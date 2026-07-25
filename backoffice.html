@@ -253,30 +253,49 @@
         }
 
         // Phase 2: Render approval queue row parameters safely
+                // 🎛️ PENDING QUEUE MONITOR: Fetches and displays ONLY items actively waiting for admin approval
         function loadQueue() {
             var container = document.getElementById("queue-container");
             if (!container) return;
+            
             fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
+                    // Clean the canvas panel row elements immediately before repainting
                     container.innerHTML = "";
                     if (!data || data.message) return;
-                    var pending = data.filter(function(r) { return r.is_approved === false || r.is_approved === "false" || !r.is_approved; });
-                    if (pending.length === 0) { container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas pendientes de aprobación.</div>"; return; }
+                    
+                    // 🛡️ ACCURATE QUEUE FILTER: Isolate ONLY records actively waiting for review
+                    var pending = data.filter(function(r) { 
+                        return r.status === "waiting"; 
+                    });
+                    
+                    if (pending.length === 0) { 
+                        container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas pendientes de aprobación.</div>"; 
+                        return; 
+                    }
+                    
+                    // Arrange logically, descending by ID index parameters
                     pending.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
+                    
                     pending.forEach(function(recipe) {
                         var row = document.createElement("div");
                         row.className = "recipe-row";
                         row.id = "recipe-row-" + recipe.id;
                         var rawName = recipe.name || "Sin Nombre";
+                        
+                        // Strict structural clean name string split parsing
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        
                         row.innerHTML = "<div><div style='font-weight:600; color:var(--text-main);'>" + nameClean + "</div><div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + "</div></div>" +
                                         "<div style='display:flex; gap:8px;'><button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button><button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button><button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"rejectRecipe('" + recipe.id + "')\">Rechazar</button></div>";
 
                         container.appendChild(row);
                     });
-                }).catch(function(err) { console.error(err); });
+                }).catch(function(err) { console.error("Queue compiling fault:", err); });
         }
+
+
 
         // Phase 3: Interactive formula inspector popup modal
         function viewRecipeDetails(recipeId, name, category, servings) {
