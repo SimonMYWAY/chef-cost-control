@@ -271,7 +271,8 @@
                         var rawName = recipe.name || "Sin Nombre";
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                         row.innerHTML = "<div><div style='font-weight:600; color:var(--text-main);'>" + nameClean + "</div><div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + "</div></div>" +
-                                        "<div style='display:flex; gap:8px;'><button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button><button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button></div>";
+                                        "<div style='display:flex; gap:8px;'><button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button><button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button><button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"rejectRecipe('" + recipe.id + "')\">Rechazar</button></div>";
+
                         container.appendChild(row);
                     });
                 }).catch(function(err) { console.error(err); });
@@ -532,6 +533,35 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { method: "PATCH", headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ is_approved: true }) })
             .then(function(res) { if (res.ok) { alert("✅ ¡Fórmula autorizada con éxito!"); loadQueue(); } });
         }
+                // 🔴 REJECTION SERVICE pipeline: Overrides state to rejected and clears queue
+        function rejectRecipe(id) {
+            if (!confirm("¿Está seguro de que desea rechazar esta receta?")) return;
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: {
+                    "apikey": API_KEY,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({ status: "rejected" })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    // Re-fire your queue renderer to sweep the card off the screen instantly
+                    if (typeof renderApprovalQueue === "function") {
+                        renderApprovalQueue();
+                    } else if (typeof loadRecipes === "function") {
+                        loadRecipes();
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert("❌ Error al procesar el rechazo de la receta.");
+                }
+            }).catch(function(err) { console.error("Rejection path crash:", err); });
+        }
+
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
