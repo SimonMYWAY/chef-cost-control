@@ -554,7 +554,7 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
-                // 🛡️ ACCURATE ARRAY TARGETING: Extract element index 0 to unwrap the recipe object details cleanly
+                // 🛡️ CRITICAL INDEX FIX: Extract element index [0] to unwrap the true recipe object variables cleanly
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
                 var recipe = recipeData[0]; 
                 
@@ -582,7 +582,7 @@
                     var yieldDivisor = parseFloat(recipe.servings) || 1;
                     if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
                     
-                    // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals
+                    // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals rounded to 4 spaces
                     var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                     // 3. Patch valid table columns, including your brand new cost_per_serving column asset
@@ -604,7 +604,6 @@
                             var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                             var tier2UOM = recipe.tier2_uom || "porcion"; 
 
-                            // FIXED KEY VALUE PAIR: Corrected inverted header layout fields to resolve network parsing faults
                             return fetch(BASE_API_URL + "ingredients", {
                                 method: "POST",
                                 headers: { 
@@ -634,6 +633,7 @@
                 if (el) el.style.opacity = "";
             });
         }
+
 
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
