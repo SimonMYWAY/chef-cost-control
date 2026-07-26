@@ -311,6 +311,7 @@
         }
              
                 // 📋 MASTER DIRECTORY ENGINE: Displays all approved or draft recipes currently stored in your cloud
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -321,7 +322,7 @@
                     container.innerHTML = "";
                     if (!data || data.message) return;
                     
-                    // Filter out items actively stuck in the pending queue to keep workspaces clear
+                    // Filter out items actively stuck in the pending approval queue
                     var catalogItems = data.filter(function(r) { return r.status !== "waiting"; });
                     
                     if (catalogItems.length === 0) {
@@ -329,7 +330,7 @@
                         return;
                     }
                     
-                    // Sort descending by ID key baseline indexes
+                    // Sort descending by numeric ID baseline index values
                     catalogItems.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
                     
                     catalogItems.forEach(function(recipe) {
@@ -339,14 +340,30 @@
                         var rawName = recipe.name || "Sin Nombre";
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                         
-                        row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:6px; background-color:var(--bg-surface); width:100%; box-sizing:border-box;");
+                        // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0
+                        var isActiveForChef = parseFloat(recipe.locked_multiplier) !== 0.0;
+                        
+                        var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
+                        var isCheckedAttr = isActiveForChef ? "checked" : "";
+                        var rowOpacity = isActiveForChef ? "background-color:var(--bg-surface);" : "background-color:var(--bg-surface); opacity:0.65;";
+                        
+                        row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:4px; transition: opacity 0.2s ease; " + rowOpacity);
                         
                         row.innerHTML = "<div style='flex:1; text-align:left;'>" +
-                                            "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#e0f2fe; color:#0369a1;'>" + (recipe.status || 'draft').toUpperCase() + "</span></div>" +
-                                            "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base Calculado: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
+                                            "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
+                                            "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
                                         "</div>" +
-                                        "<div style='display:flex; gap:8px; margin-left:15px;'>" +
+                                        "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
                                             "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
+                                            
+                                            /* 🎚️ MODERN INLINE SWITCH CONTROL */
+                                            "<label style='position:relative; display:inline-block; width:44px; height:24px; margin:0; cursor:pointer;'>" +
+                                                "<input type='checkbox' " + isCheckedAttr + " onchange=\"toggleMasterCatalogActive('" + recipe.id + "', " + isActiveForChef + ")\" style='opacity:0; width:0; height:0;'>" +
+                                                "<span style='position:absolute; top:0; left:0; right:0; bottom:0; background-color:" + (isActiveForChef ? "#22c55e" : "#cbd5e1") + "; border-radius:24px; transition:0.3s;'>" +
+                                                    "<span style='position:absolute; content:\"\"; height:18px; width:18px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:0.3s; transform:" + (isActiveForChef ? "translateX(20px)" : "translateX(0)") + ";'></span>" +
+                                                "</span>" +
+                                            "</label>" +
+                                            
                                             "<button class='btn btn-red' style='background-color:#ef4444; color:white; padding:6px 12px; font-size:0.85rem;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Eliminar</button>" +
                                         "</div>";
                                         
@@ -354,6 +371,62 @@
                     });
                 }).catch(function(err) { console.error("Catalog compounding error:", err); });
         }
+
+        // 🔄 MULTIPLIER SWITCH MATRIX: Updates the locked_multiplier flag in Supabase on switch change
+        function toggleMasterCatalogActive(id, currentStatus) {
+            var targetActive = !currentStatus;
+            
+            // 🌟 1.0 = Active/Visible, 0.0 = Archived/Hidden
+            var payload = {
+                locked_multiplier: targetActive ? 1.0 : 0.0
+            };
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    loadMasterCatalog(); // Instantly update rows and repaint layout
+                } else {
+                    alert("❌ Error al modificar la visibilidad de la receta.");
+                    loadMasterCatalog(); // Reset toggle if failed
+                }
+            }).catch(function(err) { 
+                console.error("Toggle fault:", err); 
+                loadMasterCatalog();
+            });
+        }
+
+        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
+        function deleteRecipeFromSystem(id) {
+            if (!confirm("⚠️ ¡ADVERTENCIA CRÍTICA! ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba y todos sus ingredientes vinculados? Esta acción borrará el registro de Supabase y no se puede deshacer.")) return;
+            
+            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { 
+                method: "DELETE", 
+                headers: { "apikey": API_KEY } 
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Failed to clear ingredient sub-links.");
+                return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                    method: "DELETE", 
+                    headers: { "apikey": API_KEY } 
+                });
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Failed to purge master recipe row.");
+                alert("🗑️ ¡Receta de prueba eliminada permanentemente del ecosistema con éxito!");
+                
+                loadMasterCatalog();
+                if (typeof loadQueue === "function") loadQueue();
+            })
+            .catch(function(err) { 
+                console.error("Deletion pathway failure:", err); 
+                alert("❌ Error al procesar la eliminación física de la base de datos.");
+            });
+        }
+
 
 
         // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
