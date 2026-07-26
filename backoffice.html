@@ -545,7 +545,7 @@
             }).then(function(res) { if (res.ok) { alert("✅ ¡Proveedor añadido!"); document.getElementById("provider-form").reset(); renderProvidersTable(); } });
         }
 
-        // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and mirrors Tier 2 items to ingredients with precise array index parsing
+                // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and mirrors Tier 2 items with precise array index parsing
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
@@ -579,9 +579,10 @@
                         // First attempt reading the recorded backend table parameter
                         var finalUnitCost = parseFloat(recipe.cost_per_serving) || 0;
                         
-                        // Fallback instantly to extracting the live text number displayed inside your modal view box grid canvas
+                        // CORRECTED ELEMENT ID FALLBACK:
+                        // Instantly grabs the active live calculation text displaying right inside your manager modal view box
                         if (finalUnitCost === 0) {
-                            var modalCostEl = document.getElementById("val-cost-serving");
+                            var modalCostEl = document.getElementById("val-plate-cost");
                             if (modalCostEl) {
                                 var cleanText = modalCostEl.innerText.replace(/[^0-9.]/g, "");
                                 finalUnitCost = parseFloat(cleanText) || 0;
@@ -616,6 +617,7 @@
                 if (el) el.style.opacity = "";
             });
         }
+
 
 
 
