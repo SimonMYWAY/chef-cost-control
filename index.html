@@ -656,27 +656,40 @@
                 }
             }
 
+                        // 🛡️ IRONCLAD LOCK GUARD PIPELINE: Block cloud updates AND client memory changes if already approved
+            if (typeof _loadedRevoCatalog !== 'undefined') {
+                const currentCloudMatch = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
+                if (currentCloudMatch && currentCloudMatch.status === 'approved') {
+                    alert(currentLang === 'en' 
+                        ? '⚠️ This recipe is currently APPROVED and locked. Please ask management to click "Liberar" in the backoffice to allow modifications!' 
+                        : '⚠️ Esta receta está APROBADA y bloqueada. ¡Por favor solicite a la administración hacer clic en "Liberar" en el backoffice para modificarla!'
+                    );
+                    return; // EXIT FUNCTION COMPLETELY - BLOCKS STAGES 1 & 2
+                }
+            }
+
             // STAGE 1: Update the master cloud table. We switch 'is_approved' to false but update details
             // to notify the admin that a fresh file is officially waiting inside their review dashboard pipeline
             await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                name: name, 
-                category: category, 
-                servings: servings, 
-                is_approved: false,
-                status: "waiting"
-            })
-        });
+                    name: name, 
+                    category: category, 
+                    servings: servings,
+                    is_approved: false,
+                    status: "waiting"
+                })
+            });
 
-            // STAGE 2: Force synchronize your live local system memory state arrays
+            // STAGE 2: Force synchronize your live local system memory state arrays (Only runs if un-approved!)
             const activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
             if (activeItem) {
                 activeItem.category = category;
                 activeItem.servings = servings;
                 activeItem._review_flagged = true; // Tracks the review trigger inside memory cache
             }
+
 
                         // =======================================================================
             // 🌐 FIXED CLOUD SYSTEM INTEGRATION PIPELINE
