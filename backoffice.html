@@ -546,7 +546,7 @@
         }
 
         // Phase 8: Authorize Recipe and Remove from Row Element Queue Container
-        // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and mirrors Tier 2 items to ingredients
+                // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and mirrors Tier 2 items to ingredients with real-time cost fallback
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
@@ -556,6 +556,7 @@
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
+                // Supabase returns an array, extract the first entry object cleanly
                 var recipe = recipeData[0];
                 
                 // 2. Patch the recipe status to "approved"
@@ -569,15 +570,23 @@
                     
                     // 3. If the recipe is Tier 2, automatically bridge it into your ingredients catalog directory
                     if (recipe.category === "tier2") {
-                        // Use raw naming parameters or safe fallback strings
                         var rawName = recipe.name || "Receta Sub-Base Tier 2";
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-                        
-                        // Use custom Tier 2 Output metrics or default gracefully to "porcion"
                         var tier2UOM = recipe.tier2_uom || "porcion"; 
                         
-                        // Calculate cost per unit based on totals matrix, fallback gracefully if not calculated yet
+                        // 💰 HIGH-PRECISION COST CAPTURE FALLBACK:
+                        // First try reading the server field column value
                         var finalUnitCost = parseFloat(recipe.cost_per_serving) || 0;
+                        
+                        // If the database field is 0 or null, instantly grab the active live calculation displaying right on your modal canvas!
+                        if (finalUnitCost === 0) {
+                            var modalCostEl = document.getElementById("val-cost-serving");
+                            if (modalCostEl) {
+                                // Extract numeric value, stripping away any display currency signs like "$"
+                                var cleanText = modalCostEl.innerText.replace(/[^0-9.]/g, "");
+                                finalUnitCost = parseFloat(cleanText) || 0;
+                            }
+                        }
 
                         return fetch(BASE_API_URL + "ingredients", {
                             method: "POST",
@@ -598,15 +607,16 @@
                 });
             })
             .then(function() { 
-                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro de ingredientes!"); 
+                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro con su costo real!"); 
                 loadQueue(); 
             })
             .catch(function(err) { 
                 console.error("Ecosystem bridging track fault:", err); 
-                alert("❌ Error al procesar la autorización estructurada.");
+                alert("❌ Error al procesar la actualización de la receta.");
                 if (el) el.style.opacity = "";
             });
         }
+
 
 
 
