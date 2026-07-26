@@ -545,7 +545,7 @@
             }).then(function(res) { if (res.ok) { alert("✅ ¡Proveedor añadido!"); document.getElementById("provider-form").reset(); renderProvidersTable(); } });
         }
 
-                // 🟢 APPROVAL SERVICE PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
+                // 🟢 APPROVAL SERVICE PIPELINE: Natively calculates recipe costs using true schema column names
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
@@ -554,9 +554,9 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
-                // 🛡️ CRITICAL INDEX FIX: Extract element index [0] to unwrap the true recipe object variables cleanly
+                // 🛡️ UNWRAP SUPABASE ARRAY CONTAINER
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
-                var recipe = recipeData[0]; 
+                var recipe = recipeData[0]; // Extracted element 0 to unwrap variables cleanly!
                 
                 // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
                 return fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
@@ -572,7 +572,9 @@
                             if (match) {
                                 var ingCost = parseFloat(match.std_cost_per_unit || match.cost) || 0;
                                 var ingQty = parseFloat(ri.quantity) || 0;
-                                var scrapFactor = 1 + (parseFloat(ri.scrap || 0) / 100);
+                                
+                                // 🌟 SCHEMA FIX: Swapped "ri.scrap" out for your real database column "ri.scrap_percentage"
+                                var scrapFactor = 1 + (parseFloat(ri.scrap_percentage || 0) / 100);
                                 totalRecipeCostMath += (ingQty * ingCost * scrapFactor);
                             }
                         });
@@ -602,6 +604,8 @@
                         if (recipe.category === "tier2") {
                             var rawName = recipe.name || "Receta Sub-Base Tier 2";
                             var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                            
+                            // Target tier2_uom property or fallback cleanly
                             var tier2UOM = recipe.tier2_uom || "porcion"; 
 
                             return fetch(BASE_API_URL + "ingredients", {
@@ -633,8 +637,6 @@
                 if (el) el.style.opacity = "";
             });
         }
-
-
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
