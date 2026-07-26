@@ -312,6 +312,7 @@
              
                 // 📋 MASTER DIRECTORY ENGINE: Displays all approved or draft recipes currently stored in your cloud
                 // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -428,42 +429,7 @@
         }
 
 
-
-        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
-        function deleteRecipeFromSystem(id) {
-            if (!confirm("⚠️ ¡ADVERTENCIA CRÍTICA! ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba y todos sus ingredientes vinculados? Esta acción borrará el registro de Supabase y no se puede deshacer.")) return;
-            
-            // First wipe nested child dependencies inside recipe_ingredients to prevent foreign key execution errors
-            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { 
-                method: "DELETE", 
-                headers: { "apikey": API_KEY } 
-            })
-            .then(function(res) {
-                if (!res.ok) throw new Error("Failed to clear ingredient sub-links.");
-                
-                // Next erase the parent recipe row from the database cleanly
-                return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
-                    method: "DELETE", 
-                    headers: { "apikey": API_KEY } 
-                });
-            })
-            .then(function(res) {
-                if (!res.ok) throw new Error("Failed to purge master recipe row.");
-                alert("🗑️ ¡Receta de prueba eliminada permanentemente del ecosistema con éxito!");
-                
-                // Refresh both table container matrix sets cleanly
-                loadMasterCatalog();
-                if (typeof loadQueue === "function") loadQueue();
-            })
-            .catch(function(err) { 
-                console.error("Deletion pathway failure:", err); 
-                alert("❌ Error al procesar la eliminación física de la base de datos.");
-            });
-        }
-
-
-
-        // Phase 3: Interactive formula inspector popup modal
+                // Phase 3: Interactive formula inspector popup modal
         function viewRecipeDetails(recipeId, name, category, servings) {
             document.getElementById("modal-recipe-name").innerText = name;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Porciones: " + servings;
