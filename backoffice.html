@@ -79,6 +79,20 @@
             </div>
         </div>
 
+                <!-- 📋 MASTER RECIPE DIRECTORY CONTAINER -->
+        <div class="card" style="margin-top: 30px;">
+            <div class="card-header" style="background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 15px;">
+                <h2 style="margin:0; font-size:1.2rem; color:var(--text-main);">📋 Directorio Maestro de Recetas</h2>
+                <p style="margin:5px 0 0 0; font-size:0.85rem; color:var(--text-muted);">Administre, desactive o elimine las fórmulas de su catálogo activo</p>
+            </div>
+            <div style="padding: 15px;">
+                <div id="master-catalog-container" class="queue-list">
+                    <!-- Master rows will compile natively right here via script -->
+                </div>
+            </div>
+        </div>
+
+
         <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
         <div id="view-deviations" class="view-pane">
             <div class="card">
@@ -293,6 +307,99 @@
                         container.appendChild(row);
                     });
                 }).catch(function(err) { console.error("Queue compiling fault:", err); });
+        }
+                // 📋 MASTER DIRECTORY ENGINE: Compiles and manages all active/approved production recipes
+        function loadMasterCatalog() {
+            var container = document.getElementById("master-catalog-container");
+            if (!container) return;
+            
+            // Fetch all non-pending recipes to let you manage approved or archived configurations
+            fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    container.innerHTML = "";
+                    if (!data || data.message) return;
+                    
+                    // Filter out items actively stuck in the pending queue to keep workspaces clear
+                    var catalogItems = data.filter(function(r) { return r.status !== "waiting"; });
+                    
+                    if (catalogItems.length === 0) {
+                        container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas registradas en el catálogo maestro.</div>";
+                        return;
+                    }
+                    
+                    // Sort descending by ID key baseline indexes
+                    catalogItems.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
+                    
+                    catalogItems.forEach(function(recipe) {
+                        var row = document.createElement("div");
+                        row.className = "recipe-row";
+                        row.id = "catalog-row-" + recipe.id;
+                        
+                        // Extract and sanitize name strings
+                        var rawName = recipe.name || "Sin Nombre";
+                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        
+                        // Check if recipe is explicitly disabled (default to true if column is missing)
+                        var isActive = recipe.is_active !== false; 
+                        var statusLabel = isActive ? "🟢 Activo" : "❌ Inactivo";
+                        var toggleText = isActive ? "Desactivar" : "Activar";
+                        var btnClass = isActive ? "btn-orange" : "btn-green";
+                        var inlineDimming = isActive ? "" : "opacity: 0.5;";
+                        
+                        row.setAttribute("style", inlineDimming + " display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border-color);");
+                        
+                        row.innerHTML = "<div>" +
+                                            "<div style='font-weight:600; color:var(--text-main);'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; color:var(--text-muted);'>[" + statusLabel + "]</span></div>" +
+                                            "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
+                                        "</div>" +
+                                        "<div style='display:flex; gap:8px;'>" +
+                                            "<button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
+                                            "<button class='btn " + btnClass + "' onclick=\"toggleRecipeActive('" + recipe.id + "', " + isActive + ")\">" + toggleText + "</button>" +
+                                            "<button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Eliminar</button>" +
+                                        "</div>";
+                                        
+                        container.appendChild(row);
+                    });
+                }).catch(function(err) { console.error("Catalog compounding error:", err); });
+        }
+
+        // 🔄 LIFECYCLE TOGGLE SWITCH: Flags a recipe active/inactive to instantly clean the chef's screen
+        function toggleRecipeActive(id, currentStatus) {
+            var targetStatus = !currentStatus;
+            var confirmMsg = targetStatus ? "¿Desea activar esta receta en el catálogo del chef?" : "¿Desea desactivar esta receta? Se ocultará de la app del chef al instante.";
+            if (!confirm(confirmMsg)) return;
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ is_active: targetStatus })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    loadMasterCatalog(); // Refresh directory canvas rows instantly
+                } else {
+                    alert("❌ Error al cambiar el estado de la receta.");
+                }
+            }).catch(function(err) { console.error("Toggle fault:", err); });
+        }
+
+        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters
+        function deleteRecipeFromSystem(id) {
+            if (!confirm("⚠️ ¡ADVERTENCIA CRÍTICA! ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta y todos sus ingredientes vinculados? Esta acción no se puede deshacer.")) return;
+            
+            // First wipe nested child dependencies inside recipe_ingredients to prevent foreign key errors
+            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { method: "DELETE", headers: { "apikey": API_KEY } })
+            .then(function() {
+                // Next erase the parent recipe row safely
+                return fetch(BASE_API_URL + "recipes?id=eq." + id, { method: "DELETE", headers: { "apikey": API_KEY } });
+            })
+            .then(function() {
+                alert("🗑️ ¡Receta eliminada permanentemente del ecosistema con éxito!");
+                loadMasterCatalog();
+                if (typeof loadQueue === "function") loadQueue();
+            })
+            .catch(function(err) { console.error("Deletion pathway failure:", err); });
         }
 
 
@@ -644,16 +751,18 @@
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
 
         // Start initialization pipeline sequentially on page load
-        window.onload = function() {
+                window.onload = function() {
             prefetchIngredients().then(function() {
                 loadQueue();
+                loadMasterCatalog(); // ✅ CO-LOADED: Boots your master directory table row list on page startup!
                 renderMasterIngredientsTable();
                 renderProvidersTable();
                 populateIngredientDropdown();
-                populateSupplierDropdown(); // FIXED: Automatically boots up your live vendor list choices!
+                populateSupplierDropdown(); 
                 renderMappingsTable();
             });
         };
+
     </script>
 </body>
 </html>
