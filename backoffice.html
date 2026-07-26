@@ -545,7 +545,7 @@
             }).then(function(res) { if (res.ok) { alert("✅ ¡Proveedor añadido!"); document.getElementById("provider-form").reset(); renderProvidersTable(); } });
         }
 
-                // 🟢 APPROVAL SERVICE PIPELINE: Natively calculates recipe costs using true schema column names
+                // 🟢 APPROVAL SERVICE PIPELINE: Natively calculates recipe costs using direct cloud-sourced pricing queries
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
@@ -554,77 +554,82 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
-                // 🛡️ UNWRAP SUPABASE ARRAY CONTAINER
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
-                var recipe = recipeData[0]; // Extracted element 0 to unwrap variables cleanly!
+                var recipe = recipeData[0]; // Safely target index 0 to unwrap your recipe fields!
                 
-                // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
+                // 2. Fetch the ingredient rows bound to this specific recipe
                 return fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(recipeIngredients) {
-                    
-                    var totalRecipeCostMath = 0;
-                    
-                    // Cross-reference weights against your master cache array to compile the true cost
-                    if (Array.isArray(recipeIngredients) && typeof DB_INGREDIENTS !== 'undefined') {
+                    if (!Array.isArray(recipeIngredients) || recipeIngredients.length === 0) {
+                        return { recipe: recipe, calculatedCostPerUnit: 0 };
+                    }
+
+                    // 3. Fetch the full MASTER INGREDIENTS LIST directly from the cloud to get fresh cost details
+                    return fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                    .then(function(res) { return res.json(); })
+                    .then(function(masterIngredients) {
+                        var totalRecipeCostMath = 0;
+                        
                         recipeIngredients.forEach(function(ri) {
-                            var match = DB_INGREDIENTS.find(function(i) { return String(i.id) === String(ri.ingredient_id); });
+                            var match = masterIngredients.find(function(i) { return String(i.id) === String(ri.ingredient_id); });
                             if (match) {
+                                // Extract the true standard cost per unit decimals from the server response
                                 var ingCost = parseFloat(match.std_cost_per_unit || match.cost) || 0;
                                 var ingQty = parseFloat(ri.quantity) || 0;
-                                
-                                // 🌟 SCHEMA FIX: Swapped "ri.scrap" out for your real database column "ri.scrap_percentage"
                                 var scrapFactor = 1 + (parseFloat(ri.scrap_percentage || 0) / 100);
                                 totalRecipeCostMath += (ingQty * ingCost * scrapFactor);
                             }
                         });
-                    }
 
-                    // Divide total recipe cost by the yield divisor factor (default to 1 for protection rules)
-                    var yieldDivisor = parseFloat(recipe.servings) || 1;
-                    if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
-                    
-                    // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals rounded to 4 spaces
-                    var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
-
-                    // 3. Patch valid table columns, including your brand new cost_per_serving column asset
-                    return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
-                        method: "PATCH", 
-                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
-                        body: JSON.stringify({ 
-                            is_approved: true, 
-                            status: "approved",
-                            cost_per_serving: calculatedCostPerUnit
-                        }) 
-                    })
-                    .then(function(res) {
-                        if (!res.ok) throw new Error("Failed to patch recipe approval status.");
+                        // Divide total recipe cost by the servings yield divisor factor
+                        var yieldDivisor = parseFloat(recipe.servings) || 1;
+                        if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
                         
-                        // 4. If the recipe is Tier 2, automatically bridge it into your ingredients catalog table directory
-                        if (recipe.category === "tier2") {
-                            var rawName = recipe.name || "Receta Sub-Base Tier 2";
-                            var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-                            
-                            // Target tier2_uom property or fallback cleanly
-                            var tier2UOM = recipe.tier2_uom || "porcion"; 
-
-                            return fetch(BASE_API_URL + "ingredients", {
-                                method: "POST",
-                                headers: { 
-                                    "apikey": API_KEY, 
-                                    "Content-Type": "application/json",
-                                    "Prefer": "return=minimal"
-                                },
-                                body: JSON.stringify({
-                                    name_es: nameClean + " (Tier 2)",
-                                    name_en: nameClean + " (Tier 2 Bulk Base)",
-                                    std_cost_per_unit: calculatedCostPerUnit,
-                                    uom: tier2UOM,
-                                    is_active: true
-                                })
-                            });
-                        }
+                        var calculatedCost = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
+                        return { recipe: recipe, calculatedCostPerUnit: calculatedCost };
                     });
+                });
+            })
+            .then(function(result) {
+                var recipe = result.recipe;
+                var calculatedCostPerUnit = result.calculatedCostPerUnit;
+
+                // 4. Patch valid table columns, including your brand new cost_per_serving column asset
+                return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                    method: "PATCH", 
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
+                    body: JSON.stringify({ 
+                        is_approved: true, 
+                        status: "approved",
+                        cost_per_serving: calculatedCostPerUnit
+                    }) 
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Failed to patch recipe approval status.");
+                    
+                    // 5. If the recipe is Tier 2, automatically bridge it into your ingredients catalog table directory
+                    if (recipe.category === "tier2") {
+                        var rawName = recipe.name || "Receta Sub-Base Tier 2";
+                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        var tier2UOM = recipe.tier2_uom || "porcion"; 
+
+                        return fetch(BASE_API_URL + "ingredients", {
+                            method: "POST",
+                            headers: { 
+                                "apikey": API_KEY, 
+                                "Content-Type": "application/json",
+                                "Prefer": "return=minimal"
+                            },
+                            body: JSON.stringify({
+                                name_es: nameClean + " (Tier 2)",
+                                name_en: nameClean + " (Tier 2 Bulk Base)",
+                                std_cost_per_unit: calculatedCostPerUnit,
+                                uom: tier2UOM,
+                                is_active: true
+                            })
+                        });
+                    }
                 });
             })
             .then(function() { 
@@ -637,6 +642,7 @@
                 if (el) el.style.opacity = "";
             });
         }
+
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
