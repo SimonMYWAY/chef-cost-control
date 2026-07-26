@@ -197,9 +197,13 @@
                 var nameB = (b.name || "").split('||')[0].trim().toLowerCase();
                 return nameA.localeCompare(nameB);
             });
-                _loadedRevoCatalog.forEach(recipe => {
+                            _loadedRevoCatalog.forEach(recipe => {
+                // 🛡️ ACCURATE CATALOG FILTER ENGINE: Skip any recipe that is Disabled (0.0) or Deleted (-9.0)
+                if (parseFloat(recipe.locked_multiplier) !== 1.0) return;
+
                 const opt = document.createElement('option');
                 opt.value = recipe.id;
+
                 
                 const hasLocalDraft = localStorage.getItem(`recipe_draft_${recipe.id}`);
                 let statusBadge = ""; // 🎨 Mobile-proof universal text badge tracker

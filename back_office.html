@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Central Back-Office - SimonMYWAY</title>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-sidebar: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --border-color: #e2e8f0;
+            --bg-hover: #f1f5f9;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        
+        .sidebar { width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px 0; }
+        .sidebar-brand { padding: 0 24px 20px 24px; font-size: 1.15rem; font-weight: 700; border-bottom: 1px solid var(--border-color); }
+        .nav-group { margin-top: 25px; }
+        .nav-label { padding: 0 24px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+        .nav-item { display: flex; align-items: center; padding: 12px 24px; margin-top: 4px; color: var(--text-main); text-decoration: none; font-size: 0.9rem; font-weight: 500; cursor: pointer; border-left: 4px solid transparent; transition: all 0.15s ease; }
+        .nav-item:hover, .nav-item.active { background: var(--bg-hover); border-left-color: var(--accent-green); font-weight: 600; }
+        
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .top-bar { height: 65px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 30px; background: #ffffff; }
+        .top-bar h1 { font-size: 1.25rem; font-weight: 700; }
+        .view-pane { flex: 1; padding: 30px; overflow-y: auto; display: none; }
+        .view-pane.active { display: block; }
+        
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 25px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card h3 { font-size: 1.1rem; margin-bottom: 8px; font-weight: 600; }
+        .recipe-row { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; background: #ffffff; }
+        
+        .btn { border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; color: white; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-green { background: var(--accent-green); }
+        .btn-blue { background: var(--accent-blue); }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal-content { background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); width: 90%; max-width: 500px; padding: 25px; position: relative; }
+        .modal-close { position: absolute; top: 15px; right: 15px; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); }
+        
+        .ingredient-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem; }
+        .ingredient-table th { text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color); background: #f8fafc; color: var(--text-muted); }
+        .ingredient-table td { padding: 10px; border-bottom: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-brand">SimonMYWAY Admin</div>
+        <div class="nav-group">
+            <div class="nav-label">Recepción y Auditoría</div>
+            <div class="nav-item active" onclick="switchView('view-approvals')">🔷 Aprobación de Recetas</div>
+            <div class="nav-item" onclick="switchView('view-deviations')">📊 Desviación de Costes</div>
+        </div>
+        <div class="nav-group">
+            <div class="nav-label">Maestros de Inventario</div>
+            <div class="nav-item" onclick="switchView('view-ingredients')">📦 Lista de Ingredientes</div>
+            <div class="nav-item" onclick="switchView('view-providers')">🏭 Lista de Proveedores</div>
+        </div>
+        <div class="nav-group">
+            <div class="nav-label">Logística y Enlaces</div>
+            <div class="nav-item" onclick="switchView('view-mappings')">🔗 Asociación y Conversión</div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
+                <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
+        <div id="view-approvals" class="view-pane active">
+            
+            <!-- UPPER BOX: Pending reviewing queue panel -->
+            <div class="card" style="width: 100%; box-sizing: border-box; margin-bottom: 25px;">
+                <h3>Cola de Revisión de Fórmulas</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
+                <div id="queue-container"></div>
+            </div>
+
+            <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
+            <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
+                <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
+                <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+                    <!-- Approved and draft recipe card records will draw cleanly here -->
+                </div>
+            </div>
+
+        </div> <!-- Closes your clean view-approvals tab block parent safely -->
+
+
+        
+
+                <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
+        <div id="view-deviations" class="view-pane">
+            <div class="card">
+                <h3>Cálculo de Consumo Estándar</h3>
+                <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 0.9rem;">Carga tu archivo de ventas Revo para cruzar los consumos teóricos contra las compras reales.</p>
+                <input type="file" id="revo-sales-file" style="margin-top:10px; display:block;">
+            </div>
+        </div>
+        <!-- MODULE CANVA 3: MASTER INGREDIENT LIST -->
+        <div id="view-ingredients" class="view-pane">
+            <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+                <div class="card" style="flex: 1; min-width: 320px;">
+                    <h3>Nuevo Ingrediente</h3>
+                    <form id="ingredient-form" onsubmit="createNewIngredient(event)">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Nombre (Inglés)</label>
+                            <input type="text" id="ing-name-en" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Nombre (Español)</label>
+                            <input type="text" id="ing-name-es" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Unidad de Receta (UOM)</label>
+                            <select id="ing-uom" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                                <option value="gr">Gramo (gr)</option>
+                                <option value="oz">Onza (oz)</option>
+                                <option value="lb">Libra (lb)</option>
+                                <option value="unidad">Unidad (unidad)</option>
+                                <option value="porcion">Porción (porcion)</option>
+                                <option value="cuchara">Cuchara (cuchara)</option>
+                                <option value="tasa">Taza (tasa)</option>
+                                <option value="diente">Diente (diente)</option>
+                                <option value="hoja">Hoja (hoja)</option>
+                                <option value="slice">Rebanada (slice)</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Coste de Receta (€)</label>
+                            <input type="number" id="ing-cost" step="0.0001" min="0" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <button type="submit" class="btn btn-green" style="width:100%;">Registrar Ingrediente</button>
+                    </form>
+                </div>
+                <div class="card" style="flex: 2; min-width: 450px;">
+                    <h3>Catálogo de Ingredientes Existentes</h3>
+                    <table class="ingredient-table">
+                        <thead><tr><th>Nombre (ES / EN)</th><th>Unidad</th><th>Coste (€)</th></tr></thead>
+                        <tbody id="ingredients-table-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODULE CANVA 4: LIVE SUPPLIER DIRECTORY -->
+        <div id="view-providers" class="view-pane">
+            <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+                <div class="card" style="flex: 1; min-width: 320px;">
+                    <h3>Nuevo Proveedor</h3>
+                    <form id="provider-form" onsubmit="createNewProvider(event)">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Nombre Comercial</label>
+                            <input type="text" id="prov-name" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Teléfono</label>
+                            <input type="text" id="prov-phone" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <button type="submit" class="btn btn-green" style="width:100%;">Registrar Proveedor</button>
+                    </form>
+                </div>
+                <div class="card" style="flex: 2; min-width: 450px;">
+                    <h3>Directorio de Proveedores Activos</h3>
+                    <table class="ingredient-table">
+                        <thead><tr><th>Proveedor</th><th>Teléfono</th><th>Estado</th></tr></thead>
+                        <tbody id="providers-table-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+                <!-- MODULE CANVA 5: LOGISTICS CONVERSION FACTOR LINKER -->
+        <div id="view-mappings" class="view-pane">
+            <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+                
+                <!-- COLUMN A: THE MAPPING FORM -->
+                <div class="card" style="flex: 1; min-width: 320px;">
+                    <h3>Nueva Tasa de Conversión</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Enlaza empaques de compra de distribuidores a porciones de preparación.</p>
+                    
+                    <form id="mapping-form" onsubmit="createNewMapping(event)">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Ingrediente</label>
+                            <select id="map-ing-id" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                                <option value="">Cargando catálogo maestro...</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Proveedor Oficial</label>
+                            <select id="map-prov-id" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                                <option value="">Cargando directorio de proveedores...</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Unidad de Compraista (Saco, Caja, Botella)</label>
+                            <input type="text" id="map-purchase-uom" placeholder="Ej: Saco" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Equivale a cuántas Unidades de Receta</label>
+                            <input type="number" id="map-factor" step="0.0001" min="0.0001" placeholder="Ej: 25000" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                        </div>
+                        <button type="submit" class="btn btn-green" style="width:100%; background:var(--accent-green); color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Guardar Factor de Enlace</button>
+                    </form>
+                </div>
+
+                <!-- COLUMN B: THE CONVERSIONS LIST GRID -->
+                <div class="card" style="flex: 2; min-width: 450px;">
+                    <h3>Tasas de Equivalencia Activas</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico.</p>
+                    <table class="ingredient-table" style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:2px solid var(--border-color);">
+                                <th style="text-align:left; padding:10px;">Ingrediente</th>
+                                <th style="text-align:left; padding:10px;">Enlace Logístico</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mappings-table-rows">
+                            <tr><td colspan="2" style="color:var(--text-muted); font-style:italic; text-align:center; padding:10px;">Cargando tasas de conversión...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- POPUP DETALLES MODAL -->
+    <div id="recipe-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <h2 id="modal-recipe-name">Receta</h2>
+            <div id="modal-recipe-meta" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">Meta</div>
+            <table class="ingredient-table">
+                <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Merma</th></tr></thead>
+                <tbody id="modal-table-rows"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
+        const BASE_API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
+        const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
+                // 🛡️ RESTRUCTURING BLACKLIST: Permanently blocks cached server records from resurfacing post-deletion
+        var _deletedRecipeIds = [];
+
+        var _ingredientsCache = {};
+
+        // Sidebar Panel Tab Routing Logic
+        function switchView(viewId) {
+            document.querySelectorAll('.view-pane').forEach(function(p) { p.classList.remove('active'); });
+            document.querySelectorAll('.nav-item').forEach(function(i) { i.classList.remove('active'); });
+            document.getElementById(viewId).classList.add('active');
+            var nav = Array.from(document.querySelectorAll('.nav-item')).find(function(item) { return item.getAttribute('onclick').includes(viewId); });
+            if (nav) { nav.classList.add('active'); document.getElementById('page-title').innerText = nav.innerText.substring(2); }
+        }
+
+        // Phase 1: Prefetch database labels to match lines cleanly
+        function prefetchIngredients() {
+            return fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) { if(data && !data.message) { data.forEach(function(item) { _ingredientsCache[item.id] = item.name_es || item.name_en || item.name; }); } })
+                .catch(function(err) { console.error(err); });
+        }
+
+                // 🎛️ PENDING QUEUE MONITOR: Fetches and displays ONLY items actively waiting for admin approval (Block-List Guarded)
+        function loadQueue() {
+            var container = document.getElementById("queue-container");
+            if (!container) return;
+            
+            fetch(BASE_API_URL + "recipes", { 
+                headers: { 
+                    "apikey": API_KEY,
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                } 
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                container.innerHTML = "";
+                if (!data || data.message) return;
+                
+                // 🛡️ FILTER OUT BLACKLISTED ENTRIES INSTANTLY
+                var pending = data.filter(function(r) { 
+                    return r.status === "waiting" && !_deletedRecipeIds.includes(String(r.id)); 
+                });
+                
+                if (pending.length === 0) { 
+                    container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas pendientes de aprobación.</div>"; 
+                    return; 
+                }
+                
+                pending.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
+                
+                pending.forEach(function(recipe) {
+                    var row = document.createElement("div");
+                    row.className = "recipe-row";
+                    row.id = "recipe-row-" + recipe.id;
+                    var rawName = recipe.name || "Sin Nombre";
+                    
+                    var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                    
+                    row.innerHTML = "<div><div style='font-weight:600; color:var(--text-main);'>" + nameClean + "</div><div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + "</div></div>" +
+                                    "<div style='display:flex; gap:8px;'><button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button><button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button><button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"rejectRecipe('" + recipe.id + "')\">Rechazar</button></div>";
+
+                    container.appendChild(row);
+                });
+            }).catch(function(err) { console.error("Queue compiling fault:", err); });
+        }
+
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
+        function loadMasterCatalog() {
+            var container = document.getElementById("master-catalog-container");
+            if (!container) return;
+            
+            fetch(BASE_API_URL + "recipes", { 
+                headers: { 
+                    "apikey": API_KEY,
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                } 
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                container.innerHTML = "";
+                if (!data || data.message) return;
+                
+                // 🛡️ CORRECTED PLACE: Sitting cleanly INSIDE loadMasterCatalog body
+                // Excludes pending queue items AND items carrying the -9.0 deletion flag
+                var catalogItems = data.filter(function(r) { 
+                    var isWaiting = r.status === "waiting";
+                    var isDeleted = parseFloat(r.locked_multiplier) === -9.0;
+                    return !isWaiting && !isDeleted;
+                });
+                
+                if (catalogItems.length === 0) {
+                    container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px; text-align:left;'>No hay recetas registradas en el catálogo maestro.</div>";
+                    return;
+                }
+                
+                catalogItems.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
+                
+                catalogItems.forEach(function(recipe) {
+                    var row = document.createElement("div");
+                    row.id = "catalog-row-" + recipe.id;
+                    
+                    var rawName = recipe.name || "Sin Nombre";
+                    var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                    
+                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0 or deleted
+                    var isActiveForChef = parseFloat(recipe.locked_multiplier) === 1.0;
+                    
+                    var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
+                    var isCheckedAttr = isActiveForChef ? "checked" : "";
+                    var rowOpacity = isActiveForChef ? "background-color:var(--bg-surface);" : "background-color:var(--bg-surface); opacity:0.65;";
+                    
+                    row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:4px; transition: opacity 0.2s ease; " + rowOpacity);
+                    
+                    row.innerHTML = "<div style='flex:1; text-align:left;'>" +
+                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem CONTAINER;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
+                                        "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
+                                    "</div>" +
+                                    "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
+                                        "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
+                                        
+                                        "<label style='position:relative; display:inline-block; width:44px; height:24px; margin:0; cursor:pointer;'>" +
+                                            "<input type='checkbox' " + isCheckedAttr + " onchange=\"toggleMasterCatalogActive('" + recipe.id + "', " + isActiveForChef + ")\" style='opacity:0; width:0; height:0;'>" +
+                                            "<span style='position:absolute; top:0; left:0; right:0; bottom:0; background-color:" + (isActiveForChef ? "#22c55e" : "#cbd5e1") + "; border-radius:24px; transition:0.3s;'>" +
+                                                "<span style='position:absolute; content:\"\"; height:18px; width:18px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:0.3s; transform:" + (isActiveForChef ? "translateX(20px)" : "translateX(0)") + ";'></span>" +
+                                            "</span>" +
+                                        "</label>" +
+                                        
+                                        "<button class='btn btn-red' style='background-color:#ef4444; color:white; padding:6px 12px; font-size:0.85rem;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Eliminar</button>" +
+                                    "</div>";
+                                    
+                    container.appendChild(row);
+                });
+            }).catch(function(err) { console.error("Catalog compounding error:", err); });
+        }
+
+
+
+                // 🗑️ SYSTEM PURGE LINE: Assigns the -9.0 removal flag to hide items permanently across all platforms
+        function deleteRecipeFromSystem(id) {
+            if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR esta receta de prueba? Desaparecerá de todas las pantallas al instante.")) return;
+            
+            var upperRow = document.getElementById("recipe-row-" + id);
+            var lowerRow = document.getElementById("catalog-row-" + id);
+            if (upperRow) upperRow.style.opacity = "0.3";
+            if (lowerRow) lowerRow.style.opacity = "0.3";
+
+            // Overwrites flags cleanly: sets locked_multiplier to -9.0 to trigger global isolation rules
+            fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                method: "PATCH", 
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal" 
+                },
+                body: JSON.stringify({
+                    is_approved: true,
+                    status: "approved",
+                    locked_multiplier: -9.0 
+                })
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Database removal flag assignment rejected.");
+                
+                // Sweep elements off the layout canvas immediately
+                if (upperRow) upperRow.remove();
+                if (lowerRow) lowerRow.remove();
+                
+                alert("🗑️ ¡Receta de prueba eliminada con éxito!");
+                
+                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                if (typeof loadQueue === "function") loadQueue();
+            })
+            .catch(function(err) { 
+                console.error("Purge failure:", err); 
+                alert("❌ Error al procesar la eliminación de la receta.");
+                if (upperRow) upperRow.style.opacity = "";
+                if (lowerRow) lowerRow.style.opacity = "";
+            });
+        }
+
+                // Phase 3: Interactive formula inspector popup modal
+        function viewRecipeDetails(recipeId, name, category, servings) {
+            document.getElementById("modal-recipe-name").innerText = name;
+            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Porciones: " + servings;
+            var rowsTarget = document.getElementById("modal-table-rows");
+            rowsTarget.innerHTML = "<tr><td colspan='3' style='color:var(--text-muted); text-align:center;'>Buscando...</td></tr>";
+            document.getElementById("recipe-modal").style.display = "flex";
+            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(lines) {
+                    rowsTarget.innerHTML = "";
+                    if(!lines || lines.length === 0) { rowsTarget.innerHTML = "<tr><td colspan='3'>Sin ingredientes asociados.</td></tr>"; return; }
+                    lines.forEach(function(line) {
+                        var tr = document.createElement("tr");
+                        tr.innerHTML = "<td>" + (_ingredientsCache[line.ingredient_id] || "Desconocido") + "</td><td>" + (line.quantity || 0) + " g</td><td>" + (line.scrap_percentage || 0) + "%</td>";
+                        rowsTarget.appendChild(tr);
+                    });
+                });
+        }
+        // Phase 4: Render Live Ingredient Inventory Table with Active/Inactive Toggle Sliders
+        function renderMasterIngredientsTable() {
+            var rowsTarget = document.getElementById("ingredients-table-rows");
+            if (!rowsTarget) return;
+            
+            fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    rowsTarget.innerHTML = "";
+                    if (!data || data.length === 0 || data.message) { 
+                        rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay registros.</td></tr>"; 
+                        return; 
+                    }
+                    
+                    data.sort(function(a, b) { 
+                        var nameA = a.name_es ? a.name_es.toLowerCase() : "";
+                        var nameB = b.name_es ? b.name_es.toLowerCase() : "";
+                        return nameA.localeCompare(nameB); 
+                    });
+                    
+                    data.forEach(function(item) {
+                        var tr = document.createElement("tr");
+                        var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
+                        var formattedCost = costVal < 0.10 ? costVal.toFixed(4) : costVal.toFixed(2);
+                        
+                        // Check if the current row state status flag is true or false
+                        var isEnabled = item.is_active === true || item.is_active === "true" || item.is_active === null;
+                        var statusBtnText = isEnabled ? "🟢 Activo" : "🔴 Inactivo";
+                        var statusBtnClass = isEnabled ? "btn-green" : "btn-blue";
+                        var rowOpacity = isEnabled ? "1.0" : "0.5"; // Dim row visually if ingredient is disabled
+
+                        tr.style.opacity = rowOpacity;
+                        tr.innerHTML = "<td style='padding:10px; font-weight:500;'>" + (item.name_es || "N/A") + " <span style='color:var(--text-muted); font-size:0.8rem;'>(" + (item.name_en || "N/A") + ")</span></td>" +
+                                       "<td style='padding:10px; color:var(--text-muted);'>" + (item.uom || "gr") + "</td>" +
+                                       "<td style='padding:10px; font-weight:600; color:#0284c7;'>$" + formattedCost + "</td>" +
+                                       "<td style='padding:10px; text-align:right;'>" +
+                                           "<button class='btn " + statusBtnClass + "' style='padding:4px 10px; font-size:0.75rem;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button>" +
+                                       "</td>";
+                        rowsTarget.appendChild(tr);
+                    });
+                }).catch(function(err) { console.error("Grid compiling crash:", err); });
+        }
+
+                // 🎛️ ADMINISTRATIVE MODULE: PATCH the true/false status constraints in the cloud
+        function toggleIngredientStatus(id, currentStatus) {
+            var targetNewStatus = !currentStatus; // Flips status on click
+            
+            fetch(BASE_API_URL + "ingredients?id=eq." + id, {
+                method: "PATCH",
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=minimal" 
+                },
+                body: JSON.stringify({ is_active: targetNewStatus })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    renderMasterIngredientsTable(); // Refresh the list grid immediately
+                } else {
+                    alert("❌ Error al modificar el estado de seguridad.");
+                }
+            });
+        }
+
+
+        // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
+        function renderProvidersTable() {
+            var rowsTarget = document.getElementById("providers-table-rows");
+            if (!rowsTarget) return;
+            fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    rowsTarget.innerHTML = "";
+                    if (!data || data.length === 0 || data.message) { rowsTarget.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay proveedores registrados.</td></tr>"; return; }
+                    data.sort(function(a, b) { return (a.name || "").localeCompare(b.name || ""); });
+                    data.forEach(function(item) {
+                        var tr = document.createElement("tr");
+                        tr.innerHTML = "<td style='padding:10px; font-weight:600;'>" + (item.name || "N/A") + "</td><td style='padding:10px; color:var(--text-muted);'>" + (item.phone || "-") + "</td><td style='padding:10px; font-size:0.85rem; color:var(--text-muted);'>✅ Activo</td>";
+                        rowsTarget.appendChild(tr);
+                    });
+                }).catch(function(err) { console.error(err); });
+        }
+                // 🔗 LOGISTICS MODULE: Populate the Form Select Menu with Live Ingredients
+        function populateIngredientDropdown() {
+            var selectMenu = document.getElementById("map-ing-id");
+            if (!selectMenu) return;
+
+            fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || data.message) return;
+                    
+                    // Sort A to Z safely by Spanish title layout strings
+                    data.sort(function(a, b) { return (a.name_es || "").localeCompare(b.name_es || ""); });
+                    
+                    selectMenu.innerHTML = '<option value="">-- Seleccionar Artículo Base --</option>';
+                    data.forEach(function(item) {
+                        var option = document.createElement("option");
+                        option.value = item.id;
+                        option.innerText = (item.name_es || "N/A") + " (" + (item.uom || "gr") + ")";
+                        selectMenu.appendChild(option);
+                    });
+                });
+        }
+                // 🔗 LOGISTICS MODULE: Populate the Supplier Dropdown Menu Live
+        function populateSupplierDropdown() {
+            var provMenu = document.getElementById("map-prov-id");
+            if (!provMenu) return;
+
+            fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || data.message) return;
+                    
+                    data.sort(function(a, b) { return (a.name || "").localeCompare(b.name || ""); });
+                    
+                    provMenu.innerHTML = '<option value="">-- Seleccionar Distribuidor --</option>';
+                    data.forEach(function(item) {
+                        var option = document.createElement("option");
+                        option.value = item.id; // Sends the numeric database ID relationship key
+                        option.innerText = item.name || "N/A";
+                        provMenu.appendChild(option);
+                    });
+                });
+        }
+                // 🔗 LOGISTICS MODULE: Download and render existing purchasing conversions
+        function renderMappingsTable() {
+            var rowsTarget = document.getElementById("mappings-table-rows");
+            if (!rowsTarget) return;
+
+            fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    rowsTarget.innerHTML = "";
+                    if (!data || data.length === 0 || data.message) {
+                        rowsTarget.innerHTML = "<tr><td colspan='2' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay formatos registrados.</td></tr>";
+                        return;
+                    }
+
+                    data.forEach(function(item) {
+                        var tr = document.createElement("tr");
+                        var ingName = _ingredientsCache[item.ingredient_id] || "Ingrediente #" + item.ingredient_id;
+                        var provider = item.provider_name || "N/A";
+                        var packing = item.purchase_uom || "Empaque";
+                        var ratio = parseFloat(item.units_per_purchase) || 0;
+
+                        tr.innerHTML = "<td style='padding:10px; font-weight:600;'>" + ingName + " <span style='color:var(--text-muted); font-size:0.8rem; font-weight:400;'>(" + provider + ")</span></td>" +
+                                       "<td style='padding:10px; color:var(--text-muted);'>1 " + packing + " = " + ratio.toLocaleString() + " uds de receta</td>";
+                        rowsTarget.appendChild(tr);
+                    });
+                })
+                .catch(function(err) { console.error("Mappings load error:", err); });
+        }
+
+                // 🔗 LOGISTICS MODULE: Submit conversion data using your exact database columns and UUID string types
+        function createNewMapping(event) {
+            event.preventDefault();
+            
+            var ingSelect = document.getElementById("map-ing-id");
+            var provSelect = document.getElementById("map-prov-id");
+            var purchaseUom = document.getElementById("map-purchase-uom").value.trim();
+            var factorInput = parseFloat(document.getElementById("map-factor").value) || 0;
+
+            if (!ingSelect.value || !provSelect.value) { 
+                alert("Por favor, selecciona un ingrediente y un proveedor."); 
+                return; 
+            }
+
+            var providerTextName = provSelect.options[provSelect.selectedIndex].text.trim();
+
+            // FIXED TYPE SCHEMA MATCH: ingredient_id is passed as a string string to satisfy UUID format parameters
+            var payload = {
+                ingredient_id: ingSelect.value, // Replaced parseInt() with raw option hash string value!
+                provider_name: providerTextName,
+                purchase_uom: purchaseUom,
+                units_per_purchase: factorInput
+            };
+
+            fetch(BASE_API_URL + "supplier_formats", {
+                method: "POST",
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=minimal" 
+                },
+                body: JSON.stringify(payload)
+            }).then(function(res) {
+                if (res.ok) {
+                    alert("✅ ¡Tasa de conversión registrada con éxito!");
+                    document.getElementById("mapping-form").reset();
+                    renderMappingsTable();
+                } else {
+                    alert("❌ Error 400: Conflicto en el tipo de dato del Servidor.");
+                }
+            }).catch(function(err) {
+                console.error("Critical submission fail:", err);
+            });
+        }
+
+
+
+        // Phase 6: Post New Recipe Unit Ingredient Entry to Supabase
+        function createNewIngredient(event) {
+            event.preventDefault();
+            var nameEn = document.getElementById("ing-name-en").value.trim();
+            var nameEs = document.getElementById("ing-name-es").value.trim();
+            var uomVal = document.getElementById("ing-uom").value;
+            var costVal = parseFloat(document.getElementById("ing-cost").value) || 0;
+            fetch(BASE_API_URL + "ingredients", {
+                method: "POST",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ name_en: nameEn, name_es: nameEs, uom: uomVal, std_cost_per_unit: costVal })
+            }).then(function(res) { if (res.ok) { alert("✅ ¡Ingrediente añadido!"); document.getElementById("ingredient-form").reset(); renderMasterIngredientsTable(); prefetchIngredients(); } });
+        }
+
+        // Phase 7: Post New Supplier Record to Supabase Matching Verified Schema Fields Only
+        function createNewProvider(event) {
+            event.preventDefault();
+            var nameVal = document.getElementById("prov-name").value.trim();
+            var phoneVal = document.getElementById("prov-phone").value.trim();
+            fetch(BASE_API_URL + "suppliers", {
+                method: "POST",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ name: nameVal, phone: phoneVal })
+            }).then(function(res) { if (res.ok) { alert("✅ ¡Proveedor añadido!"); document.getElementById("provider-form").reset(); renderProvidersTable(); } });
+        }
+
+                // 🟢 PRODUCTION APPROVAL PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
+        function approveRecipe(id) {
+            var el = document.getElementById("recipe-row-" + id);
+            if (el) el.style.opacity = "0.3";
+            
+            // 1. Fetch the full recipe metadata details first to check its category parameters
+            fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
+            .then(function(res) { return res.json(); })
+            .then(function(recipeData) {
+                // 🛡️ ACCURATE ARRAY TARGETING: Extract element index 0 to unwrap the recipe object details cleanly
+                if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
+                var recipe = recipeData[0]; 
+                
+                // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
+                return fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(recipeIngredients) {
+                    
+                    return fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                    .then(function(res) { return res.json(); })
+                    .then(function(masterIngredients) {
+                        
+                        var totalRecipeCostMath = 0;
+                        if (Array.isArray(recipeIngredients) && Array.isArray(masterIngredients)) {
+                            recipeIngredients.forEach(function(ri) {
+                                var match = masterIngredients.find(function(i) { return String(i.id) === String(ri.ingredient_id); });
+                                if (match) {
+                                    var ingCost = parseFloat(match.std_cost_per_unit) || 0;
+                                    var ingQty = parseFloat(ri.quantity) || 0;
+                                    var scrapFactor = 1 + (parseFloat(ri.scrap_percentage || 0) / 100);
+                                    totalRecipeCostMath += (ingQty * ingCost * scrapFactor);
+                                }
+                            });
+                        }
+
+                        // Divide total recipe cost by the yield divisor factor
+                        var yieldDivisor = parseFloat(recipe.servings) || 1;
+                        if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
+                        
+                        // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals rounded to 4 spaces
+                        var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
+
+                        // 3. Patch valid table columns, including your brand new cost_per_serving column asset
+                        return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                            method: "PATCH", 
+                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
+                            body: JSON.stringify({ 
+                                is_approved: true, 
+                                status: "approved",
+                                cost_per_serving: calculatedCostPerUnit
+                            }) 
+                        })
+                        .then(function(res) {
+                            if (!res.ok) throw new Error("Failed to patch recipe approval status.");
+                            
+                            // 4. If the recipe is Tier 2, automatically bridge it into your ingredients catalog table directory
+                            if (recipe.category === "tier2") {
+                                var rawName = recipe.name || "Receta Sub-Base Tier 2";
+                                var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                                var tier2UOM = recipe.tier2_uom || "porcion"; 
+
+                                return fetch(BASE_API_URL + "ingredients", {
+                                    method: "POST",
+                                    headers: { 
+                                        "apikey": API_KEY, 
+                                        "Content-Type": "application/json",
+                                        "Prefer": "return=minimal"
+                                    },
+                                    body: JSON.stringify({
+                                        name_es: nameClean + " (Tier 2)",
+                                        name_en: nameClean + " (Tier 2 Bulk Base)",
+                                        std_cost_per_unit: calculatedCostPerUnit,
+                                        uom: tier2UOM,
+                                        is_active: true
+                                    })
+                                });
+                            }
+                        });
+                    });
+                });
+            })
+            .then(function() { 
+                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro con su costo real!"); 
+                loadQueue(); 
+            })
+            .catch(function(err) { 
+                console.error("Ecosystem bridging track fault:", err); 
+                alert("❌ Error al procesar la actualización de la receta.");
+                if (el) el.style.opacity = "";
+            });
+        }
+
+
+
+
+        function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
+        function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
+
+        // Start initialization pipeline sequentially on page load
+                window.onload = function() {
+            prefetchIngredients().then(function() {
+                loadQueue();
+                loadMasterCatalog(); // ✅ CO-LOADED: Boots your master directory table row list on page startup!
+                renderMasterIngredientsTable();
+                renderProvidersTable();
+                populateIngredientDropdown();
+                populateSupplierDropdown(); 
+                renderMappingsTable();
+            });
+        };
+
+    </script>
+        
+</body>
+</html>
