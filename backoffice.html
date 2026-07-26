@@ -546,12 +546,35 @@
         }
 
         // Phase 8: Authorize Recipe and Remove from Row Element Queue Container
+                // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and clears queue
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
-            fetch(BASE_API_URL + "recipes?id=eq." + id, { method: "PATCH", headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ is_approved: true }) })
-            .then(function(res) { if (res.ok) { alert("✅ ¡Fórmula autorizada con éxito!"); loadQueue(); } });
+            
+            // FIXED PAYLOAD: Explicitly switches status to "approved" to cleanly drop off queue workspace views
+            fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                method: "PATCH", 
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=minimal" 
+                }, 
+                body: JSON.stringify({ 
+                    is_approved: true,
+                    status: "approved" 
+                }) 
+            })
+            .then(function(res) { 
+                if (res.ok) { 
+                    alert("✅ ¡Fórmula autorizada con éxito!"); 
+                    loadQueue(); 
+                } else {
+                    alert("❌ Error al autorizar la fórmula.");
+                    if (el) el.style.opacity = "";
+                }
+            }).catch(function(err) { console.error("Approval track fault:", err); });
         }
+
                 // 🔴 REJECTION SERVICE pipeline: Overrides state to rejected and clears queue
         function rejectRecipe(id) {
             if (!confirm("¿Está seguro de que desea rechazar esta receta?")) return;
