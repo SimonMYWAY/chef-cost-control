@@ -604,12 +604,13 @@
                             var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                             var tier2UOM = recipe.tier2_uom || "porcion"; 
 
+                            // FIXED KEY VALUE PAIR: Corrected inverted header layout fields to resolve network parsing faults
                             return fetch(BASE_API_URL + "ingredients", {
                                 method: "POST",
                                 headers: { 
                                     "apikey": API_KEY, 
                                     "Content-Type": "application/json",
-                                    "Prefer=minimal": "return=minimal"
+                                    "Prefer": "return=minimal"
                                 },
                                 body: JSON.stringify({
                                     name_es: nameClean + " (Tier 2)",
@@ -633,6 +634,7 @@
                 if (el) el.style.opacity = "";
             });
         }
+
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
