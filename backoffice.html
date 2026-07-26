@@ -315,6 +315,7 @@
         }
 
                 // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -332,7 +333,6 @@
                 container.innerHTML = "";
                 if (!data || data.message) return;
                 
-                // 🛡️ CORRECTED PLACE: Sitting cleanly INSIDE loadMasterCatalog body
                 // Excludes pending queue items AND items carrying the -9.0 deletion flag
                 var catalogItems = data.filter(function(r) { 
                     var isWaiting = r.status === "waiting";
@@ -354,8 +354,8 @@
                     var rawName = recipe.name || "Sin Nombre";
                     var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                     
-                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0 or deleted
-                    var isActiveForChef = parseFloat(recipe.locked_multiplier) === 1.0;
+                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active only if explicitly set to 1.0 (or default null treated as active)
+                    var isActiveForChef = recipe.locked_multiplier === null || parseFloat(recipe.locked_multiplier) === 1.0 || recipe.locked_multiplier === undefined;
                     
                     var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
                     var isCheckedAttr = isActiveForChef ? "checked" : "";
@@ -364,7 +364,7 @@
                     row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:4px; transition: opacity 0.2s ease; " + rowOpacity);
                     
                     row.innerHTML = "<div style='flex:1; text-align:left;'>" +
-                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem CONTAINER;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
+                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
                                         "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
                                     "</div>" +
                                     "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
@@ -385,50 +385,71 @@
             }).catch(function(err) { console.error("Catalog compounding error:", err); });
         }
 
+        // 🔄 MULTIPLIER SWITCH MATRIX: Updates the locked_multiplier flag in Supabase on switch change
+        function toggleMasterCatalogActive(id, currentStatus) {
+            var targetActive = !currentStatus;
+            
+            var payload = {
+                locked_multiplier: targetActive ? 1.0 : 0.0
+            };
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    loadMasterCatalog(); 
+                } else {
+                    alert("❌ Error al modificar la visibilidad de la receta.");
+                    loadMasterCatalog(); 
+                }
+            }).catch(function(err) { 
+                console.error("Toggle fault:", err); 
+                loadMasterCatalog();
+            });
+        }
 
-
-                // 🗑️ SYSTEM PURGE LINE: Assigns the -9.0 removal flag to hide items permanently across all platforms
+        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
         function deleteRecipeFromSystem(id) {
-            if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR esta receta de prueba? Desaparecerá de todas las pantallas al instante.")) return;
+            if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba? Se borrará la fórmula de Supabase, pero sus ingredientes maestros permanecerán intactos en el catálogo general.")) return;
             
             var upperRow = document.getElementById("recipe-row-" + id);
             var lowerRow = document.getElementById("catalog-row-" + id);
-            if (upperRow) upperRow.style.opacity = "0.3";
-            if (lowerRow) lowerRow.style.opacity = "0.3";
+            if (upperRow) upperRow.style.opacity = "0.2";
+            if (lowerRow) lowerRow.style.opacity = "0.2";
 
-            // Overwrites flags cleanly: sets locked_multiplier to -9.0 to trigger global isolation rules
-            fetch(BASE_API_URL + "recipes?id=eq." + id, { 
-                method: "PATCH", 
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal" 
-                },
-                body: JSON.stringify({
-                    is_approved: true,
-                    status: "approved",
-                    locked_multiplier: -9.0 
-                })
+            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { 
+                method: "DELETE", 
+                headers: { "apikey": API_KEY } 
             })
             .then(function(res) {
-                if (!res.ok) throw new Error("Database removal flag assignment rejected.");
+                if (!res.ok) throw new Error("Failed to clear ingredient sub-links.");
+                return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                    method: "DELETE", 
+                    headers: { "apikey": API_KEY } 
+                });
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Failed to purge master recipe row.");
                 
-                // Sweep elements off the layout canvas immediately
                 if (upperRow) upperRow.remove();
                 if (lowerRow) lowerRow.remove();
                 
-                alert("🗑️ ¡Receta de prueba eliminada con éxito!");
+                alert("🗑️ ¡Receta de prueba eliminada permanentemente del ecosistema con éxito!");
                 
-                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
-                if (typeof loadQueue === "function") loadQueue();
+                loadMasterCatalog();
+                loadQueue();
             })
             .catch(function(err) { 
-                console.error("Purge failure:", err); 
-                alert("❌ Error al procesar la eliminación de la receta.");
+                console.error("Deletion pathway failure:", err); 
+                alert("❌ Error al procesar la eliminación física de la base de datos.");
                 if (upperRow) upperRow.style.opacity = "";
                 if (lowerRow) lowerRow.style.opacity = "";
             });
         }
+
 
                 // Phase 3: Interactive formula inspector popup modal
         function viewRecipeDetails(recipeId, name, category, servings) {
