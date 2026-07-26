@@ -546,63 +546,68 @@
         }
 
         // Phase 8: Authorize Recipe and Remove from Row Element Queue Container
-                // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and clears queue
+        // 🟢 APPROVAL SERVICE PIPELINE: Upgrades lifecycle status and mirrors Tier 2 items to ingredients
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
             
-            // FIXED PAYLOAD: Explicitly switches status to "approved" to cleanly drop off queue workspace views
-            fetch(BASE_API_URL + "recipes?id=eq." + id, { 
-                method: "PATCH", 
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Content-Type": "application/json", 
-                    "Prefer": "return=minimal" 
-                }, 
-                body: JSON.stringify({ 
-                    is_approved: true,
-                    status: "approved" 
-                }) 
+            // 1. Fetch the full recipe details first to check its category and metrics before archiving
+            fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
+            .then(function(res) { return res.json(); })
+            .then(function(recipeData) {
+                if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
+                var recipe = recipeData[0];
+                
+                // 2. Patch the recipe status to "approved"
+                return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                    method: "PATCH", 
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
+                    body: JSON.stringify({ is_approved: true, status: "approved" }) 
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Failed to patch recipe approval status.");
+                    
+                    // 3. If the recipe is Tier 2, automatically bridge it into your ingredients catalog directory
+                    if (recipe.category === "tier2") {
+                        // Use raw naming parameters or safe fallback strings
+                        var rawName = recipe.name || "Receta Sub-Base Tier 2";
+                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        
+                        // Use custom Tier 2 Output metrics or default gracefully to "porcion"
+                        var tier2UOM = recipe.tier2_uom || "porcion"; 
+                        
+                        // Calculate cost per unit based on totals matrix, fallback gracefully if not calculated yet
+                        var finalUnitCost = parseFloat(recipe.cost_per_serving) || 0;
+
+                        return fetch(BASE_API_URL + "ingredients", {
+                            method: "POST",
+                            headers: { 
+                                "apikey": API_KEY, 
+                                "Content-Type": "application/json",
+                                "Prefer": "return=minimal"
+                            },
+                            body: JSON.stringify({
+                                name_es: nameClean + " (Tier 2)",
+                                name_en: nameClean + " (Tier 2 Bulk Base)",
+                                std_cost_per_unit: finalUnitCost,
+                                uom: tier2UOM,
+                                is_active: true
+                            })
+                        });
+                    }
+                });
             })
-            .then(function(res) { 
-                if (res.ok) { 
-                    alert("✅ ¡Fórmula autorizada con éxito!"); 
-                    loadQueue(); 
-                } else {
-                    alert("❌ Error al autorizar la fórmula.");
-                    if (el) el.style.opacity = "";
-                }
-            }).catch(function(err) { console.error("Approval track fault:", err); });
+            .then(function() { 
+                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro de ingredientes!"); 
+                loadQueue(); 
+            })
+            .catch(function(err) { 
+                console.error("Ecosystem bridging track fault:", err); 
+                alert("❌ Error al procesar la autorización estructurada.");
+                if (el) el.style.opacity = "";
+            });
         }
 
-                // 🔴 REJECTION SERVICE pipeline: Overrides state to rejected and clears queue
-        function rejectRecipe(id) {
-            if (!confirm("¿Está seguro de que desea rechazar esta receta?")) return;
-            
-            fetch(BASE_API_URL + "recipes?id=eq." + id, {
-                method: "PATCH",
-                headers: {
-                    "apikey": API_KEY,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
-                },
-                body: JSON.stringify({ status: "rejected" })
-            })
-            .then(function(res) {
-                if (res.ok) {
-                    // Re-fire your queue renderer to sweep the card off the screen instantly
-                    if (typeof renderApprovalQueue === "function") {
-                        renderApprovalQueue();
-                    } else if (typeof loadRecipes === "function") {
-                        loadRecipes();
-                    } else {
-                        location.reload();
-                    }
-                } else {
-                    alert("❌ Error al procesar el rechazo de la receta.");
-                }
-            }).catch(function(err) { console.error("Rejection path crash:", err); });
-        }
 
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
