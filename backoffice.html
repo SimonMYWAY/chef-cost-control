@@ -385,8 +385,7 @@
         }
 
 
-        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
-                // 🗑️ HARD REMOVAL LIFELINE: Safely wipes records from Supabase with precise database constraint handling
+                // 🗑️ HARD REMOVAL LIFELINE: Safely purges records permanently from Supabase servers
         function deleteRecipeFromSystem(id) {
             if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba? Se borrará la fórmula de Supabase, pero sus ingredientes maestros permanecerán intactos en el catálogo general.")) return;
             
@@ -398,7 +397,7 @@
             // 1. Wipe nested child dependencies inside recipe_ingredients first
             fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { 
                 method: "DELETE", 
-                headers: { "apikey": API_KEY } 
+                headers: { "apikey": API_KEY, "Prefer": "return=minimal" } 
             })
             .then(function(res) {
                 if (!res.ok) throw new Error("Failed to clear ingredient sub-links.");
@@ -406,20 +405,13 @@
                 // 2. Erase the parent recipe row from the database cleanly
                 return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                     method: "DELETE", 
-                    headers: { "apikey": API_KEY, "Prefer": "return=representation" } // Ask for status response data!
+                    headers: { "apikey": API_KEY, "Prefer": "return=minimal" } // Standard minimal payload alignment
                 });
             })
             .then(function(res) {
-                // 🛡️ REJECTION CONTROL CHECK: If the server returned an error code, trap it immediately!
-                if (!res.ok) {
-                    return res.json().then(function(errBody) {
-                        throw new Error(errBody.message || "Foreign key cascade constraint violation.");
-                    });
-                }
-                return res.json();
-            })
-            .then(function(deletedData) {
-                // 🧹 REAL-TIME CLIENT-SIDE CANVASS SWEEP: Only execute if the database actually committed the delete!
+                if (!res.ok) throw new Error("Foreign key cascade constraint violation or network denial.");
+                
+                // 🧹 REAL-TIME CLIENT-SIDE SWEEP & BLACKLIST LOGGING
                 if (typeof _deletedRecipeIds !== "undefined") {
                     _deletedRecipeIds.push(String(id));
                 }
@@ -434,11 +426,12 @@
             })
             .catch(function(err) { 
                 console.error("Deletion pathway failure:", err); 
-                alert("❌ No se pudo eliminar de la base de datos: Esta receta está bloqueada porque está vinculada como ingrediente Tier 2 en otra fórmula activa. Use el interruptor Switch para desactivarla en su lugar.");
+                alert("❌ No se pudo eliminar de la base de datos: Esta receta podría estar bloqueada porque está vinculada como ingrediente Tier 2 en otra fórmula activa. Use el interruptor Switch para desactivarla en su lugar.");
                 if (upperRow) upperRow.style.opacity = "";
                 if (lowerRow) lowerRow.style.opacity = "";
             });
         }
+
 
 
                 // Phase 3: Interactive formula inspector popup modal
