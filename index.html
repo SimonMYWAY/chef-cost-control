@@ -855,25 +855,40 @@
                 });
             });
 
-            // LOCAL SANDBOX FIX: Save data to browser memory to bypass server RLS blocks completely!
+            // 🌐 LOCAL SANDBOX FIX: Save data to browser memory to bypass server RLS blocks completely!
+            const activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
+            let finalStatus = "draft";
+            
+            // Maintain lifecycle states: Keep 'rejected' flags active until a formal resubmission occurs
+            if (activeItem && (activeItem.status === "rejected" || activeItem.status === "new")) {
+                finalStatus = activeItem.status === "rejected" ? "rejected" : "draft";
+            }
+
             const recipeStorageKey = `recipe_draft_${recipeId}`;
             const draftPayload = {
                 category: category,
                 servings: servings,
+                status: finalStatus,
                 ingredients: localIngredientsArray
             };
             localStorage.setItem(recipeStorageKey, JSON.stringify(draftPayload));
 
             // Sync your active browser memory variables to prevent self-wiping loop resets
-            const activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
             if (activeItem) {
                 activeItem.category = category;
                 activeItem.servings = servings;
+                activeItem.status = finalStatus;
                 activeItem.is_approved = false;
             }
 
-                        if (nameInput) nameInput.className = 'status-saved'; // Changes to grey on successful storage sequence!
-
+            // 🎨 VISUAL ACCENT MANAGER: Apply styling classes dynamically based on operational state
+            if (nameInput) {
+                if (finalStatus === "rejected") {
+                    nameInput.className = 'status-rejected'; // Retain specific visibility parameters for reworks
+                } else {
+                    nameInput.className = 'status-saved'; // Standard draft changes cleanly to grey!
+                }
+            }
             alert(currentLang === 'en' ? 'Draft saved successfully!' : '¡Borrador guardado con éxito!');
 
         } catch (err) {
