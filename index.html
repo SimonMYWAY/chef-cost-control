@@ -644,6 +644,17 @@
                 alert(currentLang === 'en' ? 'Please save your ingredients as a draft first!' : '¡Por favor guarde sus ingredientes como borrador primero!');
                 return;
             }
+                        // 🛡️ LOCK GUARD PIEPLINE: Block saves if the master cloud version is already approved
+            if (typeof _loadedRevoCatalog !== 'undefined') {
+                const currentCloudMatch = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
+                if (currentCloudMatch && currentCloudMatch.status === 'approved') {
+                    alert(currentLang === 'en' 
+                        ? '⚠️ This recipe is currently APPROVED and locked. Please ask management to click "Liberar" in the backoffice to allow modifications!' 
+                        : '⚠️ Esta receta está APROBADA y bloqueada. ¡Por favor solicite a la administración hacer clic en "Liberar" en el backoffice para modificarla!'
+                    );
+                    return; // KILL EXECUTION COMPLETELY
+                }
+            }
 
             // STAGE 1: Update the master cloud table. We switch 'is_approved' to false but update details
             // to notify the admin that a fresh file is officially waiting inside their review dashboard pipeline
