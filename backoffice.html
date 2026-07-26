@@ -554,8 +554,8 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
+                // 🛡️ ACCURATE ARRAY TARGETING: Extract element index 0 to unwrap the recipe object details cleanly
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
-                // Supabase returns an array, safely target index 0
                 var recipe = recipeData[0]; 
                 
                 // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
@@ -582,7 +582,7 @@
                     var yieldDivisor = parseFloat(recipe.servings) || 1;
                     if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
                     
-                    // 💸 FIXED PRECISION ROUNDING: Formats the calculation to a clean database numeric value
+                    // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals
                     var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                     // 3. Patch valid table columns, including your brand new cost_per_serving column asset
@@ -609,7 +609,7 @@
                                 headers: { 
                                     "apikey": API_KEY, 
                                     "Content-Type": "application/json",
-                                    "Prefer": "return=minimal"
+                                    "Prefer=minimal": "return=minimal"
                                 },
                                 body: JSON.stringify({
                                     name_es: nameClean + " (Tier 2)",
@@ -633,13 +633,6 @@
                 if (el) el.style.opacity = "";
             });
         }
-
-
-
-
-
-
-
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
