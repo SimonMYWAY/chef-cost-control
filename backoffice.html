@@ -76,6 +76,24 @@
                 <h3>Cola de Revisión de Fórmulas</h3>
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
+                        <div id="view-approvals" class="view-pane active">
+            <div class="card">
+                <h3>Cola de Revisión de Fórmulas</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
+                <div id="queue-container"></div>
+                
+                <!-- 📋 NESTED MASTER RECIPE DIRECTORY (SAFE INSIDE APPROVALS TAB CONTAINER) -->
+                <div style="margin-top: 40px; border-top: 2px dashed var(--border-color); padding-top: 25px; width: 100%;">
+                    <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
+                    <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+                    <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+                        <!-- Approved and draft recipe card records will draw cleanly inside this secure tab space -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
             </div>
         </div>
 
@@ -735,21 +753,6 @@
         };
 
     </script>
-        <!-- 📋 MASTER CONTROL PANEL: Hardlocked outside dynamic view wrappers to stop screen invasion bugs -->
-    <div id="master-catalog-isolated-footer-zone" style="max-width: 1200px; margin: 50px auto; padding: 20px; display: block; clear: both; position: relative;">
-        <div style="background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box;">
-            <div style="background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 15px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
-                <h2 style="margin:0; font-size:1.2rem; color:var(--text-main); text-align: left;">📋 Directorio Maestro de Recetas</h2>
-                <p style="margin:5px 0 0 0; font-size:0.85rem; color:var(--text-muted); text-align: left;">Catálogo general de fórmulas en el sistema</p>
-            </div>
-            <div style="padding: 15px; background-color: var(--bg-surface); border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
-                    <!-- Rows will compile natively inside this absolute boundary -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-
+        
 </body>
 </html>
