@@ -314,8 +314,7 @@
             }).catch(function(err) { console.error("Queue compiling fault:", err); });
         }
 
-        // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Block-List Guarded)
-                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Block-List Guarded)
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -324,7 +323,8 @@
                 headers: { 
                     "apikey": API_KEY,
                     "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache"
+                    "Pragma": "no-cache",
+                    "Expires": "0"
                 } 
             })
             .then(function(res) { return res.json(); })
@@ -332,12 +332,11 @@
                 container.innerHTML = "";
                 if (!data || data.message) return;
                 
-                // 🛡️ UNIFIED CASE-INSENSITIVE BLACKLIST FILTER: Guarantees deleted UUID items never resurface on screen refresh loops
+                // 🛡️ CORRECTED PLACE: Sitting cleanly INSIDE loadMasterCatalog body
+                // Excludes pending queue items AND items carrying the -9.0 deletion flag
                 var catalogItems = data.filter(function(r) { 
                     var isWaiting = r.status === "waiting";
-                    var isDeleted = _deletedRecipeIds.some(function(id) {
-                        return String(id).toLowerCase().trim() === String(r.id).toLowerCase().trim();
-                    });
+                    var isDeleted = parseFloat(r.locked_multiplier) === -9.0;
                     return !isWaiting && !isDeleted;
                 });
                 
@@ -353,9 +352,11 @@
                     row.id = "catalog-row-" + recipe.id;
                     
                     var rawName = recipe.name || "Sin Nombre";
-                    var nameClean = rawName.includes("||") ? rawName.split("||").trim() : rawName.trim();
+                    var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                     
-                    var isActiveForChef = parseFloat(recipe.locked_multiplier) !== 0.0;
+                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0 or deleted
+                    var isActiveForChef = parseFloat(recipe.locked_multiplier) === 1.0;
+                    
                     var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
                     var isCheckedAttr = isActiveForChef ? "checked" : "";
                     var rowOpacity = isActiveForChef ? "background-color:var(--bg-surface);" : "background-color:var(--bg-surface); opacity:0.65;";
@@ -363,7 +364,7 @@
                     row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:4px; transition: opacity 0.2s ease; " + rowOpacity);
                     
                     row.innerHTML = "<div style='flex:1; text-align:left;'>" +
-                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
+                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem CONTAINER;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
                                         "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
                                     "</div>" +
                                     "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
@@ -385,17 +386,17 @@
         }
 
 
-                // 🗑️ HARD REMOVAL LIFELINE: Safely purges records permanently from Supabase servers
-                // 🗑️ HARD REMOVAL LIFELINE: Archives records via status override to bypass strict server RLS blockages permanentely
+
+                // 🗑️ SYSTEM PURGE LINE: Assigns the -9.0 removal flag to hide items permanently across all platforms
         function deleteRecipeFromSystem(id) {
-            if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR esta receta de prueba? Se archivará en la base de datos y desaparecerá de todas las pantallas al instante.")) return;
+            if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR esta receta de prueba? Desaparecerá de todas las pantallas al instante.")) return;
             
             var upperRow = document.getElementById("recipe-row-" + id);
             var lowerRow = document.getElementById("catalog-row-" + id);
-            if (upperRow) upperRow.style.opacity = "0.2";
-            if (lowerRow) lowerRow.style.opacity = "0.2";
+            if (upperRow) upperRow.style.opacity = "0.3";
+            if (lowerRow) lowerRow.style.opacity = "0.3";
 
-            // 🛡️ RE-ALIGNED AS AN ARCHIVE UPDATE: Overrides status string to completely drop off all client screens
+            // Overwrites flags cleanly: sets locked_multiplier to -9.0 to trigger global isolation rules
             fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                 method: "PATCH", 
                 headers: { 
@@ -404,37 +405,30 @@
                     "Prefer": "return=minimal" 
                 },
                 body: JSON.stringify({
-                    is_approved: false,
-                    status: "archived",
-                    locked_multiplier: 0.0 // Ensure it gets frozen completely
+                    is_approved: true,
+                    status: "approved",
+                    locked_multiplier: -9.0 
                 })
             })
             .then(function(res) {
-                if (!res.ok) throw new Error("Database status override rejected.");
+                if (!res.ok) throw new Error("Database removal flag assignment rejected.");
                 
-                // 🧹 REAL-TIME CLIENT-SIDE CANVASS SWEEP & BLACKLIST LOGGING
-                if (typeof _deletedRecipeIds !== "undefined") {
-                    _deletedRecipeIds.push(String(id));
-                }
-                
+                // Sweep elements off the layout canvas immediately
                 if (upperRow) upperRow.remove();
                 if (lowerRow) lowerRow.remove();
                 
-                alert("🗑️ ¡Receta de prueba eliminada del catálogo con éxito!");
+                alert("🗑️ ¡Receta de prueba eliminada con éxito!");
                 
                 if (typeof loadMasterCatalog === "function") loadMasterCatalog();
                 if (typeof loadQueue === "function") loadQueue();
             })
             .catch(function(err) { 
-                console.error("Archive pathway failure:", err); 
+                console.error("Purge failure:", err); 
                 alert("❌ Error al procesar la eliminación de la receta.");
                 if (upperRow) upperRow.style.opacity = "";
                 if (lowerRow) lowerRow.style.opacity = "";
             });
         }
-
-
-
 
                 // Phase 3: Interactive formula inspector popup modal
         function viewRecipeDetails(recipeId, name, category, servings) {
