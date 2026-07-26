@@ -269,18 +269,20 @@
 
         // Phase 2: Render approval queue row parameters safely
                 // 🎛️ PENDING QUEUE MONITOR: Fetches and displays ONLY items actively waiting for admin approval
+                // 🎛️ PENDING QUEUE MONITOR: Fetches and displays ONLY items actively waiting for admin approval (Cache-Proof)
         function loadQueue() {
             var container = document.getElementById("queue-container");
             if (!container) return;
             
-            fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } })
+            // 🛡️ CACHE BUSTER: Appending a live timestamp forces Supabase to bypass network caching layers
+            var cacheBustUrl = BASE_API_URL + "recipes?_ts=" + Date.now();
+            
+            fetch(cacheBustUrl, { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
-                    // Clean the canvas panel row elements immediately before repainting
                     container.innerHTML = "";
                     if (!data || data.message) return;
                     
-                    // 🛡️ ACCURATE QUEUE FILTER: Isolate ONLY records actively waiting for review
                     var pending = data.filter(function(r) { 
                         return r.status === "waiting"; 
                     });
@@ -290,7 +292,6 @@
                         return; 
                     }
                     
-                    // Arrange logically, descending by ID index parameters
                     pending.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
                     
                     pending.forEach(function(recipe) {
@@ -299,7 +300,6 @@
                         row.id = "recipe-row-" + recipe.id;
                         var rawName = recipe.name || "Sin Nombre";
                         
-                        // Strict structural clean name string split parsing
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                         
                         row.innerHTML = "<div><div style='font-weight:600; color:var(--text-main);'>" + nameClean + "</div><div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + "</div></div>" +
@@ -310,20 +310,21 @@
                 }).catch(function(err) { console.error("Queue compiling fault:", err); });
         }
              
-                // 📋 MASTER DIRECTORY ENGINE: Displays all approved or draft recipes currently stored in your cloud
-                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches
-                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches
+            
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Proof)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
             
-            fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } })
+            // 🛡️ CACHE BUSTER: Appending a live timestamp forces Supabase to bypass network caching layers
+            var cacheBustUrl = BASE_API_URL + "recipes?_ts=" + Date.now();
+            
+            fetch(cacheBustUrl, { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     container.innerHTML = "";
                     if (!data || data.message) return;
                     
-                    // Filter out items actively stuck in the pending approval queue
                     var catalogItems = data.filter(function(r) { return r.status !== "waiting"; });
                     
                     if (catalogItems.length === 0) {
@@ -331,7 +332,6 @@
                         return;
                     }
                     
-                    // Sort descending by numeric ID baseline index values
                     catalogItems.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
                     
                     catalogItems.forEach(function(recipe) {
@@ -339,7 +339,7 @@
                         row.id = "catalog-row-" + recipe.id;
                         
                         var rawName = recipe.name || "Sin Nombre";
-                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        var nameClean = rawName.includes("||") ? rawName.split("||").trim() : rawName.trim();
                         
                         // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0
                         var isActiveForChef = parseFloat(recipe.locked_multiplier) !== 0.0;
@@ -357,7 +357,6 @@
                                         "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
                                             "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
                                             
-                                            /* 🎚️ MODERN INLINE SWITCH CONTROL */
                                             "<label style='position:relative; display:inline-block; width:44px; height:24px; margin:0; cursor:pointer;'>" +
                                                 "<input type='checkbox' " + isCheckedAttr + " onchange=\"toggleMasterCatalogActive('" + recipe.id + "', " + isActiveForChef + ")\" style='opacity:0; width:0; height:0;'>" +
                                                 "<span style='position:absolute; top:0; left:0; right:0; bottom:0; background-color:" + (isActiveForChef ? "#22c55e" : "#cbd5e1") + "; border-radius:24px; transition:0.3s;'>" +
@@ -377,7 +376,6 @@
         function toggleMasterCatalogActive(id, currentStatus) {
             var targetActive = !currentStatus;
             
-            // 🌟 1.0 = Active/Visible, 0.0 = Archived/Hidden
             var payload = {
                 locked_multiplier: targetActive ? 1.0 : 0.0
             };
@@ -389,10 +387,11 @@
             })
             .then(function(res) {
                 if (res.ok) {
-                    loadMasterCatalog(); // Instantly update rows and repaint layout
+                    alert("🔄 Estado de visibilidad actualizado en la base de datos.");
+                    loadMasterCatalog(); 
                 } else {
                     alert("❌ Error al modificar la visibilidad de la receta.");
-                    loadMasterCatalog(); // Reset toggle if failed
+                    loadMasterCatalog(); 
                 }
             }).catch(function(err) { 
                 console.error("Toggle fault:", err); 
@@ -400,26 +399,22 @@
             });
         }
 
-        // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
-                // 🗑️ HARD REMOVAL LIFELINE: Erases records from Supabase and sweeps the layout canvas instantly
+
+                // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
         function deleteRecipeFromSystem(id) {
             if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba? Se borrará la fórmula de Supabase, pero sus ingredientes maestros permanecerán intactos en el catálogo general.")) return;
             
-            // Apply a dimming animation directly onto the target cards on click
             var upperRow = document.getElementById("recipe-row-" + id);
             var lowerRow = document.getElementById("catalog-row-" + id);
             if (upperRow) upperRow.style.opacity = "0.2";
             if (lowerRow) lowerRow.style.opacity = "0.2";
 
-            // 1. Wipe nested child dependencies inside recipe_ingredients first
             fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { 
                 method: "DELETE", 
                 headers: { "apikey": API_KEY } 
             })
             .then(function(res) {
                 if (!res.ok) throw new Error("Failed to clear ingredient sub-links.");
-                
-                // 2. Erase the parent recipe row from the database cleanly
                 return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                     method: "DELETE", 
                     headers: { "apikey": API_KEY } 
@@ -428,16 +423,15 @@
             .then(function(res) {
                 if (!res.ok) throw new Error("Failed to purge master recipe row.");
                 
-                // 🧹 REAL-TIME CLIENT-SIDE CANVASS SWEEP:
-                // Manually remove the row elements from your display monitor canvas instantly!
+                // Sweep elements off the layout canvas immediately to beat database index lag
                 if (upperRow) upperRow.remove();
                 if (lowerRow) lowerRow.remove();
                 
                 alert("🗑️ ¡Receta de prueba eliminada permanentemente del ecosistema con éxito!");
                 
-                // 3. Re-fire refresh loaders to keep underlying arrays synced up
-                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
-                if (typeof loadQueue === "function") loadQueue();
+                // Triggers clean loaders using fresh network timestamp rules
+                loadMasterCatalog();
+                loadQueue();
             })
             .catch(function(err) { 
                 console.error("Deletion pathway failure:", err); 
@@ -446,6 +440,7 @@
                 if (lowerRow) lowerRow.style.opacity = "";
             });
         }
+
 
 
 
