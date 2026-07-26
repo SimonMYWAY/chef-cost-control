@@ -555,6 +555,7 @@
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
+                // Supabase returns an array, safely target index 0
                 var recipe = recipeData[0]; 
                 
                 // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
@@ -581,9 +582,10 @@
                     var yieldDivisor = parseFloat(recipe.servings) || 1;
                     if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
                     
-                    var calculatedCostPerUnit = totalRecipeCostMath / yieldDivisor;
+                    // 💸 FIXED PRECISION ROUNDING: Formats the calculation to a clean database numeric value
+                    var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
-                    // 3. Patch the recipe status to "approved" and save the calculated cost to the row parameter
+                    // 3. Patch valid table columns, including your brand new cost_per_serving column asset
                     return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                         method: "PATCH", 
                         headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
@@ -631,6 +633,7 @@
                 if (el) el.style.opacity = "";
             });
         }
+
 
 
 
