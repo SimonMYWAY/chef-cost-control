@@ -70,29 +70,27 @@
 
     <div class="main-content">
         <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
-        <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
+                <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
         <div id="view-approvals" class="view-pane active">
-            <div class="card">
+            
+            <!-- UPPER BOX: Pending reviewing queue panel -->
+            <div class="card" style="width: 100%; box-sizing: border-box; margin-bottom: 25px;">
                 <h3>Cola de Revisión de Fórmulas</h3>
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
-                        <div id="view-approvals" class="view-pane active">
-            <div class="card">
-                <h3>Cola de Revisión de Fórmulas</h3>
-                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
-                <div id="queue-container"></div>
-                
-                <!-- 📋 NESTED MASTER RECIPE DIRECTORY (SAFE INSIDE APPROVALS TAB CONTAINER) -->
-                <div style="margin-top: 40px; border-top: 2px dashed var(--border-color); padding-top: 25px; width: 100%;">
-                    <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
-                    <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
-                    <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
-                        <!-- Approved and draft recipe card records will draw cleanly inside this secure tab space -->
-                    </div>
-                </div>
-
             </div>
-        </div>
+
+            <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
+            <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
+                <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
+                <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+                    <!-- Approved and draft recipe card records will draw cleanly here -->
+                </div>
+            </div>
+
+        </div> <!-- Closes your clean view-approvals tab block parent safely -->
+
 
             </div>
         </div>
