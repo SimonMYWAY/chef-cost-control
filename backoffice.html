@@ -79,22 +79,7 @@
             </div>
         </div>
 
-                <!-- 📋 MASTER RECIPE DIRECTORY CONTAINER (ISOLATED STYLE MATRIX) -->
-        <div class="card" style="margin-top: 30px; display: block; clear: both; width: 100%;">
-            <div class="card-header" style="background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 15px;">
-                <h2 style="margin:0; font-size:1.2rem; color:var(--text-main);">📋 Directorio Maestro de Recetas</h2>
-                <p style="margin:5px 0 0 0; font-size:0.85rem; color:var(--text-muted);">Elimine permanentemente las fórmulas de prueba de su catálogo activo</p>
-            </div>
-            <div style="padding: 15px;">
-                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-                    <!-- Master rows compile natively right here via script -->
-                </div>
-            </div>
-        </div>
-
-
-
-        <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
+                <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
         <div id="view-deviations" class="view-pane">
             <div class="card">
                 <h3>Cálculo de Consumo Estándar</h3>
@@ -309,7 +294,7 @@
                     });
                 }).catch(function(err) { console.error("Queue compiling fault:", err); });
         }
-                // 📋 MASTER DIRECTORY ENGINE: Compiles and manages all active/approved production recipes
+             
                 // 📋 MASTER DIRECTORY ENGINE: Displays all approved or draft recipes currently stored in your cloud
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
@@ -325,7 +310,7 @@
                     var catalogItems = data.filter(function(r) { return r.status !== "waiting"; });
                     
                     if (catalogItems.length === 0) {
-                        container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas registradas en el catálogo maestro.</div>";
+                        container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px; text-align:left;'>No hay recetas registradas en el catálogo maestro.</div>";
                         return;
                     }
                     
@@ -334,9 +319,6 @@
                     
                     catalogItems.forEach(function(recipe) {
                         var row = document.createElement("div");
-                        
-                        // Renamed local layout configuration to isolate aesthetics and prevent popup leaks
-                        row.className = "master-catalog-row-isolated";
                         row.id = "catalog-row-" + recipe.id;
                         
                         var rawName = recipe.name || "Sin Nombre";
@@ -357,6 +339,7 @@
                     });
                 }).catch(function(err) { console.error("Catalog compounding error:", err); });
         }
+
 
         // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
         function deleteRecipeFromSystem(id) {
@@ -752,5 +735,21 @@
         };
 
     </script>
+        <!-- 📋 MASTER CONTROL PANEL: Hardlocked outside dynamic view wrappers to stop screen invasion bugs -->
+    <div id="master-catalog-isolated-footer-zone" style="max-width: 1200px; margin: 50px auto; padding: 20px; display: block; clear: both; position: relative;">
+        <div style="background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box;">
+            <div style="background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 15px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                <h2 style="margin:0; font-size:1.2rem; color:var(--text-main); text-align: left;">📋 Directorio Maestro de Recetas</h2>
+                <p style="margin:5px 0 0 0; font-size:0.85rem; color:var(--text-muted); text-align: left;">Catálogo general de fórmulas en el sistema</p>
+            </div>
+            <div style="padding: 15px; background-color: var(--bg-surface); border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+                    <!-- Rows will compile natively inside this absolute boundary -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 </body>
 </html>
