@@ -315,7 +315,6 @@
         }
 
                 // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
-                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Cache-Safe)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -352,9 +351,11 @@
                     row.id = "catalog-row-" + recipe.id;
                     
                     var rawName = recipe.name || "Sin Nombre";
-                    var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                     
-                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active only if explicitly set to 1.0 (or default null treated as active)
+                    // 🛠️ INDEX ARRAY FIXED NATIVELY:
+                    var nameClean = rawName.includes("||") ? rawName.split("||").trim() : rawName.trim();
+                    
+                    // MULTIPLIER LIFECYCLE MANAGEMENT: Active unless explicitly set to 0.0 or deleted
                     var isActiveForChef = recipe.locked_multiplier === null || parseFloat(recipe.locked_multiplier) === 1.0 || recipe.locked_multiplier === undefined;
                     
                     var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
@@ -449,6 +450,7 @@
                 if (lowerRow) lowerRow.style.opacity = "";
             });
         }
+
 
 
                 // Phase 3: Interactive formula inspector popup modal
