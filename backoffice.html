@@ -355,7 +355,7 @@
                     return nameA.localeCompare(nameB);
                 });
                 
-                catalogItems.forEach(function(recipe) {
+                                catalogItems.forEach(function(recipe) {
                     var row = document.createElement("div");
                     row.id = "catalog-row-" + recipe.id;
                     
@@ -375,8 +375,11 @@
                                         "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'> " + nameClean + " <span style='font-size:0.75rem; font-weight:normal; margin-left:8px; padding:2px 6px; border-radius:3px; background-color:#f1f5f9; color:#475569;'>" + statusLabel + "</span></div>" +
                                         "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
                                     "</div>" +
-                                    "<div style='display:flex; align-items:center; gap:15px; margin-left:15px;'>" +
+                                    "<div style='display:flex; align-items:center; gap:12px; margin-left:15px;'> " +
                                         "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
+                                        
+                                        /* 📝 THE RELEASE CONTROL BUTTON INJECTION */
+                                        "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Liberar</button>" +
                                         
                                         "<label style='position:relative; display:inline-block; width:44px; height:24px; margin:0; cursor:pointer;'>" +
                                             "<input type='checkbox' " + isCheckedAttr + " onchange=\"toggleMasterCatalogActive('" + recipe.id + "', " + isActiveForChef + ")\" style='opacity:0; width:0; height:0;'>" +
@@ -391,7 +394,34 @@
                     container.appendChild(row);
                 });
             }).catch(function(err) { console.error("Catalog compounding error:", err); });
+        } // 🔒 END OF loadMasterCatalog
+
+        // 📝 RELEASE PIPELINE FUNCTION LOGIC: Sits cleanly outside the loop on its own layer
+        function releaseRecipeToDraft(id) {
+            if (!confirm("📝 ¿Desea liberar esta fórmula? Cambiará a estado Borrador (Draft) para que el chef pueda editar sus componentes directamente desde la aplicación principal.")) return;
+            
+            var payload = {
+                status: "draft",
+                is_approved: false
+            };
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("🔄 Fórmula liberada con éxito. Ya está desbloqueada en la app del chef para su edición.");
+                    if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                    if (typeof loadQueue === "function") loadQueue();
+                } else {
+                    alert("❌ Error al liberar la receta.");
+                }
+            })
+            .catch(function(err) { console.error("Release pipeline failure:", err); });
         }
+
 
         // 🔄 MULTIPLIER SWITCH MATRIX: Updates the locked_multiplier flag in Supabase on switch change
         function toggleMasterCatalogActive(id, currentStatus) {
