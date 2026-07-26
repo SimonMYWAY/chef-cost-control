@@ -315,6 +315,7 @@
         }
 
         // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Block-List Guarded)
+                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes and manages activation states via standard toggle switches (Block-List Guarded)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
@@ -331,9 +332,13 @@
                 container.innerHTML = "";
                 if (!data || data.message) return;
                 
-                // 🛡️ FILTER OUT BLACKLISTED ENTRIES INSTANTLY
+                // 🛡️ UNIFIED CASE-INSENSITIVE BLACKLIST FILTER: Guarantees deleted UUID items never resurface on screen refresh loops
                 var catalogItems = data.filter(function(r) { 
-                    return r.status !== "waiting" && !_deletedRecipeIds.includes(String(r.id)); 
+                    var isWaiting = r.status === "waiting";
+                    var isDeleted = _deletedRecipeIds.some(function(id) {
+                        return String(id).toLowerCase().trim() === String(r.id).toLowerCase().trim();
+                    });
+                    return !isWaiting && !isDeleted;
                 });
                 
                 if (catalogItems.length === 0) {
@@ -348,7 +353,7 @@
                     row.id = "catalog-row-" + recipe.id;
                     
                     var rawName = recipe.name || "Sin Nombre";
-                    var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                    var nameClean = rawName.includes("||") ? rawName.split("||").trim() : rawName.trim();
                     
                     var isActiveForChef = parseFloat(recipe.locked_multiplier) !== 0.0;
                     var statusLabel = isActiveForChef ? "🟢 Visible en Catálogo" : "❌ Desactivado (Archivado)";
@@ -378,6 +383,7 @@
                 });
             }).catch(function(err) { console.error("Catalog compounding error:", err); });
         }
+
 
         // 🗑️ HARD REMOVAL LIFELINE: Completely erases a test recipe from your database parameters safely
         function deleteRecipeFromSystem(id) {
