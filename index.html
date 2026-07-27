@@ -699,13 +699,15 @@
                 })
             });
 
-            // STAGE 2: Force synchronize your live local system memory state arrays (Only runs if un-approved!)
+                        // STAGE 2: Force synchronize your live local system memory state arrays (Only runs if un-approved!)
             const activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
             if (activeItem) {
                 activeItem.category = category;
                 activeItem.servings = servings;
+                activeItem.status = "waiting"; // 🔷 FIX: Update memory array to update badges instantly!
                 activeItem._review_flagged = true; // Tracks the review trigger inside memory cache
             }
+
 
 
                         // =======================================================================
