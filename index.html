@@ -806,6 +806,17 @@
         try {
             const pickerEl = document.getElementById('revo-recipe-picker');
                 let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
+                        // 🛡️ LOCK GUARD INJECTION: Freeze submissions completely if the recipe is already approved
+            if (recipeId && typeof _loadedRevoCatalog !== 'undefined') {
+                const cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
+                if (cloudRecord && cloudRecord.status === 'approved') {
+                    alert(currentLang === 'en' 
+                        ? '⚠️ This recipe is currently APPROVED and locked. Please request management to click "Liberar" in the backoffice to allow modifications!' 
+                        : '⚠️ Esta receta está APROBADA y bloqueada. ¡Por favor solicite a la administración hacer clic en "Liberar" en el backoffice para modificarla!'
+                    );
+                    return; // KILL ROUTINE COMPLETELY
+                }
+            }
 
             // =======================================================================
             // 🌐 AUTOMATIC CLOUD RECOGNITION & REGISTER ENGINE
