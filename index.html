@@ -661,6 +661,18 @@
                 alert(currentLang === 'en' ? 'Please save your ingredients as a draft first!' : '¡Por favor guarde sus ingredientes como borrador primero!');
                 return;
             }
+                        // 🛡️ STRUCTURAL CATEGORY VALIDATION GUARD: Block submissions if category field is empty or missing
+            const parsedDraftData = JSON.parse(localDataString);
+            const chosenCategory = (category || (parsedDraftData && parsedDraftData.category) || "").toString().trim();
+            
+            if (!chosenCategory || chosenCategory === "" || chosenCategory.toLowerCase() === "select" || chosenCategory.toLowerCase() === "n/a") {
+                alert(currentLang === 'en' 
+                    ? '⚠️ Missing Category! Please select a valid Category field before submitting for Admin approval.' 
+                    : '⚠️ ¡Falta la Categoría! Por favor seleccione una Categoría válida antes de enviar para aprobación del Administrador.'
+                );
+                return; // FREEZE SUBMISSION COMPLETELY
+            }
+
                         // 🛡️ LOCK GUARD PIEPLINE: Block saves if the master cloud version is already approved
             if (typeof _loadedRevoCatalog !== 'undefined') {
                 const currentCloudMatch = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
