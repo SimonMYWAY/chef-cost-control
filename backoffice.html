@@ -465,6 +465,31 @@
             })
             .catch(function(err) { console.error("Release pipeline failure:", err); });
         }
+                // 🟥 REJECT PIPELINE FUNCTION LOGIC: Marks a pending recipe as rejected so the chef can adjust it
+        function rejectRecipe(id) {
+            if (!confirm("🟥 ¿Desea rechazar esta receta? Cambiará a estado REJECTED para que el chef pueda revisarla y corregirla en la aplicación principal.")) return;
+            
+            var payload = {
+                status: "rejected",
+                is_approved: false
+            };
+            
+            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("🟥 Fórmula rechazada con éxito. Se ha enviado la notificación de corrección a la app del chef.");
+                    if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                    if (typeof loadQueue === "function") loadQueue();
+                } else {
+                    alert("❌ Error al procesar el rechazo de la receta.");
+                }
+            })
+            .catch(function(err) { console.error("Rejection pipeline failure:", err); });
+        }
 
 
         // 🗑️ HARD REMOVAL LIFELINE: Soft-deletes a record by stamping -9.0 to clean layout instantly across ecosystems
