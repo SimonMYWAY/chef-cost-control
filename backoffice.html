@@ -549,6 +549,7 @@
         }
         // Phase 4: Render Live Ingredient Inventory Table with Active/Inactive Toggle Sliders
                 // 📊 INGREDIENTS MONITOR: Renders all raw items with editable price fields and status toggle controls
+                // 📊 INGREDIENTS MONITOR: Renders all raw items aligned to your strict 3-Column HTML table architecture
         function renderMasterIngredientsTable() {
             var container = document.getElementById("master-ingredients-body");
             if (!container) return;
@@ -569,31 +570,25 @@
                         var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
                         var isEnabled = item.is_active === true || item.is_active === "true" || item.is_active === null;
                         
-                        var statusBtnText = isEnabled ? "Desactivar" : "Activar";
-                        var statusBtnClass = isEnabled ? "btn-red" : "btn-green";
                         var rowStyle = isEnabled ? "" : "style='opacity: 0.55; background-color: #f8fafc;'";
-                        
-                        tr.setAttribute("html-row-id", item.id);
                         if (rowStyle) tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
                         
-                        // 🌟 INJECT INLINE EDITABLE PRICE FIELD WITH EMBEDDED ACTION TRIGGER BUTTON
+                        // 🌟 REALIGNED 3-COLUMN STRUCTURE: Combine input and save 💾 button directly inside the third column cell!
                         tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + (item.name || 'Sin Nombre') + "</td>" +
                                        "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || item.uom || 'N/A') + "</td>" +
-                                       "<td style='text-align: center; width: 140px;'>" +
-                                           "<div style='display: flex; align-items: center; gap: 4px; justify-content: center;'>" +
+                                       "<td style='text-align: right; width: 160px;'>" +
+                                           "<div style='display: flex; align-items: center; gap: 4px; justify-content: flex-end;'>" +
                                                "<span style='color: var(--text-muted); font-size: 0.85rem;'>$</span>" +
-                                               "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 80px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'>" +
-                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
+                                               "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 70px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'>" +
+                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px; margin-left:2px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
                                            "</div>" +
-                                       "</td>" +
-                                       "<td style='text-align: right; width: 150px;'>" +
-                                           "<button class='btn " + statusBtnClass + "' style='padding: 4px 10px; font-size: 0.8rem;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button>" +
                                        "</td>";
                                        
                         container.appendChild(tr);
                     });
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
+
 
         // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
         function toggleIngredientStatus(id, currentStatus) {
