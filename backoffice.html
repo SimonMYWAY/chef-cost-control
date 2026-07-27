@@ -548,7 +548,6 @@
                 });
         }
         // Phase 4: Render Live Ingredient Inventory Table with Active/Inactive Toggle Sliders
-                // 📊 INGREDIENTS MONITOR: Renders all raw items with editable price fields and status toggle controls
                 // 📊 INGREDIENTS MONITOR: Renders all raw items aligned to your strict 3-Column HTML table architecture
         function renderMasterIngredientsTable() {
             var container = document.getElementById("master-ingredients-body");
@@ -588,7 +587,6 @@
                     });
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
-
 
         // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
         function toggleIngredientStatus(id, currentStatus) {
