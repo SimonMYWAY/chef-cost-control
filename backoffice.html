@@ -548,67 +548,187 @@
                 });
         }
         // Phase 4: Render Live Ingredient Inventory Table with Active/Inactive Toggle Sliders
+                // 📊 INGREDIENTS MONITOR: Renders all raw items with editable price fields and status toggle controls
         function renderMasterIngredientsTable() {
-            var rowsTarget = document.getElementById("ingredients-table-rows");
-            if (!rowsTarget) return;
+            var container = document.getElementById("master-ingredients-body");
+            if (!container) return;
             
             fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
-                    rowsTarget.innerHTML = "";
-                    if (!data || data.length === 0 || data.message) { 
-                        rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay registros.</td></tr>"; 
-                        return; 
-                    }
+                    container.innerHTML = "";
+                    if (!data || data.message) return;
                     
-                    data.sort(function(a, b) { 
-                        var nameA = a.name_es ? a.name_es.toLowerCase() : "";
-                        var nameB = b.name_es ? b.name_es.toLowerCase() : "";
-                        return nameA.localeCompare(nameB); 
+                    // Sort alphabetically from A to Z by default baseline parameters
+                    data.sort(function(a, b) {
+                        return (a.name || "").localeCompare(b.name || "");
                     });
                     
                     data.forEach(function(item) {
                         var tr = document.createElement("tr");
                         var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
-                        var formattedCost = costVal < 0.10 ? costVal.toFixed(4) : costVal.toFixed(2);
-                        
-                        // Check if the current row state status flag is true or false
                         var isEnabled = item.is_active === true || item.is_active === "true" || item.is_active === null;
-                        var statusBtnText = isEnabled ? "🟢 Activo" : "🔴 Inactivo";
-                        var statusBtnClass = isEnabled ? "btn-green" : "btn-blue";
-                        var rowOpacity = isEnabled ? "1.0" : "0.5"; // Dim row visually if ingredient is disabled
-
-                        tr.style.opacity = rowOpacity;
-                        tr.innerHTML = "<td style='padding:10px; font-weight:500;'>" + (item.name_es || "N/A") + " <span style='color:var(--text-muted); font-size:0.8rem;'>(" + (item.name_en || "N/A") + ")</span></td>" +
-                                       "<td style='padding:10px; color:var(--text-muted);'>" + (item.uom || "gr") + "</td>" +
-                                       "<td style='padding:10px; font-weight:600; color:#0284c7;'>$" + formattedCost + "</td>" +
-                                       "<td style='padding:10px; text-align:right;'>" +
-                                           "<button class='btn " + statusBtnClass + "' style='padding:4px 10px; font-size:0.75rem;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button>" +
+                        
+                        var statusBtnText = isEnabled ? "Desactivar" : "Activar";
+                        var statusBtnClass = isEnabled ? "btn-red" : "btn-green";
+                        var rowStyle = isEnabled ? "" : "style='opacity: 0.55; background-color: #f8fafc;'";
+                        
+                        tr.setAttribute("html-row-id", item.id);
+                        if (rowStyle) tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
+                        
+                        // 🌟 INJECT INLINE EDITABLE PRICE FIELD WITH EMBEDDED ACTION TRIGGER BUTTON
+                        tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + (item.name || 'Sin Nombre') + "</td>" +
+                                       "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || item.uom || 'N/A') + "</td>" +
+                                       "<td style='text-align: center; width: 140px;'>" +
+                                           "<div style='display: flex; align-items: center; gap: 4px; justify-content: center;'>" +
+                                               "<span style='color: var(--text-muted); font-size: 0.85rem;'>$</span>" +
+                                               "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 80px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'>" +
+                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
+                                           "</div>" +
+                                       "</td>" +
+                                       "<td style='text-align: right; width: 150px;'>" +
+                                           "<button class='btn " + statusBtnClass + "' style='padding: 4px 10px; font-size: 0.8rem;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button>" +
                                        "</td>";
-                        rowsTarget.appendChild(tr);
+                                       
+                        container.appendChild(tr);
                     });
-                }).catch(function(err) { console.error("Grid compiling crash:", err); });
+                }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
 
-                // 🎛️ ADMINISTRATIVE MODULE: PATCH the true/false status constraints in the cloud
+        // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
         function toggleIngredientStatus(id, currentStatus) {
-            var targetNewStatus = !currentStatus; // Flips status on click
+            var targetNewStatus = !currentStatus;
             
             fetch(BASE_API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Content-Type": "application/json", 
-                    "Prefer": "return=minimal" 
-                },
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ is_active: targetNewStatus })
             })
             .then(function(res) {
                 if (res.ok) {
-                    renderMasterIngredientsTable(); // Refresh the list grid immediately
+                    renderMasterIngredientsTable(); 
                 } else {
-                    alert("❌ Error al modificar el estado de seguridad.");
+                    alert("❌ Error al modificar el estado de vigencia del ingrediente.");
                 }
+            }).catch(function(err) { console.error("Status toggle failure:", err); });
+        }
+                // 🔄 CASCADING COST ENGINE: Updates an ingredient cost and recursively updates all parent & nested Tier 2 formulas
+        function updateIngredientCostAndCascade(ingredientId) {
+            var inputEl = document.getElementById("price-input-" + ingredientId);
+            if (!inputEl) return;
+            
+            var newCost = parseFloat(inputEl.value);
+            if (isNaN(newCost) || newCost < 0) {
+                alert("❌ Por favor ingrese un precio válido mayor o igual a cero.");
+                return;
+            }
+            
+            // Step 1: Patch the raw material cost in the ingredients database table
+            fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ std_cost_per_unit: newCost })
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Failed to update base ingredient price.");
+                
+                // Step 2: Fetch full mappings and formulas to process the cascading tree recursively
+                return Promise.all([
+                    fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                    fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                    fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                ]);
+            })
+            .then(function(results) {
+                var mappings = results[0];
+                var recipes = results[1];
+                var ingredients = results[2];
+                
+                if (!mappings || !recipes || !ingredients) return;
+                
+                // Helper index dictionaries for high-speed calculation lookups
+                var ingMap = {};
+                ingredients.forEach(i => { ingMap[String(i.id)] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
+                
+                var recMap = {};
+                recipes.forEach(r => { recMap[String(r.id)] = r; });
+                
+                // Track list queue of items that need recalculation
+                var updateQueue = [];
+                
+                // Find direct Tier 1 affected recipe IDs
+                mappings.forEach(m => {
+                    if (String(m.ingredient_id) === String(ingredientId)) {
+                        if (!updateQueue.includes(String(m.recipe_id))) {
+                            updateQueue.push(String(m.recipe_id));
+                        }
+                    }
+                });
+                
+                var processedUpdatesCount = 0;
+                
+                // Recursive loop resolver: Processes updates through your entire matrix depth
+                while (updateQueue.length > 0) {
+                    var targetRecipeId = updateQueue.shift();
+                    var recipeRecord = recMap[targetRecipeId];
+                    if (!recipeRecord) continue;
+                    
+                    // Filter down mappings to just this recipe's elements
+                    var components = mappings.filter(m => String(m.recipe_id) === targetRecipeId);
+                    var newTotalRecipeCost = 0;
+                    
+                    components.forEach(c => {
+                        var unitCost = 0;
+                        if (c.is_sub_recipe === true || c.is_sub_recipe === "true") {
+                            // Read sub-recipe structural costs from our working cache
+                            var subRec = recMap[String(c.sub_recipe_id || c.ingredient_id)];
+                            unitCost = subRec ? (parseFloat(subRec.cost_per_serving) || 0) : 0;
+                        } else {
+                            unitCost = ingMap[String(c.ingredient_id)] || 0;
+                        }
+                        
+                        var qty = parseFloat(c.quantity || c.amount) || 0;
+                        var wasteFactor = 1 + (parseFloat(c.waste_percentage || c.merma) || 0) / 100;
+                        newTotalRecipeCost += (qty * unitCost * wasteFactor);
+                    });
+                    
+                    var servingsCount = parseFloat(recipeRecord.servings) || 4;
+                    var newCostPerServing = newTotalRecipeCost / servingsCount;
+                    
+                    // Cache the updated cost back into our memory dictionary so Tier 2 parents can read it right away
+                    if (recMap[targetRecipeId]) {
+                        recMap[targetRecipeId].cost_per_serving = newCostPerServing;
+                    }
+                    
+                    // Transmit the updated calculation straight to Supabase
+                    fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
+                        method: "PATCH",
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify({ cost_per_serving: newCostPerServing })
+                    }).catch(err => console.error("Batch single patch fault:", err));
+                    
+                    processedUpdatesCount++;
+                    
+                    // 🔄 RECURSIVE CHECK FOR TIER 2 PACKETS:
+                    // Check if this newly updated recipe is itself a sub-ingredient inside any OTHER parent recipes
+                    mappings.forEach(m => {
+                        if ((m.is_sub_recipe === true || m.is_sub_recipe === "true") && String(m.sub_recipe_id || m.ingredient_id) === targetRecipeId) {
+                            if (!updateQueue.includes(String(m.recipe_id))) {
+                                updateQueue.push(String(m.recipe_id)); // Append grandparent formulas to execution stack list loop
+                            }
+                        }
+                    });
+                }
+                
+                alert("🔄 ¡Precio base guardado! El costo estándar se ha recalculado en cascada en " + processedUpdatesCount + " recetas del catálogo de manera exitosa.");
+                
+                // Repaint layout views dynamically to sync screen text metrics
+                renderMasterIngredientsTable();
+                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+            })
+            .catch(function(err) {
+                console.error("Cascading engine calculation failure:", err);
+                alert("❌ Error al procesar el recálculo automático en cascada.");
             });
         }
 
