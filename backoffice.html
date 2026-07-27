@@ -573,7 +573,7 @@
                         
                         var rawName = item.name || "Sin Nombre";
                         
-                        // 🛠️ INDEX ARRAY STRUCTURAL TYPO NATIVELY FIXED FOR THE INGREDIENT RENDERING LOOP
+                        // 🛠️ INDEX ARRAY MOUNTED CORRECTLY NATIVELY TO PREVENT RUNTIME CRASHES
                         var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                         
                         // REALIGNED 3-COLUMN STRUCTURE: Combine input and save 💾 button directly inside the third column cell!
@@ -591,6 +591,7 @@
                     });
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
+
 
 
         // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
