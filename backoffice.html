@@ -664,6 +664,9 @@
                 var ingMap = {};
                 ingredients.forEach(i => { ingMap[String(i.id)] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
                 
+                // 🌟 FIX 1: Overwrite the newly modified ingredient price directly inside the index memory map
+                ingMap[String(ingredientId)] = newCost;
+                
                 var recMap = {};
                 recipes.forEach(r => { recMap[String(r.id)] = r; });
                 
@@ -680,6 +683,7 @@
                 });
                 
                 var processedUpdatesCount = 0;
+                var patchPromises = [];
                 
                 // Recursive loop resolver: Processes updates through your entire matrix depth
                 while (updateQueue.length > 0) {
@@ -715,12 +719,13 @@
                     }
                     
                     // Transmit the updated calculation straight to Supabase
-                    fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
+                    var p = fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ cost_per_serving: newCostPerServing })
                     }).catch(err => console.error("Batch single patch fault:", err));
                     
+                    patchPromises.push(p);
                     processedUpdatesCount++;
                     
                     // 🔄 RECURSIVE CHECK FOR TIER 2 PACKETS:
@@ -734,17 +739,22 @@
                     });
                 }
                 
-                alert("🔄 ¡Precio base guardado! El costo estándar se ha recalculado en cascada en " + processedUpdatesCount + " recetas del catálogo de manera exitosa.");
-                
-                // Repaint layout views dynamically to sync screen text metrics
-                renderMasterIngredientsTable();
-                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                // Wait until all server PATCH records are fully transmitted before firing success triggers
+                Promise.all(patchPromises).then(function() {
+                    alert("🔄 ¡Precio base guardado! El costo estándar se ha recalculado en cascada en " + processedUpdatesCount + " recetas del catálogo de manera exitosa.");
+                    
+                    // 🌟 FIX 2: Repaint ALL layout blocks, explicitly forcing your upper pending queue cards to update text strings instantly!
+                    renderMasterIngredientsTable();
+                    if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                    if (typeof loadQueue === "function") loadQueue();
+                });
             })
             .catch(function(err) {
                 console.error("Cascading engine calculation failure:", err);
                 alert("❌ Error al procesar el recálculo automático en cascada.");
             });
         }
+
 
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
