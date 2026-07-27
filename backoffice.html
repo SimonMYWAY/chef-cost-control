@@ -547,7 +547,7 @@
                     });
                 });
         }
-                // 📊 INGREDIENTS MONITOR: Renders all raw items using your verified name_es schema variables
+                // 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
         function renderMasterIngredientsTable() {
             var container = document.getElementById("ingredients-table-rows");
             if (!container) return;
@@ -560,8 +560,8 @@
                     
                     // Sort alphabetically from A to Z using your master name_es property
                     data.sort(function(a, b) {
-                        var nameA = String(a.name_es || a.nombre || "Sin Nombre").toLowerCase();
-                        var nameB = String(b.name_es || b.nombre || "Sin Nombre").toLowerCase();
+                        var nameA = String(a.name_es || "Sin Nombre").toLowerCase();
+                        var nameB = String(b.name_es || "Sin Nombre").toLowerCase();
                         return nameA.localeCompare(nameB);
                     });
                     
@@ -569,8 +569,11 @@
                         var tr = document.createElement("tr");
                         var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
                         
-                        // VISIBILITY SWITCH LIFECYCLE: Active unless explicitly set to 0.0 or deleted
-                        var isEnabled = parseFloat(item.locked_multiplier) !== 0.0;
+                        // 🌟 MATCHING ACCURATE VARIABLE ROLES:
+                        // "pending" represents an active ingredient on your kitchen floor
+                        // "approved" represents a disabled/archived item from calculations
+                        var currentRawStatus = String(item.status || "pending").toLowerCase().trim();
+                        var isEnabled = currentRawStatus === "pending";
                         
                         var statusBtnText = isEnabled ? "Desactivar" : "Activar";
                         var statusBtnClass = isEnabled ? "btn-red" : "btn-green";
@@ -581,21 +584,18 @@
                         
                         var rawName = item.name_es || "Sin Nombre";
                         var nameClean = rawName.trim();
-                        
-                        // Slice off any trailing formatting tokens safely
                         if (rawName.indexOf("||") !== -1) {
                             nameClean = rawName.substring(0, rawName.indexOf("||")).trim();
                         }
                         
-                        // 🌟 ACCURATE INTEGRATION MAP: Aligned directly to name_es with your inline input and active button toggles
                         tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + nameClean + "</td>" +
                                        "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || 'N/A') + "</td>" +
                                        "<td style='text-align: right; width: 260px;'>" +
-                                           "<div style='display: flex; align-items: center; gap: 6px; justify-content: flex-end;'> " +
+                                           "<div style='display: flex; align-items: center; gap: 6px; justify-content: flex-end;'>" +
                                                "<span style='color: var(--text-muted); font-size: 0.85rem;'>$</span>" +
-                                               "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 70px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'> " +
-                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button> " +
-                                               "<button class='btn " + statusBtnClass + "' style='padding: 4px 8px; font-size: 0.8rem; margin-left: 4px;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button> " +
+                                               "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 70px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'>" +
+                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
+                                               "<button class='btn " + statusBtnClass + "' style='padding: 4px 8px; font-size: 0.8rem; margin-left: 4px;' onclick=\"toggleIngredientStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button>" +
                                            "</div>" +
                                        "</td>";
                                        
@@ -604,14 +604,10 @@
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
 
-                // 🔄 ACTIVE SWITCH STATUS MATRIX: Updates the locked_multiplier flag inside your ingredients table using valid integers
-        function toggleIngredientStatus(id, currentStatus) {
-            var targetNewStatus = !currentStatus;
-            
-            // 🛡️ INTEGER BALANCING PAYLOAD: Pass raw 1 or 0 integers to satisfy ingredient schema validation constraints
-            var payload = {
-                locked_multiplier: targetNewStatus ? 1 : 0
-            };
+        // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles the text status field cleanly to pending or approved inside Supabase
+        function toggleIngredientStatus(id, currentRawStatus) {
+            // Flip values: if it was pending, change to approved. If it was approved, shift back to pending.
+            var targetStatusText = currentRawStatus === "pending" ? "approved" : "pending";
             
             fetch(BASE_API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
@@ -620,7 +616,7 @@
                     "Content-Type": "application/json", 
                     "Prefer": "return=minimal" 
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ status: targetStatusText })
             })
             .then(function(res) {
                 if (res.ok) {
@@ -630,8 +626,6 @@
                 }
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
-
-
                 // 🔄 CASCADING COST ENGINE: Updates an ingredient cost and recursively updates all parent & nested Tier 2 formulas
         function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
