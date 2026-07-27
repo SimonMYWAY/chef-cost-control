@@ -626,8 +626,9 @@
                 }
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
-                // 🔄 CASCADING COST ENGINE: Updates an ingredient cost and recursively updates all parent & nested Tier 2 formulas
-        function updateIngredientCostAndCascade(ingredientId) {
+        
+                // 🔄 CASCADING COST ENGINE: Synchronized sequential loop to calculate and save Tier 1 and Tier 2 costs flawlessly
+        async function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
             if (!inputEl) return;
             
@@ -636,43 +637,39 @@
                 alert("❌ Por favor ingrese un precio válido mayor o igual a cero.");
                 return;
             }
-            
-            // Step 1: Patch the raw material cost in the ingredients database table
-            fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
-                method: "PATCH",
-                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                body: JSON.stringify({ std_cost_per_unit: newCost })
-            })
-            .then(function(res) {
-                if (!res.ok) throw new Error("Failed to update base ingredient price.");
-                
-                // Step 2: Fetch full mappings and formulas to process the cascading tree recursively
-                return Promise.all([
+
+            try {
+                // 1. Update the base material cost in the database first
+                var baseUpdateRes = await fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
+                    method: "PATCH",
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                    body: JSON.stringify({ std_cost_per_unit: newCost })
+                });
+                if (!baseUpdateRes.ok) throw new Error("Failed to update base ingredient price.");
+
+                // 2. Fetch all configuration data arrays in parallel
+                var results = await Promise.all([
                     fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
                     fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
                     fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
                 ]);
-            })
-            .then(function(results) {
+
                 var mappings = results[0];
                 var recipes = results[1];
                 var ingredients = results[2];
-                
                 if (!mappings || !recipes || !ingredients) return;
-                
-                // Helper index dictionaries for high-speed calculation lookups
+
+                // Build index dictionaries for fast calculation lookups
                 var ingMap = {};
                 ingredients.forEach(i => { ingMap[String(i.id)] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
-                
-                // 🌟 FIX 1: Overwrite the newly modified ingredient price directly inside the index memory map
-                ingMap[String(ingredientId)] = newCost;
-                
+                ingMap[String(ingredientId)] = newCost; // Explicit lock for your modified ingredient
+
                 var recMap = {};
                 recipes.forEach(r => { recMap[String(r.id)] = r; });
-                
-                // Track list queue of items that need recalculation
+
+                // Initialize calculation tracking queue stack
                 var updateQueue = [];
-                
+
                 // Find direct Tier 1 affected recipe IDs
                 mappings.forEach(m => {
                     if (String(m.ingredient_id) === String(ingredientId)) {
@@ -681,81 +678,73 @@
                         }
                     }
                 });
-                
+
                 var processedUpdatesCount = 0;
-                var patchPromises = [];
-                
-                // Recursive loop resolver: Processes updates through your entire matrix depth
+
+                // 🌟 SEQUENTIAL TRANSACTION LOOP: Process each formula step-by-step using strict awaits
                 while (updateQueue.length > 0) {
                     var targetRecipeId = updateQueue.shift();
                     var recipeRecord = recMap[targetRecipeId];
                     if (!recipeRecord) continue;
-                    
-                    // Filter down mappings to just this recipe's elements
+
+                    // Filter components down to just this recipe's mappings
                     var components = mappings.filter(m => String(m.recipe_id) === targetRecipeId);
                     var newTotalRecipeCost = 0;
-                    
+
                     components.forEach(c => {
                         var unitCost = 0;
                         if (c.is_sub_recipe === true || c.is_sub_recipe === "true") {
-                            // Read sub-recipe structural costs from our working cache
                             var subRec = recMap[String(c.sub_recipe_id || c.ingredient_id)];
                             unitCost = subRec ? (parseFloat(subRec.cost_per_serving) || 0) : 0;
                         } else {
                             unitCost = ingMap[String(c.ingredient_id)] || 0;
                         }
-                        
                         var qty = parseFloat(c.quantity || c.amount) || 0;
                         var wasteFactor = 1 + (parseFloat(c.waste_percentage || c.merma) || 0) / 100;
                         newTotalRecipeCost += (qty * unitCost * wasteFactor);
                     });
-                    
+
                     var servingsCount = parseFloat(recipeRecord.servings) || 4;
                     var newCostPerServing = newTotalRecipeCost / servingsCount;
-                    
-                    // Cache the updated cost back into our memory dictionary so Tier 2 parents can read it right away
+
+                    // Save the calculation into memory so Tier 2 parents can read it immediately
                     if (recMap[targetRecipeId]) {
                         recMap[targetRecipeId].cost_per_serving = newCostPerServing;
                     }
-                    
-                    // Transmit the updated calculation straight to Supabase
-                    var p = fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
+
+                    // 🌟 CRITICAL LOCK: Force the app to wait until the database successfully saves this entry
+                    await fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
-                        headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                         body: JSON.stringify({ cost_per_serving: newCostPerServing })
-                    }).catch(err => console.error("Batch single patch fault:", err));
-                    
-                    patchPromises.push(p);
+                    });
+
                     processedUpdatesCount++;
-                    
-                    // 🔄 RECURSIVE CHECK FOR TIER 2 PACKETS:
-                    // Check if this newly updated recipe is itself a sub-ingredient inside any OTHER parent recipes
+
+                    // Check if this newly updated recipe is a sub-recipe inside another parent (Tier 2)
                     mappings.forEach(m => {
                         if ((m.is_sub_recipe === true || m.is_sub_recipe === "true") && String(m.sub_recipe_id || m.ingredient_id) === targetRecipeId) {
                             if (!updateQueue.includes(String(m.recipe_id))) {
-                                updateQueue.push(String(m.recipe_id)); // Append grandparent formulas to execution stack list loop
+                                updateQueue.push(String(m.recipe_id));
                             }
                         }
                     });
                 }
-                
-                // Wait until all server PATCH records are fully transmitted before firing success triggers
-                Promise.all(patchPromises).then(function() {
+
+                // 🛡️ BATCH PROMPT TIMEOUT GUARD: Give the cloud server a brief moment to finish indexing before we load lists
+                setTimeout(function() {
                     alert("🔄 ¡Precio base guardado! El costo estándar se ha recalculado en cascada en " + processedUpdatesCount + " recetas del catálogo de manera exitosa.");
                     
-                    // 🌟 FIX 2: Repaint ALL layout blocks, explicitly forcing your upper pending queue cards to update text strings instantly!
-                    renderMasterIngredientsTable();
+                    if (typeof renderMasterIngredientsTable === "function") renderMasterIngredientsTable();
                     if (typeof loadMasterCatalog === "function") loadMasterCatalog();
                     if (typeof loadQueue === "function") loadQueue();
-                });
-            })
-            .catch(function(err) {
+                }, 300);
+
+            } catch (err) {
                 console.error("Cascading engine calculation failure:", err);
                 alert("❌ Error al procesar el recálculo automático en cascada.");
-            });
+            }
         }
-
-
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
         function renderProvidersTable() {
