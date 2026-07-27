@@ -604,14 +604,23 @@
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
 
-        // 🔄 ACTIVE SWITCH STATUS MATRIX: Updates the locked_multiplier flag in Supabase on switch change
+                // 🔄 ACTIVE SWITCH STATUS MATRIX: Updates the locked_multiplier flag inside your ingredients table using valid integers
         function toggleIngredientStatus(id, currentStatus) {
             var targetNewStatus = !currentStatus;
             
+            // 🛡️ INTEGER BALANCING PAYLOAD: Pass raw 1 or 0 integers to satisfy ingredient schema validation constraints
+            var payload = {
+                locked_multiplier: targetNewStatus ? 1 : 0
+            };
+            
             fetch(BASE_API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
-                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                body: JSON.stringify({ locked_multiplier: targetNewStatus ? 1.0 : 0.0 })
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=minimal" 
+                },
+                body: JSON.stringify(payload)
             })
             .then(function(res) {
                 if (res.ok) {
@@ -621,6 +630,7 @@
                 }
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
+
 
                 // 🔄 CASCADING COST ENGINE: Updates an ingredient cost and recursively updates all parent & nested Tier 2 formulas
         function updateIngredientCostAndCascade(ingredientId) {
