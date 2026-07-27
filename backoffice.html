@@ -548,9 +548,7 @@
                 });
         }
                 // 📊 INGREDIENTS MONITOR: Renders all raw items aligned to your strict 3-Column HTML table architecture
-                // 📊 INGREDIENTS MONITOR: Renders all raw items aligned to your strict 3-Column HTML table architecture
         function renderMasterIngredientsTable() {
-            // 🛡️ ALIGNED TO THE CORRECT TARGET IDENTIFIER FROM LINE 145 OF YOUR FILE
             var container = document.getElementById("ingredients-table-rows");
             if (!container) return;
             
@@ -562,18 +560,24 @@
                     
                     // Sort alphabetically from A to Z by default baseline parameters
                     data.sort(function(a, b) {
-                        return (a.name || "").localeCompare(b.name || "");
+                        var nameA = (a.nombre || a.name || "Sin Nombre").toLowerCase();
+                        var nameB = (b.nombre || b.name || "Sin Nombre").toLowerCase();
+                        return nameA.localeCompare(nameB);
                     });
                     
                     data.forEach(function(item) {
                         var tr = document.createElement("tr");
-                        var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
-                        var isEnabled = item.is_active === true || item.is_active === "true" || item.is_active === null;
+                        var costVal = parseFloat(item.std_cost_per_unit || item.cost || item.coste) || 0;
+                        var isEnabled = item.is_active === true || item.is_active === "true" || item.is_active === null || item.estado !== "desactivado";
                         
-                        var rowStyle = isEnabled ? "" : "style='opacity: 0.55; background-color: #f8fafc;'";
-                        if (rowStyle) tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
+                        var statusBtnText = isEnabled ? "Desactivar" : "Activar";
+                        var statusBtnClass = isEnabled ? "btn-red" : "btn-green";
                         
-                        var rawName = item.name || "Sin Nombre";
+                        if (!isEnabled) {
+                            tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
+                        }
+                        
+                        var rawName = item.nombre || item.name || "Sin Nombre";
                         var nameClean = rawName.trim();
                         
                         // Direct search pattern to slice naming tokens cleanly without array bracket syntax errors
@@ -581,14 +585,15 @@
                             nameClean = rawName.substring(0, rawName.indexOf("||")).trim();
                         }
                         
-                        // REALIGNED 3-COLUMN STRUCTURE: Combine input and save 💾 button directly inside the third column cell!
+                        // 🌟 BACK TO PERFECT SYNC: Combined input, save button, and toggle control inside your 3-column cell structure
                         tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + nameClean + "</td>" +
-                                       "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || item.uom || 'N/A') + "</td>" +
-                                       "<td style='text-align: right; width: 160px;'> " +
-                                           "<div style='display: flex; align-items: center; gap: 4px; justify-content: flex-end;'> " +
+                                       "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || item.uom || item.unidad || 'N/A') + "</td>" +
+                                       "<td style='text-align: right; width: 260px;'>" +
+                                           "<div style='display: flex; align-items: center; gap: 6px; justify-content: flex-end;'>" +
                                                "<span style='color: var(--text-muted); font-size: 0.85rem;'>$</span>" +
                                                "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal + "' style='width: 70px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; text-align: right;'>" +
-                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px; margin-left:2px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
+                                               "<button class='btn btn-blue' style='padding: 4px 6px; font-size: 0.8rem; border-radius: 4px;' onclick=\"updateIngredientCostAndCascade('" + item.id + "')\">💾</button>" +
+                                               "<button class='btn " + statusBtnClass + "' style='padding: 4px 8px; font-size: 0.8rem; margin-left: 4px;' onclick=\"toggleIngredientStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button>" +
                                            "</div>" +
                                        "</td>";
                                        
@@ -596,6 +601,7 @@
                     });
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
+
 
 
         // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
