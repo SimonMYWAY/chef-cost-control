@@ -622,6 +622,23 @@
 
     // --- NATIVE PAGE STARTUP INITIALIZATION TRIGGERS ---
         async function submitForApproval() {
+             // 🛡️ LOCK GUARD PIEPLINE: Freeze saves completely if the recipe is already approved
+            if (typeof _selectedRecipeId !== 'undefined' && _selectedRecipeId && typeof _loadedRevoCatalog !== 'undefined') {
+                const cloudRecord = _loadedRevoCatalog.find(function(r) { 
+                    return String(r.id).toLowerCase().trim() === String(_selectedRecipeId).toLowerCase().trim(); 
+                });
+                if (cloudRecord && (String(cloudRecord.status).toLowerCase().trim() === 'approved' || cloudRecord.is_approved === true)) {
+                    alert(currentLang === 'en' 
+                        ? '⚠️ This recipe is currently APPROVED and locked. Please request management to click "Liberar" in the backoffice to allow modifications!' 
+                        : '⚠️ Esta receta está APROBADA y bloqueada. ¡Por favor solicite a la administración hacer clic en "Liberar" en el backoffice para modificarla!'
+                    );
+                    
+                    // 🧹 CACHE PROTECTION: Clear out any local layout drafts to force the device to reset
+                    localStorage.removeItem(`recipe_draft_${_selectedRecipeId}`);
+                    if (typeof loadRecipeDetails === "function") loadRecipeDetails(_selectedRecipeId);
+                    return; // KILL ROUTINE IMMEDIATELY
+                }
+            }
         const nameInput = document.getElementById('recipe-name');
         const name = nameInput ? nameInput.value.trim() : '';
         const categorySelect = document.getElementById('recipe-category');
