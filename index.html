@@ -198,8 +198,10 @@
                 return nameA.localeCompare(nameB);
             });
                             _loadedRevoCatalog.forEach(recipe => {
-                // 🛡️ ACCURATE CATALOG FILTER ENGINE: Skip any recipe that is Disabled (0.0) or Deleted (-9.0)
-                if (parseFloat(recipe.locked_multiplier) !== 1.0) return;
+                                // 🛡️ CHEF CATALOG VISIBILITY MAPPING: Skip ONLY if explicitly Disabled (0.0) or Deleted (-9.0)
+                const checkMul = recipe.locked_multiplier !== null && recipe.locked_multiplier !== undefined ? parseFloat(recipe.locked_multiplier) : 1.0;
+                if (checkMul === 0.0 || checkMul === -9.0) return;
+
 
                 const opt = document.createElement('option');
                 opt.value = recipe.id;
