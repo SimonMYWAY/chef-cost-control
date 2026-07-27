@@ -547,7 +547,6 @@
                     });
                 });
         }
-        // Phase 4: Render Live Ingredient Inventory Table with Active/Inactive Toggle Sliders
                 // 📊 INGREDIENTS MONITOR: Renders all raw items aligned to your strict 3-Column HTML table architecture
         function renderMasterIngredientsTable() {
             var container = document.getElementById("master-ingredients-body");
@@ -572,8 +571,13 @@
                         var rowStyle = isEnabled ? "" : "style='opacity: 0.55; background-color: #f8fafc;'";
                         if (rowStyle) tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
                         
-                        // 🌟 REALIGNED 3-COLUMN STRUCTURE: Combine input and save 💾 button directly inside the third column cell!
-                        tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + (item.name || 'Sin Nombre') + "</td>" +
+                        var rawName = item.name || "Sin Nombre";
+                        
+                        // 🛠️ INDEX ARRAY STRUCTURAL TYPO NATIVELY FIXED FOR THE INGREDIENT RENDERING LOOP
+                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+                        
+                        // REALIGNED 3-COLUMN STRUCTURE: Combine input and save 💾 button directly inside the third column cell!
+                        tr.innerHTML = "<td style='text-align: left; font-weight: 600; color: var(--text-main);'>" + nameClean + "</td>" +
                                        "<td style='text-align: center; color: var(--text-muted); font-size: 0.85rem;'>" + (item.unit || item.uom || 'N/A') + "</td>" +
                                        "<td style='text-align: right; width: 160px;'>" +
                                            "<div style='display: flex; align-items: center; gap: 4px; justify-content: flex-end;'>" +
@@ -587,6 +591,7 @@
                     });
                 }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
+
 
         // 🔄 ACTIVE SWITCH STATUS MATRIX: Toggles ingredient accessibility inside your catalog builders
         function toggleIngredientStatus(id, currentStatus) {
