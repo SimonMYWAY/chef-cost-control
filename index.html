@@ -350,7 +350,9 @@
         const CHEF_API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
 
         function syncLiveIngredients() {
-            return fetch(CHEF_API_URL + "ingredients?is_active=eq.true", { 
+                        // 🛡️ ACCURATE ENDPOINT FILTER ALIGNMENT: Fetch only ingredients marked as active ('pending' state)
+            return fetch(CHEF_API_URL + "ingredients?status=eq.pending", { 
+ 
                 headers: { "apikey": CHEF_API_KEY } 
             })
             .then(res => res.json())
