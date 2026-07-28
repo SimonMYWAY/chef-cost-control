@@ -627,7 +627,7 @@
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
         
-                // 🔄 CASCADING COST ENGINE: Advanced multi-key link tracking to map Ingredient -> Tier 2 -> Final Recipe safely
+                // 🔄 ADVANCED CASCADING MATH ENGINE: Synchronized sequential loop to calculate and save Tier 2 and Final Recipe costs flawlessly
         async function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
             if (!inputEl) return;
@@ -639,13 +639,13 @@
             }
 
             try {
-                // Sanitize target root ID string for strict case-insensitive checks
+                // Ensure the root target ID is perfectly formatted for strict string checking
                 var targetRootId = String(ingredientId).toLowerCase().trim();
 
-                // 1. Update the base raw material cost in the ingredients database table first
+                // 1. Update the base material cost inside the ingredients table first
                 var baseUpdateRes = await fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
                     method: "PATCH",
-                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify({ std_cost_per_unit: newCost })
                 });
                 if (!baseUpdateRes.ok) throw new Error("Failed to update base ingredient price.");
@@ -662,10 +662,10 @@
                 var ingredients = results[2];
                 if (!mappings || !recipes || !ingredients) return;
 
-                // Build lookup maps for high-speed calculation lookups
+                // Build lookup maps for high-speed cross-referencing
                 var ingMap = {};
                 ingredients.forEach(i => { ingMap[String(i.id).toLowerCase().trim()] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
-                ingMap[targetRootId] = newCost; // Set active modified row value
+                ingMap[targetRootId] = newCost; // Explicit lock for your modified ingredient price
 
                 var recMap = {};
                 recipes.forEach(r => { recMap[String(r.id).toLowerCase().trim()] = r; });
@@ -673,7 +673,7 @@
                 // Initialize calculation queue stack tracking list
                 var updateQueue = [];
 
-                // 🌟 STEP 1: Find Tier 2 Sub-Recipes that contain this direct raw ingredient
+                // Find Tier 2 Sub-Recipes that contain this direct raw ingredient
                 mappings.forEach(m => {
                     if (m.ingredient_id) {
                         var compId = String(m.ingredient_id).toLowerCase().trim();
@@ -688,7 +688,7 @@
 
                 var processedUpdatesCount = 0;
 
-                // 🌟 RECURSIVE RESOLVER: Run cascading calculations through your menu layers step-by-step
+                // 🌟 SEQUENTIAL TRANSACTION LOOP: Process each formula step-by-step using strict awaits
                 while (updateQueue.length > 0) {
                     var targetRecipeId = updateQueue.shift();
                     var recipeRecord = recMap[targetRecipeId];
@@ -719,20 +719,20 @@
                     var servingsCount = parseFloat(recipeRecord.servings) || 1;
                     var newCostPerServing = newTotalRecipeCost / servingsCount;
 
-                    // Update memory lookup copy instantly so upper tiers read the fresh costs right away
+                    // 🌟 CRITICAL CACHE ALIGNMENT: Update memory lookup copy instantly so upper tiers read the fresh costs right away
                     if (recMap[targetRecipeId]) {
                         recMap[targetRecipeId].cost_per_serving = newCostPerServing;
                     }
 
-                    // 💾 CLOUD RE-ALIGNMENT: Save the fresh calculated cost to the recipe table
-                    await fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
+                    // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier before moving forward
+                    var patchRecipeRes = await fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
-                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ cost_per_serving: newCostPerServing })
                     });
+                    if (!patchRecipeRes.ok) console.error("Failed to commit cost mutation to recipes table.");
 
-                    // 🔄 ABSOLUTE STRUCTURAL MATCH RESOLVER:
-                    // Look up your tables to find the ingredient shadow row using BOTH ID cross-referencing and name mappings
+                    // Look up your tables to find the ingredient shadow row representation
                     var matchingIngredientRow = ingredients.find(i => {
                         var isSameId = String(i.id).toLowerCase().trim() === targetRecipeId;
                         var isSameName = i.name_es && recipeRecord.name && i.name_es.trim().toLowerCase() === recipeRecord.name.trim().toLowerCase();
@@ -742,18 +742,21 @@
                     if (matchingIngredientRow) {
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
                         
-                        await fetch(BASE_API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
+                        // 💾 INGREDIENT MATRIX SECURE LOCK: Wait until the shadow row is fully updated on the server disk
+                        var patchIngRes = await fetch(BASE_API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
                             method: "PATCH",
-                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                            headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                             body: JSON.stringify({ std_cost_per_unit: newCostPerServing })
                         });
+                        if (!patchIngRes.ok) console.error("Failed to commit cost mutation to ingredients matrix.");
                         
+                        // Synchronize our ingredient memory maps for subsequent loop tracks
                         ingMap[cleanRowId] = newCostPerServing;
                     }
 
                     processedUpdatesCount++;
 
-                    // 🌟 STEP 2 (TIER 2 TO FINAL RECIPE): Find grandparent formulas using this Tier 2 item ID as an ingredient link
+                    // Find grandparent formulas using the resolved ingredient table ID token link
                     mappings.forEach(m => {
                         if (m.ingredient_id) {
                             var parentCheckId = String(m.ingredient_id).toLowerCase().trim();
@@ -761,7 +764,7 @@
                             // Check if the link matches EITHER the Recipe ID OR the corresponding Ingredient Row representation
                             var isLinkedAsSub = parentCheckId === targetRecipeId || (matchingIngredientRow && parentCheckId === String(matchingIngredientRow.id).toLowerCase().trim());
                             
-                            // 🛡️ RECURSIVE RECOVERY LAYER: If text name fails, search the ingredients list for a fallback matching link
+                            // Recursive recovery checker for text variations
                             if (!isLinkedAsSub && matchingIngredientRow === undefined && recipeRecord.name) {
                                 var foundFallback = ingredients.find(ing => ing.name_es && ing.name_es.trim().toLowerCase().includes(recipeRecord.name.trim().toLowerCase()));
                                 if (foundFallback && parentCheckId === String(foundFallback.id).toLowerCase().trim()) {
@@ -772,7 +775,7 @@
                             if (isLinkedAsSub) {
                                 var grandParentRecipeId = String(m.recipe_id).toLowerCase().trim();
                                 if (!updateQueue.includes(grandParentRecipeId)) {
-                                    updateQueue.push(grandParentRecipeId); // Queue Final Recipe for evaluation loop
+                                    updateQueue.push(grandParentRecipeId); // Queue Final Recipe for next sequential execution loop
                                 }
                             }
                         }
