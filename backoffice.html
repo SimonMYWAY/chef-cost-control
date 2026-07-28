@@ -627,7 +627,7 @@
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
         
-                // 🔄 CASCADING COST ENGINE: Flawless structural lookup loop to calculate Ingredient -> Tier 2 -> Final Recipe costs safely
+                // 🔄 CASCADING COST ENGINE: Advanced multi-key link tracking to map Ingredient -> Tier 2 -> Final Recipe safely
         async function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
             if (!inputEl) return;
@@ -731,7 +731,8 @@
                         body: JSON.stringify({ cost_per_serving: newCostPerServing })
                     });
 
-                    // 🔄 STRUCTURAL LINK MIRROR: Search the structural components to mirror to the ingredients table row
+                    // 🔄 ABSOLUTE STRUCTURAL MATCH RESOLVER:
+                    // Look up your tables to find the ingredient shadow row using BOTH ID cross-referencing and name mappings
                     var matchingIngredientRow = ingredients.find(i => {
                         var isSameId = String(i.id).toLowerCase().trim() === targetRecipeId;
                         var isSameName = i.name_es && recipeRecord.name && i.name_es.trim().toLowerCase() === recipeRecord.name.trim().toLowerCase();
@@ -759,6 +760,14 @@
                             
                             // Check if the link matches EITHER the Recipe ID OR the corresponding Ingredient Row representation
                             var isLinkedAsSub = parentCheckId === targetRecipeId || (matchingIngredientRow && parentCheckId === String(matchingIngredientRow.id).toLowerCase().trim());
+                            
+                            // 🛡️ RECURSIVE RECOVERY LAYER: If text name fails, search the ingredients list for a fallback matching link
+                            if (!isLinkedAsSub && matchingIngredientRow === undefined && recipeRecord.name) {
+                                var foundFallback = ingredients.find(ing => ing.name_es && ing.name_es.trim().toLowerCase().includes(recipeRecord.name.trim().toLowerCase()));
+                                if (foundFallback && parentCheckId === String(foundFallback.id).toLowerCase().trim()) {
+                                    isLinkedAsSub = true;
+                                }
+                            }
                             
                             if (isLinkedAsSub) {
                                 var grandParentRecipeId = String(m.recipe_id).toLowerCase().trim();
