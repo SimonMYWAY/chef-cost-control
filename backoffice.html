@@ -627,7 +627,7 @@
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
         
-                // 🔄 CASCADING COST ENGINE: Flawless dual-key cost mapping for Ingredient -> Tier 2 -> Final Recipe structures
+                // 🔄 CASCADING COST ENGINE: Synchronized dual-cache mapping for Ingredient -> Tier 2 -> Final Recipe structures
         async function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
             if (!inputEl) return;
@@ -701,7 +701,7 @@
                         var compId = String(c.ingredient_id).toLowerCase().trim();
                         var unitCost = 0;
                         
-                        // 🌟 DUAL-KEY SELECTION: Read from recMap first, fallback to ingMap values
+                        // DUAL-KEY SELECTION: Read from recMap first, fallback to ingMap values
                         if (recMap[compId]) {
                             unitCost = parseFloat(recMap[compId].cost_per_serving) || 0;
                         } else {
@@ -723,7 +723,7 @@
                         recMap[targetRecipeId].cost_per_serving = newCostPerServing;
                     }
 
-                    // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
+                    // 💾 CLOUD SAVE SECURE LOCK: Save the fresh calculated cost to the recipe table
                     var patchRecipeRes = await fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Content-Type": "application/json" },
@@ -749,11 +749,11 @@
                         });
                         if (!patchIngRes.ok) console.error("Failed to commit cost mutation to ingredients matrix.");
                         
-                        // 🌟 CRITICAL SYNC: Ensure both maps carry the fresh price for subsequent upper tier loops
+                        // 🌟 CRITICAL SYNC FIX: Ensure the ingredient cache map carries the new sub-recipe cost immediately!
                         ingMap[cleanRowId] = newCostPerServing;
                     }
 
-                    // 🌟 FALLBACK SYNC LAYER: If the Recipe ID itself was used as the ingredient link in parent recipes, map its value to ingMap too!
+                    // 🌟 DUAL SYNC FIX: Also map the new cost to the Recipe ID key inside ingMap so grandparent recipes find it instantly
                     ingMap[targetRecipeId] = newCostPerServing;
 
                     processedUpdatesCount++;
@@ -797,7 +797,6 @@
                 alert("❌ Error al procesar el recálculo automático en cascada.");
             }
         }
-
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
         function renderProvidersTable() {
