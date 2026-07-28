@@ -627,7 +627,7 @@
             }).catch(function(err) { console.error("Status toggle failure:", err); });
         }
         
-                // 🔄 ADVANCED CASCADING MATH ENGINE: Recursively sweeps through true database column schema mappings
+                // 🔄 ADVANCED CASCADING MATH ENGINE: Recursively sweeps through true database column schema mappings case-insensitively
         async function updateIngredientCostAndCascade(ingredientId) {
             var inputEl = document.getElementById("price-input-" + ingredientId);
             if (!inputEl) return;
@@ -639,6 +639,9 @@
             }
 
             try {
+                // Ensure the root target ID is perfectly formatted for strict string checking
+                var targetRootId = String(ingredientId).toLowerCase().trim();
+
                 // 1. Update the base material cost inside the ingredients table first
                 var baseUpdateRes = await fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
                     method: "PATCH",
@@ -654,27 +657,31 @@
                     fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
                 ]);
 
-                var mappings = results;
-                var recipes = results;
-                var ingredients = results;
+                var mappings = results[0];
+                var recipes = results[1];
+                var ingredients = results[2];
                 if (!mappings || !recipes || !ingredients) return;
 
                 // Build lookup maps for high-speed cross-referencing
                 var ingMap = {};
-                ingredients.forEach(i => { ingMap[String(i.id)] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
-                ingMap[String(ingredientId)] = newCost; // Explicit lock for your modified ingredient price
+                ingredients.forEach(i => { ingMap[String(i.id).toLowerCase().trim()] = parseFloat(i.std_cost_per_unit || i.cost) || 0; });
+                ingMap[targetRootId] = newCost; // Explicit lock for your modified ingredient price
 
                 var recMap = {};
-                recipes.forEach(r => { recMap[String(r.id)] = r; });
+                recipes.forEach(r => { recMap[String(r.id).toLowerCase().trim()] = r; });
 
                 // Initialize calculation queue stack
                 var updateQueue = [];
 
-                // 🌟 TIER 1 INITIALIZER: Find direct parent recipe IDs using this ingredient code string
+                // 🌟 CASE-INSENSITIVE TIER 1 INITIALIZER: Find direct parent recipe IDs using sanitized string tokens
                 mappings.forEach(m => {
-                    if (m.ingredient_id && String(m.ingredient_id) === String(ingredientId)) {
-                        if (!updateQueue.includes(String(m.recipe_id))) {
-                            updateQueue.push(String(m.recipe_id));
+                    if (m.ingredient_id) {
+                        var compId = String(m.ingredient_id).toLowerCase().trim();
+                        if (compId === targetRootId) {
+                            var parentRecipeId = String(m.recipe_id).toLowerCase().trim();
+                            if (!updateQueue.includes(parentRecipeId)) {
+                                updateQueue.push(parentRecipeId);
+                            }
                         }
                     }
                 });
@@ -688,11 +695,11 @@
                     if (!recipeRecord) continue;
 
                     // Filter components down to just this recipe's components array
-                    var components = mappings.filter(m => String(m.recipe_id) === targetRecipeId);
+                    var components = mappings.filter(m => String(m.recipe_id).toLowerCase().trim() === targetRecipeId);
                     var newTotalRecipeCost = 0;
 
                     components.forEach(c => {
-                        var compId = String(c.ingredient_id);
+                        var compId = String(c.ingredient_id).toLowerCase().trim();
                         var unitCost = 0;
                         
                         // Check if this component ID matches a record row inside your recipes table (Tier 2 Sub-Recipe link)
@@ -703,8 +710,8 @@
                         }
                         
                         var qty = parseFloat(c.quantity) || 0;
-                        // 🌟 FIX 1: Aligned explicitly to your true database scrap_percentage column key parameter
-                        var scrapPct = parseFloat(c.scrap_percentage || c.merma || 0);
+                        // Aligned explicitly to your true database scrap_percentage column key parameter
+                        var scrapPct = parseFloat(c.scrap_percentage || 0);
                         var wasteFactor = 1 + (scrapPct / 100);
                         
                         newTotalRecipeCost += (qty * unitCost * wasteFactor);
@@ -726,24 +733,34 @@
                     });
 
                     // 🔄 MIRROR VALUE UPDATE: If this recipe is ALSO mapped as an item row in your ingredients table, update its price value too!
-                    var matchingIngredientRow = ingredients.find(i => String(i.id) === targetRecipeId || (i.name_es && recipeRecord.name && i.name_es.trim().toLowerCase() === recipeRecord.name.trim().toLowerCase()));
+                    var matchingIngredientRow = ingredients.find(i => {
+                        var isSameId = String(i.id).toLowerCase().trim() === targetRecipeId;
+                        var isSameName = i.name_es && recipeRecord.name && i.name_es.trim().toLowerCase() === recipeRecord.name.trim().toLowerCase();
+                        return isSameId || isSameName;
+                    });
+                    
                     if (matchingIngredientRow) {
+                        var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
                         await fetch(BASE_API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
                             method: "PATCH",
                             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                             body: JSON.stringify({ std_cost_per_unit: newCostPerServing })
                         });
                         // Update our ingredient memory maps for subsequent loop tracks
-                        ingMap[String(matchingIngredientRow.id)] = newCostPerServing;
+                        ingMap[cleanRowId] = newCostPerServing;
                     }
 
                     processedUpdatesCount++;
 
                     // 🌟 TIER 2 CHECK: Look for grandparent formulas using this modified component as an ingredient_id link
                     mappings.forEach(m => {
-                        if (m.ingredient_id && String(m.ingredient_id) === targetRecipeId) {
-                            if (!updateQueue.includes(String(m.recipe_id))) {
-                                updateQueue.push(String(m.recipe_id)); // Append parent formulas to execution loop
+                        if (m.ingredient_id) {
+                            var parentCheckId = String(m.ingredient_id).toLowerCase().trim();
+                            if (parentCheckId === targetRecipeId) {
+                                var grandParentRecipeId = String(m.recipe_id).toLowerCase().trim();
+                                if (!updateQueue.includes(grandParentRecipeId)) {
+                                    updateQueue.push(grandParentRecipeId); // Append parent formulas to execution loop
+                                }
                             }
                         }
                     });
@@ -762,6 +779,7 @@
                 alert("❌ Error al procesar el recálculo automático en cascada.");
             }
         }
+
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
         function renderProvidersTable() {
