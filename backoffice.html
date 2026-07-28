@@ -732,11 +732,39 @@
                     if (!patchRecipeRes.ok) console.error("Failed to commit cost mutation to recipes table.");
 
                     // Look up your tables to find the ingredient shadow row representation
-                    var matchingIngredientRow = ingredients.find(i => {
-                        var isSameId = String(i.id).toLowerCase().trim() === targetRecipeId;
-                        var isSameName = i.name_es && recipeRecord.name && i.name_es.trim().toLowerCase() === recipeRecord.name.trim().toLowerCase();
-                        return isSameId || isSameName;
-                    });
+                                        // 🌟 STRUCTURAL INGREDIENT ROW TRACKER: Find the ingredient shadow row using mapping linkages instead of names
+                    var matchingIngredientRow = null;
+                    
+                    // Search your recipe mappings to find where this sub-recipe was used as a component
+                    var mappingLink = mappings.find(m => m.recipe_id && String(m.recipe_id).toLowerCase().trim() === targetRecipeId);
+                    if (mappingLink && mappingLink.ingredient_id) {
+                        var resolvedIngId = String(mappingLink.ingredient_id).toLowerCase().trim();
+                        matchingIngredientRow = ingredients.find(i => String(i.id).toLowerCase().trim() === resolvedIngId);
+                    }
+                    
+                    // Fallback to name search only if the map link isn't found
+                    if (!matchingIngredientRow) {
+                        matchingIngredientRow = ingredients.find(i => {
+                            var ingName = (i.name_es || "").trim().toLowerCase();
+                            var recName = (recipeRecord.name || "").trim().toLowerCase();
+                            return ingName === recName || ingName.includes(recName) || recName.includes(ingName);
+                        });
+                    }
+                    
+                    if (matchingIngredientRow) {
+                        var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
+                        
+                        // 💾 INGREDIENT RE-ALIGNMENT LOCK: Push the updated Tier 2 cost straight to the ingredients table
+                        var patchIngRes = await fetch(BASE_API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
+                            method: "PATCH",
+                            headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                            body: JSON.stringify({ std_cost_per_unit: newCostPerServing }) // Saves the new calculated cost
+                        });
+                        if (!patchIngRes.ok) console.error("Failed to commit cost mutation to ingredients matrix.");
+                        
+                        // Synchronize our ingredient memory maps for subsequent calculations
+                        ingMap[cleanRowId] = newCostPerServing;
+                    }
                     
                     if (matchingIngredientRow) {
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
