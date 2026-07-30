@@ -420,8 +420,8 @@
                                         "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Costo Base: $" + (parseFloat(recipe.cost_per_serving) || 0).toFixed(2) + "</div>" +
                                     "</div>" +
                                     "<div style='display:flex; align-items:center; gap:12px; margin-left:15px;'>" +
-                                        "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button>" +
-                                        
+                                        "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ", '" + (recipe.uom || 'porciones') + "')\">Ver Detalles</button>" +
+                                      
                                         "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Liberar</button>" +
                                         
                                         "<label style='position:relative; display:inline-block; width:44px; height:24px; margin:0; cursor:pointer;'>" +
@@ -1228,7 +1228,7 @@
                         // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals rounded to 4 spaces
                         var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
-                        // 3. Patch valid table columns, including your brand new cost_per_serving column asset
+                                                // 3. Patch valid table columns, including your brand new cost_per_serving column asset
                         return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                             method: "PATCH", 
                             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
@@ -1238,41 +1238,63 @@
                                 cost_per_serving: calculatedCostPerUnit
                             }) 
                         })
-                        .then(function(res) {
+                        .then(async function(res) {
                             if (!res.ok) throw new Error("Failed to patch recipe approval status.");
                             
-                            // 4. If the recipe is Tier 2, automatically bridge it into your ingredients catalog table directory
+                            // 4. If the recipe is Tier 2, seamlessly synchronize its metrics into your ingredients table
                             if (recipe.category === "tier2") {
                                 var rawName = recipe.name || "Receta Sub-Base Tier 2";
                                 var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-                                var tier2UOM = recipe.tier2_uom || "porcion"; 
+                                
+                                // 🌟 FIX A: Aligned directly to your true column "recipe.uom" to fetch custom units safely!
+                                var resolvedUOM = recipe.uom || "porcion"; 
 
-                                return fetch(BASE_API_URL + "ingredients", {
-                                    method: "POST",
-                                    headers: { 
-                                        "apikey": API_KEY, 
-                                        "Content-Type": "application/json",
-                                        "Prefer": "return=minimal"
-                                    },
-                                    body: JSON.stringify({
-                                        name_es: nameClean + " (Tier 2)",
-                                        name_en: nameClean + " (Tier 2 Bulk Base)",
-                                        std_cost_per_unit: calculatedCostPerUnit,
-                                        uom: tier2UOM,
-                                        is_active: true
-                                    })
+                                // Check if this shadow ingredient row already exists inside your database first
+                                var checkIngRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } });
+                                var existingIngs = await checkIngRes.json();
+                                
+                                var existingMatch = existingIngs.find(function(i) {
+                                    return String(i.id) === String(id) || 
+                                           (i.name_es && i.name_es.trim().toLowerCase() === nameClean.trim().toLowerCase());
                                 });
+
+                                var ingPayload = {
+                                    id: id, // Force matching structural UUID keys between both tables
+                                    name_es: nameClean, // 🌟 FIX B: Keep name completely identical for your cascading math lookups!
+                                    name_en: nameClean,
+                                    std_cost_per_unit: calculatedCostPerUnit,
+                                    uom: resolvedUOM,
+                                    status: "pending" // 🌟 FIX C: Synchronized to 'pending' to clear blurry button glitches!
+                                };
+
+                                if (existingMatch) {
+                                    // Update existing row using PATCH if it's already registered
+                                    return fetch(BASE_API_URL + "ingredients?id=eq." + existingMatch.id, {
+                                        method: "PATCH",
+                                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                                        body: JSON.stringify(ingPayload)
+                                    });
+                                } else {
+                                    // Create a new row using POST only if it doesn't exist yet
+                                    return fetch(BASE_API_URL + "ingredients", {
+                                        method: "POST",
+                                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                                        body: JSON.stringify(ingPayload)
+                                    });
+                                }
                             }
                         });
                     });
                 });
             })
             .then(function() { 
-                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro con su costo real!"); 
-                loadQueue(); 
+                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro con su costo real y unidad corregida!"); 
+                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+                if (typeof loadQueue === "function") loadQueue(); 
             })
             .catch(function(err) { 
-                console.error("Ecosystem bridging track fault:", err); 
+                console.error("Ecosystem bridging track fault:", err);
+ 
                 alert("❌ Error al procesar la actualización de la receta.");
                 if (el) el.style.opacity = "";
             });
