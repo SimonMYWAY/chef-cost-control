@@ -834,6 +834,7 @@
             }
         }
                 // 📊 CORE SALES VARIANCE ENGINE (PART 1): Securely loads file pointers with ironclad screen wipes
+                // 📊 CORE SALES VARIANCE ENGINE (PART 1): Securely loads file pointers with ironclad screen wipes
         async function processSalesCostDeviation() {
             var dateFrom = document.getElementById("deviation-date-from").value;
             var dateTo = document.getElementById("deviation-date-to").value;
@@ -849,11 +850,11 @@
                 return;
             }
             
-            // 🌟 CRITICAL ACTIVE BLANK WIPE: Forces old ghost data off your monitor screen instantly
+            // 🌟 CRITICAL ACTIVE BLANK WIPE: Forces old ghost data off your monitor screen instantly before processing
             resultsContainer.innerHTML = ""; 
             resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
             
-            // 🛡️ RESTORED ACCURATE ARRAY ELEMENT INDEX: Target index zero precisely to prevent FileReader crashes!
+            // 🛡️ RE-ALIGNED FILE POINTER SELECTION TO PREVENT RUNTIME CRASHES
             var file = fileInput.files[0];
             var reader = new FileReader();
             
@@ -917,7 +918,7 @@
                     // Fire Part 2 logic directly to execute tree explosion and render HTML grid layout
                     executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo);
                     
-                    // Clear the file picker value text row immediately so the exact same file can be re-uploaded instantly
+                    // Clear out file uploader string value text selection inside DOM to unlock consecutive triggers
                     fileInput.value = "";
                     
                 } catch (err) {
