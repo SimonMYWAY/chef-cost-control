@@ -1187,6 +1187,7 @@
         }
 
                 // 🟢 PRODUCTION APPROVAL PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
+                // 🔑 APPROVAL MATRIX VALVE: Authorizes pending chef inputs and synchronizes sub-recipe units cleanly
         function approveRecipe(id) {
             var el = document.getElementById("recipe-row-" + id);
             if (el) el.style.opacity = "0.3";
@@ -1195,7 +1196,6 @@
             fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
-                // 🛡️ ACCURATE ARRAY TARGETING: Extract element index 0 to unwrap the recipe object details cleanly
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
                 var recipe = recipeData[0]; 
                 
@@ -1223,12 +1223,11 @@
 
                         // Divide total recipe cost by the yield divisor factor
                         var yieldDivisor = parseFloat(recipe.servings) || 1;
-                        if (recipe.category !== 'tier2') yieldDivisor = 1; // Hardlock protection alignment
+                        if (recipe.category !== 'tier2') yieldDivisor = 1; 
                         
-                        // 💸 HIGH-PRECISION FLOATING MATH: Calculates true production decimals rounded to 4 spaces
                         var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
-                                                // 3. Patch valid table columns, including your brand new cost_per_serving column asset
+                        // 3. Patch valid table columns, including your brand new cost_per_serving column asset
                         return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
                             method: "PATCH", 
                             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
@@ -1238,50 +1237,38 @@
                                 cost_per_serving: calculatedCostPerUnit
                             }) 
                         })
-                        .then(async function(res) {
+                        .then(function(res) {
                             if (!res.ok) throw new Error("Failed to patch recipe approval status.");
                             
-                            // 4. If the recipe is Tier 2, seamlessly synchronize its metrics into your ingredients table
+                            // 4. If the recipe is Tier 2, preserve its existing shadow row unit inside your ingredients catalog
                             if (recipe.category === "tier2") {
                                 var rawName = recipe.name || "Receta Sub-Base Tier 2";
                                 var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-                                
-                                // 🌟 FIX A: Aligned directly to your true column "recipe.uom" to fetch custom units safely!
-                                var resolvedUOM = recipe.uom || "porcion"; 
 
-                                // Check if this shadow ingredient row already exists inside your database first
-                                var checkIngRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } });
-                                var existingIngs = await checkIngRes.json();
-                                
-                                var existingMatch = existingIngs.find(function(i) {
-                                    return String(i.id) === String(id) || 
-                                           (i.name_es && i.name_es.trim().toLowerCase() === nameClean.trim().toLowerCase());
-                                });
+                                // Extract the existing unit directly from your master ingredients dataset copy
+                                var currentShadowUnit = "gramos"; // Default fallback
+                                if (Array.isArray(masterIngredients)) {
+                                    var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
+                                    if (existingShadowItem && existingShadowItem.uom) {
+                                        currentShadowUnit = existingShadowItem.uom; // 🌟 Locks your custom choice like "cucharada"!
+                                    }
+                                }
 
                                 var ingPayload = {
-                                    id: id, // Force matching structural UUID keys between both tables
-                                    name_es: nameClean, // 🌟 FIX B: Keep name completely identical for your cascading math lookups!
+                                    id: id,
+                                    name_es: nameClean,
                                     name_en: nameClean,
                                     std_cost_per_unit: calculatedCostPerUnit,
-                                    uom: resolvedUOM,
-                                    status: "pending" // 🌟 FIX C: Synchronized to 'pending' to clear blurry button glitches!
+                                    uom: currentShadowUnit, // Maintains your true custom text unit
+                                    status: "pending"
                                 };
 
-                                if (existingMatch) {
-                                    // Update existing row using PATCH if it's already registered
-                                    return fetch(BASE_API_URL + "ingredients?id=eq." + existingMatch.id, {
-                                        method: "PATCH",
-                                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                                        body: JSON.stringify(ingPayload)
-                                    });
-                                } else {
-                                    // Create a new row using POST only if it doesn't exist yet
-                                    return fetch(BASE_API_URL + "ingredients", {
-                                        method: "POST",
-                                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                                        body: JSON.stringify(ingPayload)
-                                    });
-                                }
+                                // Execute direct PATCH update to synchronize your existing shadow row perfectly
+                                return fetch(BASE_API_URL + "ingredients?id=eq." + id, {
+                                    method: "PATCH",
+                                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                                    body: JSON.stringify(ingPayload)
+                                });
                             }
                         });
                     });
@@ -1294,14 +1281,10 @@
             })
             .catch(function(err) { 
                 console.error("Ecosystem bridging track fault:", err);
- 
-                alert("❌ Error al procesar la actualización de la receta.");
-                if (el) el.style.opacity = "";
+                alert("❌ Error al procesar la aprobación de la fórmula.");
+                if (typeof loadQueue === "function") loadQueue();
             });
         }
-
-
-
 
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
