@@ -292,48 +292,63 @@
         }
 
                 // 🎛️ PENDING QUEUE MONITOR: Fetches and displays ONLY items actively waiting for admin approval (Block-List Guarded)
+                // 📋 REVIEW DASHBOARD ENGINE: Fetches pending recipes and cross-references true shadow units for pristine displays
         function loadQueue() {
             var container = document.getElementById("queue-container");
             if (!container) return;
             
-            fetch(BASE_API_URL + "recipes", { 
-                headers: { 
-                    "apikey": API_KEY,
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache"
-                } 
-            })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
+            // 🌟 FETCH IN PARALLEL: Pull both pending recipe reviews AND live ingredients to align cosmetic text labels
+            Promise.all([
+                fetch(BASE_API_URL + "recipes?status=eq.waiting", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ])
+            .then(function(results) {
+                var pendingRecipes = results[0];
+                var masterIngredients = results[1];
+                
                 container.innerHTML = "";
-                if (!data || data.message) return;
-                
-                // 🛡️ FILTER OUT BLACKLISTED ENTRIES INSTANTLY
-                var pending = data.filter(function(r) { 
-                    return r.status === "waiting" && !_deletedRecipeIds.includes(String(r.id)); 
-                });
-                
-                if (pending.length === 0) { 
-                    container.innerHTML = "<div style='color:var(--text-muted); font-style:italic; padding:10px;'>No hay recetas pendientes de aprobación.</div>"; 
-                    return; 
+                if (!pendingRecipes || pendingRecipes.length === 0 || pendingRecipes.message) {
+                    container.innerHTML = "<div class='no-data' style='text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>☕ No hay fórmulas pendientes de revisión en este momento.</div>";
+                    return;
                 }
                 
-                pending.sort(function(a, b) { return parseInt(b.id || 0) - parseInt(a.id || 0); });
-                
-                pending.forEach(function(recipe) {
+                pendingRecipes.forEach(function(recipe) {
                     var row = document.createElement("div");
-                    row.className = "recipe-row";
                     row.id = "recipe-row-" + recipe.id;
-                    var rawName = recipe.name || "Sin Nombre";
+                    row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:15px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:8px; background-color:var(--bg-surface);");
                     
+                    var rawName = recipe.name || "Fórmula Sin Nombre";
                     var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
                     
-                    row.innerHTML = "<div><div style='font-weight:600; color:var(--text-main);'>" + nameClean + "</div><div style='font-size:0.8rem; color:var(--text-muted); margin-top:3px;'>Categoría: " + (recipe.category || 'N/A') + "</div></div>" +
-                                    "<div style='display:flex; gap:8px;'><button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ")\">Ver Detalles</button><button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button><button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"rejectRecipe('" + recipe.id + "')\">Rechazar</button></div>";
-
+                    // 🌟 PERFECT COSMETIC SYNCHRONIZATION: Read your true selection from the correct ingredients lookup array
+                    var queueUOM = "porciones";
+                    if (recipe.category === "tier2" && Array.isArray(masterIngredients)) {
+                        var shadowMatch = masterIngredients.find(function(i) { 
+                            return String(i.id).toLowerCase().trim() === String(recipe.id).toLowerCase().trim(); 
+                        });
+                        if (shadowMatch && shadowMatch.uom) {
+                            queueUOM = shadowMatch.uom; // Extracts your custom choice like "cucharada"!
+                        }
+                    }
+                    
+                    // Render the item card incorporating your accurate metric variables cleanly on screen
+                    row.innerHTML = "<div style='flex:1; text-align:left;'>" +
+                                        "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + " <span style='font-size:0.75rem; font-weight:700; margin-left:8px; padding:3px 8px; border-radius:4px; background-color:#eff6ff; color:#1e40af; border:1px solid var(--border-color);'>🔷 ESPERANDO</span></div>" +
+                                        "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Rendimiento Esperado: " + (recipe.servings || 1) + " " + queueUOM + "</div>" +
+                                    "</div>" +
+                                    "<div style='display:flex; gap:8px;'>" +
+                                        "<button class='btn btn-blue' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ", '" + queueUOM + "')\">Ver Detalles</button>" +
+                                        "<button class='btn btn-green' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button>" +
+                                        "<button class='btn btn-red' style='background-color:#ef4444; color:white;' onclick=\"rejectRecipe('" + recipe.id + "')\">Rechazar</button>" +
+                                    "</div>";
+                                    
                     container.appendChild(row);
                 });
-            }).catch(function(err) { console.error("Queue compiling fault:", err); });
+            })
+            .catch(function(err) { 
+                console.error("Queue display compiler crash:", err); 
+                container.innerHTML = "<div style='color:#ef4444; padding:10px;'>❌ Error al cargar la cola de revisión de fórmulas.</div>";
+            });
         }
 
                 // 🛡️ RESTRUCTURING BLACKLIST SYSTEM
