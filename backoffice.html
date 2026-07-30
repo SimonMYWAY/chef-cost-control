@@ -1046,8 +1046,14 @@
             
             html += "</tbody></table></div>";
             resultsContainer.innerHTML = html;
+                        html += "</tbody></table></div>";
+            resultsContainer.innerHTML = html;
+            
+            // 🌟 CRITICAL RESET BUFFER: Clear out the file picker text value string inside the DOM
+            // This tricks your browser into allowing the exact same file name to be re-uploaded and re-processed instantly!
+            var fileInputReset = document.getElementById("revo-sales-file");
+            if (fileInputReset) fileInputReset.value = "";
         }
-
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
         function renderProvidersTable() {
