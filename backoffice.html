@@ -95,13 +95,35 @@
         
 
                 <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
+                <!-- MODULE: COST DEVIATION & SALES ANALYSIS -->
         <div id="view-deviations" class="view-pane">
             <div class="card">
                 <h3>Cálculo de Consumo Estándar</h3>
-                <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 0.9rem;">Carga tu archivo de ventas Revo para cruzar los consumos teóricos contra las compras reales.</p>
-                <input type="file" id="revo-sales-file" style="margin-top:10px; display:block;">
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Define el período de análisis e ingresa tu reporte de ventas para cruzar los consumos teóricos con tus facturas de compra.</p>
+                
+                <!-- 📅 OPERATIONAL DATE RANGE TRACKER CARD LAYER -->
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background-color: var(--bg-surface); padding: 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">Desde:</label>
+                        <input type="date" id="deviation-date-from" style="padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; color: var(--text-main);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">Hasta:</label>
+                        <input type="date" id="deviation-date-to" style="padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; color: var(--text-main);">
+                    </div>
+                </div>
+
+                <!-- 📤 REVO FILE SUBMISSION MATRIX -->
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Reporte de Ventas Revo (CSV):</label>
+                <input type="file" id="revo-sales-file" accept=".csv" style="margin-bottom: 15px; font-size: 0.85rem;">
+                
+                <button class="btn btn-blue" id="btn-process-deviation" style="padding: 8px 16px; font-size: 0.9rem;" onclick="processSalesCostDeviation()">Calcular Desviaciones</button>
             </div>
+            
+            <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
+            <div id="deviation-results-container" style="margin-top: 20px;"></div>
         </div>
+
         <!-- MODULE CANVA 3: MASTER INGREDIENT LIST -->
         <div id="view-ingredients" class="view-pane">
             <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
@@ -787,6 +809,217 @@
                 console.error("Cascading engine calculation failure:", err);
                 alert("❌ Error al procesar el recálculo automático en cascada.");
             }
+        }
+                // 📊 CORE SALES VARIANCE ENGINE (PART 1): Validates inputs, pre-fetches database structures and maps CSV headers
+        async function processSalesCostDeviation() {
+            var dateFrom = document.getElementById("deviation-date-from").value;
+            var dateTo = document.getElementById("deviation-date-to").value;
+            var fileInput = document.getElementById("revo-sales-file");
+            var resultsContainer = document.getElementById("deviation-results-container");
+            
+            if (!dateFrom || !dateTo) {
+                alert("⚠️ Por favor seleccione el rango de fechas (Desde / Hasta) antes de calcular.");
+                return;
+            }
+            if (!fileInput || fileInput.files.length === 0) {
+                alert("⚠️ Por favor seleccione su archivo CSV de ventas Revo para continuar.");
+                return;
+            }
+            
+            resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
+            
+            var file = fileInput.files[0];
+            var reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                try {
+                    var text = e.target.result;
+                    
+                    // Fetch full data parameters from Supabase in parallel
+                    var results = await Promise.all([
+                        fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                        fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                        fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                    ]);
+                    
+                    var mappings = results[0];
+                    var recipes = results[1];
+                    var ingredients = results[2];
+                    
+                    if (!mappings || !recipes || !ingredients) {
+                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con los servidores de base de datos.</div>";
+                        return;
+                    }
+                    
+                    // Build lookup dictionaries for lightning-fast indexing loops
+                    var recMapById = {};
+                    var recMapByRevo = {};
+                    var recMapByName = {};
+                    recipes.forEach(r => {
+                        var cleanId = String(r.id).toLowerCase().trim();
+                        recMapById[cleanId] = r;
+                        if (r.revo_id) recMapByRevo[String(r.revo_id).toLowerCase().trim()] = r;
+                        if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
+                    });
+                    
+                    var ingMap = {};
+                    ingredients.forEach(i => { ingMap[String(i.id).toLowerCase().trim()] = i; });
+                    
+                    // Parse text lines from Revo file
+                    var lines = text.split(/\r?\n/);
+                    if (lines.length <= 1) {
+                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ El archivo seleccionado está vacío o corrupto.</div>";
+                        return;
+                    }
+                    
+                    // Header detection map loop
+                    var headers = lines[0].split(",");
+                    var idxQty = -1, idxProd = -1, idxId = -1;
+                    
+                    for (var h = 0; h < headers.length; h++) {
+                        var headTxt = headers[h].replace(/["']/g, "").trim().toLowerCase();
+                        if (headTxt === "cantidad") idxQty = h;
+                        if (headTxt === "producto") idxProd = h;
+                        if (headTxt === "id") idxId = h;
+                    }
+                    
+                    if (idxQty === -1 || idxProd === -1 || idxId === -1) {
+                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Asegúrese de que contenga las columnas: Cantidad, Producto, Id.</div>";
+                        return;
+                    }
+                    
+                    // Fire Part 2 logic directly to execute tree explosion and render HTML grid layout
+                    executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo);
+                    
+                } catch (err) {
+                    console.error("Sales variance breakdown initialization crash:", err);
+                    resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error inicial al procesar el reporte de ventas.</div>";
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+                // 📊 RECUPERATION CORE (PART 2): Handles tree traversal math and renders the interactive summary dashboard view
+        function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
+            var theoreticalUsage = {}; 
+            var unmatchedSalesCount = 0;
+            var totalTheoreticalSalesCost = 0;
+            
+            // Loop through each product row entry in the CSV log data
+            for (var l = 1; l < lines.length; l++) {
+                var line = lines[l].trim();
+                if (!line || line === "") continue;
+                
+                var cols = line.split(",");
+                if (cols.length < headers.length) continue;
+                
+                var rawQty = cols[idxQty].replace(/["']/g, "").trim();
+                var rawProd = cols[idxProd].replace(/["']/g, "").trim();
+                var rawId = cols[idxId].replace(/["']/g, "").trim();
+                
+                var qtySold = parseFloat(rawQty) || 0;
+                if (qtySold <= 0) continue;
+                
+                // Cross-reference lookup mapping logic (Revo ID priority, fallback to text name)
+                var matchedRecipe = recMapByRevo[rawId.toLowerCase()] || recMapByName[rawProd.toLowerCase()];
+                if (!matchedRecipe) {
+                    unmatchedSalesCount++;
+                    continue;
+                }
+                
+                // Stack array queue to parse through sub-recipe nested hierarchies sequentially
+                var componentQueue = [{ recipeId: String(matchedRecipe.id).toLowerCase(), multiplierFactor: qtySold }];
+                
+                while (componentQueue.length > 0) {
+                    var activeExplodeTask = componentQueue.shift();
+                    var currentRecipeId = activeExplodeTask.recipeId;
+                    var currentMult = activeExplodeTask.multiplierFactor;
+                    
+                    var targetRecipeRecord = recMapById[currentRecipeId];
+                    if (!targetRecipeRecord) continue;
+                    
+                    var recipeYieldServings = parseFloat(targetRecipeRecord.servings) || 1;
+                    var recipeComponents = mappings.filter(m => String(m.recipe_id).toLowerCase().trim() === currentRecipeId);
+                    
+                    recipeComponents.forEach(c => {
+                        var componentId = String(c.ingredient_id).toLowerCase().trim();
+                        var qtyNeededPerYield = parseFloat(c.quantity) || 0;
+                        var scrapPct = parseFloat(c.scrap_percentage || 0);
+                        var wasteFactor = 1 + (scrapPct / 100);
+                        
+                        var totalTheoreticalQtyNeeded = (qtyNeededPerYield / recipeYieldServings) * currentMult * wasteFactor;
+                        
+                        // Recursive check: If the component targets another sub-recipe row, push it back down the stack queue
+                        if (recMapById[componentId]) {
+                            componentQueue.push({ recipeId: componentId, multiplierFactor: (qtyNeededPerYield / recipeYieldServings) * currentMult });
+                        } else {
+                            // Aggregate as a raw ingredient material item consumption row metric
+                            var baseIng = ingMap[componentId];
+                            if (baseIng) {
+                                var unitPrice = parseFloat(baseIng.std_cost_per_unit || baseIng.cost) || 0;
+                                var totalLineCost = totalTheoreticalQtyNeeded * unitPrice;
+                                
+                                if (!theoreticalUsage[componentId]) {
+                                    theoreticalUsage[componentId] = {
+                                        name: baseIng.name_es || "Ingrediente Desconocido",
+                                        unit: baseIng.uom || "N/A",
+                                        quantity: 0,
+                                        cost: 0
+                                    };
+                                }
+                                theoreticalUsage[componentId].quantity += totalTheoreticalQtyNeeded;
+                                theoreticalUsage[componentId].cost += totalLineCost;
+                                totalTheoreticalSalesCost += totalLineCost;
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Output template constructor: Compile grid rows dynamically onto your dashboard panel
+            var html = "<div class='card' style='margin-top:20px; text-align:left; background-color:var(--bg-surface); border:1px solid var(--border-color);'>" +
+                       "<h4>Resumen de Consumo Teórico (" + dateFrom + " al " + dateTo + ")</h4>" +
+                       "<div style='margin: 15px 0; padding:12px; background-color:rgba(34,197,94,0.1); border-left:4px solid #22c55e; border-radius:4px;'>" +
+                           "<div style='font-size:1.1rem; font-weight:700; color:var(--text-main);'>Costo Teórico Total Operacional: $" + totalTheoreticalSalesCost.toFixed(2) + "</div>" +
+                           "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>*Este cálculo refleja el gasto ideal multiplicando fórmulas de recetas base contra cantidades vendidas de Revo.</div>" +
+                       "</div>";
+                       
+            if (unmatchedSalesCount > 0) {
+                html += "<div style='margin-bottom:15px; padding:10px; background-color:rgba(245,158,11,0.1); border-left:4px solid #f59e0b; color:#b45309; font-size:0.85rem; border-radius:4px;'>" +
+                            "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV de ventas porque sus nombres o IDs de Revo no se encontraron registrados en tu catálogo de recetas." +
+                        "</div>";
+            }
+            
+            html += "<table style='width:100%; border-collapse:collapse; margin-top:10px; font-size:0.9rem;'>" +
+                        "<thead>" +
+                            "<tr style='border-bottom:2px solid var(--border-color); color:var(--text-main); font-weight:700;'>" +
+                                "<th style='text-align:left; padding:8px;'>Ingrediente</th>" +
+                                "<th style='text-align:center; padding:8px;'>Unidad</th>" +
+                                "<th style='text-align:right; padding:8px;'>Consumo Teórico</th>" +
+                                "<th style='text-align:right; padding:8px;'>Costo Teórico</th>" +
+                            "</tr>" +
+                        "</thead>" +
+                        "<tbody>";
+                        
+            var itemsArray = [];
+            for (var key in theoreticalUsage) { itemsArray.push(theoreticalUsage[key]); }
+            itemsArray.sort((a,b) => b.cost - a.cost); // Sort descending by financial impact
+            
+            if (itemsArray.length === 0) {
+                html += "<tr><td colspan='4' style='padding:15px; color:var(--text-muted); italic; text-align:center;'>No se generó consumo teórico. Verifique las correspondencias de recetas de prueba.</td></tr>";
+            } else {
+                itemsArray.forEach(function(item) {
+                    html += "<tr style='border-bottom:1px solid var(--border-color); color:var(--text-main);'>" +
+                                "<td style='padding:8px; font-weight:600;'>" + item.name + "</td>" +
+                                "<td style='padding:8px; text-align:center; color:var(--text-muted);'>" + item.unit + "</td>" +
+                                "<td style='padding:8px; text-align:right; font-family:monospace;'>" + item.quantity.toFixed(3) + "</td>" +
+                                "<td style='padding:8px; text-align:right; font-weight:600; color:#22c55e;'>$" + item.cost.toFixed(2) + "</td>" +
+                            "</tr>";
+                });
+            }
+            
+            html += "</tbody></table></div>";
+            resultsContainer.innerHTML = html;
         }
 
 
