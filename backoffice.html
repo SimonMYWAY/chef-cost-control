@@ -844,10 +844,13 @@
                 alert("⚠️ Por favor seleccione el rango de fechas (Desde / Hasta) antes de calcular.");
                 return;
             }
-            if (!fileInput || fileInput.files.length === 0) {
+                        if (!fileInput || fileInput.files.length === 0) {
                 alert("⚠️ Por favor seleccione su archivo CSV de ventas Revo para continuar.");
                 return;
             }
+            
+            // 🌟 CRITICAL WIPE: Clear out previous layout text instantly before processing new files
+            resultsContainer.innerHTML = ""; 
             
             resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
             
