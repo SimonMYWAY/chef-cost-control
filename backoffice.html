@@ -566,12 +566,19 @@
         }
 
                 // Phase 3: Interactive formula inspector popup modal
-        function viewRecipeDetails(recipeId, name, category, servings) {
+        function viewRecipeDetails(recipeId, name, category, servings, uom) {
+            // 🌟 COSMETIC SYNC LAYER: Fallback to "porciones" only if no unique text unit exists
+            var activeUnitLabel = (uom && uom !== "" && uom !== "undefined") ? uom : "porciones";
+
             document.getElementById("modal-recipe-name").innerText = name;
-            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Porciones: " + servings;
+            
+            // 🌟 VARIABLE DRIVEN HEADER: Displays "Rendimiento: 1 cucharada" dynamically on screen!
+            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
+            
             var rowsTarget = document.getElementById("modal-table-rows");
             rowsTarget.innerHTML = "<tr><td colspan='3' style='color:var(--text-muted); text-align:center;'>Buscando...</td></tr>";
             document.getElementById("recipe-modal").style.display = "flex";
+            
             fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(lines) {
@@ -584,6 +591,7 @@
                     });
                 });
         }
+
                 // 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
         function renderMasterIngredientsTable() {
             var container = document.getElementById("ingredients-table-rows");
