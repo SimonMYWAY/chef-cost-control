@@ -724,11 +724,45 @@
                 activeItem._review_flagged = true; // Tracks the review trigger inside memory cache
             }
 
+            // 🌟 DUAL-CREATION MATRIX LIFECYCLE: Sync custom units into ingredients table on Day 1
+            if (category === "tier2") {
+                const uomSelect = document.getElementById("tier2-uom");
+                const customUOMText = uomSelect ? uomSelect.value.trim() : "gramos";
+                
+                // Fetch the ingredients list to see if the row already exists
+                const checkIngRes = await fetch(`${API_URL}ingredients`, { headers: { "apikey": API_KEY } });
+                const existingIngs = await checkIngRes.json();
+                
+                const existingIngMatch = Array.isArray(existingIngs) ? existingIngs.find(i => String(i.id) === String(recipeId) || (i.name_es && i.name_es.trim().toLowerCase() === name.trim().toLowerCase())) : null;
+                
+                const ingPayload = {
+                    id: recipeId, // Force matching structural UUID keys between tables
+                    name_es: name,
+                    name_en: name,
+                    uom: customUOMText, // 🌟 Saves your true custom choice like "cucharada"!
+                    status: "pending" // Sets active status immediately so backoffice loop tracks it
+                };
 
+                if (existingIngMatch) {
+                    // Update existing raw row parameters
+                    await fetch(`${API_URL}ingredients?id=eq.${existingIngMatch.id}`, {
+                        method: "PATCH",
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify(ingPayload)
+                    });
+                } else {
+                    // Post a brand new shadow row from scratch
+                    await fetch(`${API_URL}ingredients`, {
+                        method: "POST",
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify(ingPayload)
+                    });
+                }
+            }
 
                         // =======================================================================
             // 🌐 FIXED CLOUD SYSTEM INTEGRATION PIPELINE
-            // =======================================================================
+
             try {
                 // Unpack your saved formula layout rows straight from browser cache
                 const storageKey = `recipe_draft_${recipeId}`;
