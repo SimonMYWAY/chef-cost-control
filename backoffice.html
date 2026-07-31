@@ -834,7 +834,6 @@
             }
         }
                 // 📊 CORE SALES VARIANCE ENGINE (PART 1): Securely loads file pointers with ironclad screen wipes
-                // 📊 CORE SALES VARIANCE ENGINE (PART 1): Securely loads file pointers with ironclad screen wipes
         async function processSalesCostDeviation() {
             var dateFrom = document.getElementById("deviation-date-from").value;
             var dateTo = document.getElementById("deviation-date-to").value;
@@ -854,7 +853,7 @@
             resultsContainer.innerHTML = ""; 
             resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
             
-            // 🛡️ RE-ALIGNED FILE POINTER SELECTION TO PREVENT RUNTIME CRASHES
+            // Explicit lock on element index zero array pointer to maintain FileReader links safely
             var file = fileInput.files[0];
             var reader = new FileReader();
             
@@ -918,9 +917,6 @@
                     // Fire Part 2 logic directly to execute tree explosion and render HTML grid layout
                     executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo);
                     
-                    // Clear out file uploader string value text selection inside DOM to unlock consecutive triggers
-                    fileInput.value = "";
-                    
                 } catch (err) {
                     console.error("Sales variance breakdown initialization crash:", err);
                     resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al procesar el cálculo de desvíos.</div>";
@@ -929,6 +925,7 @@
             
             reader.readAsText(file);
         }
+
 
                 // 📊 RECUPERATION CORE (PART 2): Handles tree traversal math and renders the interactive summary dashboard view
         function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
