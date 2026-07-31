@@ -853,7 +853,7 @@
             resultsContainer.innerHTML = ""; 
             resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
             
-            // Explicit lock on element index zero array pointer to maintain FileReader links safely
+            // 🛡️ RE-ALIGNED FILE POINTER SELECTION: Index zero bracket added to prevent FileReader crashes!
             var file = fileInput.files[0];
             var reader = new FileReader();
             
@@ -925,7 +925,6 @@
             
             reader.readAsText(file);
         }
-
 
                 // 📊 RECUPERATION CORE (PART 2): Handles tree traversal math and renders the interactive summary dashboard view
         function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
