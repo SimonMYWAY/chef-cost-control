@@ -1173,22 +1173,137 @@
         }
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
+                // 📊 SUPPLIER LIFECYCLE CONTROLS: Cloud engine synchronized with your true Supabase status column
         function renderProvidersTable() {
             var rowsTarget = document.getElementById("providers-table-rows");
             if (!rowsTarget) return;
-            fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    rowsTarget.innerHTML = "";
-                    if (!data || data.length === 0 || data.message) { rowsTarget.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay proveedores registrados.</td></tr>"; return; }
-                    data.sort(function(a, b) { return (a.name || "").localeCompare(b.name || ""); });
-                    data.forEach(function(item) {
-                        var tr = document.createElement("tr");
-                        tr.innerHTML = "<td style='padding:10px; font-weight:600;'>" + (item.name || "N/A") + "</td><td style='padding:10px; color:var(--text-muted);'>" + (item.phone || "-") + "</td><td style='padding:10px; font-size:0.85rem; color:var(--text-muted);'>✅ Activo</td>";
-                        rowsTarget.appendChild(tr);
-                    });
-                }).catch(function(err) { console.error(err); });
+            
+            // Fetch suppliers and ingredients in parallel to run our relational erase filters
+            Promise.all([
+                fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ])
+            .then(function(results) {
+                var suppliers = results[0];
+                var ingredients = results[1];
+                
+                rowsTarget.innerHTML = "";
+                if (!suppliers || suppliers.length === 0 || suppliers.message) { 
+                    rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay proveedores registrados.</td></tr>"; 
+                    return; 
+                }
+                
+                suppliers.sort(function(a, b) { return (a.name || "").localeCompare(b.name || ""); });
+                
+                suppliers.forEach(function(item) {
+                    var tr = document.createElement("tr");
+                    tr.id = "supplier-row-" + item.id;
+                    
+                    var currentRawStatus = String(item.status || "activo").toLowerCase().trim();
+                    var isVendorActive = currentRawStatus === "activo";
+                    
+                    var statusBadgeText = isVendorActive ? "✅ Activo" : "❌ Inactivo";
+                    var statusBtnText = isVendorActive ? "Desactivar" : "Activar";
+                    var statusBtnClass = isVendorActive ? "btn-red" : "btn-green";
+                    
+                    if (!isVendorActive) {
+                        tr.setAttribute("style", "opacity: 0.6; background-color: #f8fafc;");
+                    }
+                    
+                    tr.innerHTML = 
+                        "<td style='padding:8px; text-align:left;'> " +
+                            "<input type='text' id='prov-name-" + item.id + "' value='" + (item.name || "") + "' style='width:90%; padding:4px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" +
+                        "</td>" +
+                        "<td style='padding:8px; text-align:left;'> " +
+                            "<input type='text' id='prov-phone-" + item.id + "' value='" + (item.phone || "") + "' style='width:90%; padding:4px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem; color:var(--text-muted);'>" +
+                        "</td>" +
+                        "<td style='padding:8px; text-align:center; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" + statusBadgeText + "</td>" +
+                        "<td style='padding:8px; text-align:right; width:190px;'> " +
+                            "<div style='display:flex; gap:4px; justify-content:flex-end;'> " +
+                                "<button class='btn btn-blue' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"updateProviderRecord('" + item.id + "')\">💾</button> " +
+                                "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleProviderCloudStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button> " +
+                                "<button class='btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' onclick=\"safelyEraseProvider('" + item.id + "', '" + escapeHtml(item.name || "") + "', " + JSON.stringify(ingredients) + ")\">🗑️</button> " +
+                            "</div> " +
+                        "</td>";
+                        
+                    rowsTarget.appendChild(tr);
+                });
+            }).catch(function(err) { console.error("Supplier data table compilation fault:", err); });
         }
+        // 💾 SUID SAVE TRIGGER: Updates inline provider names and phone details in Supabase
+        function updateProviderRecord(id) {
+            var nameEl = document.getElementById("prov-name-" + id);
+            var phoneEl = document.getElementById("prov-phone-" + id);
+            if (!nameEl || !phoneEl) return;
+            
+            var cleanName = nameEl.value.trim();
+            var cleanPhone = phoneEl.value.trim();
+            if (cleanName === "") { alert("⚠️ El nombre del proveedor no puede estar vacío."); return; }
+            
+            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ name: cleanName, phone: cleanPhone })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("✅ ¡Cambios del proveedor guardados con éxito!");
+                    renderProvidersTable();
+                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                } else { alert("❌ Error al guardar modificaciones."); }
+            }).catch(function(err) { console.error("Supplier modification fault:", err); });
+        }
+
+        // 🔄 NATIVE CLOUD TOGGLE: Mutates text status strings back and forth directly on your server rows
+        function toggleProviderCloudStatus(id, currentRawStatus) {
+            var targetStatus = currentRawStatus === "activo" ? "inactivo" : "activo";
+            
+            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                body: JSON.stringify({ status: targetStatus })
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    renderProvidersTable();
+                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                } else { alert("❌ Error al cambiar vigencia en la nube."); }
+            }).catch(function(err) { console.error("Supplier status switch fault:", err); });
+        }
+
+        // 🛡️ INTEGRITY SHIELD CHECK: Scans active ingredient records to prevent breaking database links
+        function safelyEraseProvider(id, providerName, masterIngredientsList) {
+            var cleanProvName = String(providerName).toLowerCase().trim();
+            var isLinked = false;
+            
+            if (Array.isArray(masterIngredientsList)) {
+                isLinked = masterIngredientsList.some(function(ing) {
+                    var linkedProvId = ing.supplier_id || ing.provider_id || "";
+                    var linkedProvName = String(ing.supplier_name || ing.provider_name || ing.proveedor || "").toLowerCase().trim();
+                    return String(linkedProvId) === String(id) || linkedProvName === cleanProvName || linkedProvName.includes(cleanProvName);
+                });
+            }
+            
+            if (isLinked) {
+                alert("🛑 Bloqueo de Integridad: No se puede eliminar a '" + providerName + "' porque actualmente está en uso vinculada a ingredientes dentro de tu catálogo maestro.");
+                return;
+            }
+            
+            if (!confirm("🗑️ ¿Está seguro de eliminar permanentemente al proveedor '" + providerName + "'? Esta acción no se puede deshacer.")) return;
+            
+            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+                method: "DELETE",
+                headers: { "apikey": API_KEY, "Prefer": "return=minimal" }
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("🗑️ Proveedor eliminado correctamente.");
+                    renderProvidersTable();
+                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                } else { alert("❌ Error al eliminar el proveedor de la base de datos."); }
+            }).catch(function(err) { console.error("Supplier erase crash:", err); });
+        }
+
                 // 🔗 LOGISTICS MODULE: Populate the Form Select Menu with Live Ingredients
         function populateIngredientDropdown() {
             var selectMenu = document.getElementById("map-ing-id");
