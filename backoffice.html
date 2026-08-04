@@ -1280,17 +1280,28 @@
             }).catch(function(err) { console.error("Supplier status toggle failure:", err); });
         }
 
-        function safelyEraseProvider(id, providerName) {
-            var cleanIdToken = String(id).trim();
-            var cleanProvName = String(providerName).toLowerCase().trim();
+                // 🛡️ INTEGRITY SHIELD ERASE: Processes pure integer column filters to prevent silent Supabase type skips
+        function safelyEraseProvider(id) {
+            // 🌟 CRITICAL TRACK FIX: Parse the incoming token into a pure numerical integer primitive matching int8 constraints
+            var numericId = parseInt(id, 10);
+            if (isNaN(numericId)) {
+                alert("❌ ID de proveedor inválido.");
+                return;
+            }
+            
+            // Dynamic text element lookup using the precise row identifier string
+            var nameInputEl = document.getElementById("prov-name-" + numericId);
+            var providerName = nameInputEl ? nameInputEl.value.trim() : "Proveedor";
+            var cleanProvName = providerName.toLowerCase();
+            
             var isLinked = false;
             
             if (Array.isArray(_masterIngredientsLookupArray)) {
                 isLinked = _masterIngredientsLookupArray.some(function(ing) {
-                    var linkedProvId = String(ing.supplier_id || ing.provider_id || "").toLowerCase().trim();
+                    var linkedProvId = ing.supplier_id || ing.provider_id || "";
                     var linkedProvName = String(ing.supplier_name || ing.provider_name || ing.proveedor || "").toLowerCase().trim();
                     
-                    return linkedProvId === cleanIdToken.toLowerCase() || 
+                    return parseInt(linkedProvId, 10) === numericId || 
                            linkedProvName === cleanProvName || 
                            linkedProvName.includes(cleanProvName);
                 });
@@ -1303,9 +1314,13 @@
             
             if (!confirm("🗑️ ¿Está completamente seguro de eliminar permanentemente al proveedor '" + providerName + "' del sistema? Esta acción no se puede deshacer.")) return;
             
-            fetch(BASE_API_URL + "suppliers?id=eq." + cleanIdToken, {
+            // 🌟 CRITICAL BINDING FIXED: No string conversions! Passes the clean integer variable straight into your query URL parameter paths
+            fetch(BASE_API_URL + "suppliers?id=eq." + numericId, {
                 method: "DELETE",
-                headers: { "apikey": API_KEY, "Prefer": "return=minimal" }
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Prefer": "return=minimal" 
+                }
             })
             .then(function(res) {
                 if (res.ok) {
@@ -1314,8 +1329,14 @@
                         renderProvidersTable();
                         if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
                     }, 150);
-                } else { alert("❌ Error al eliminar el proveedor de la base de datos."); }
-            }).catch(function(err) { console.error("Supplier elimination endpoint crash:", err); });
+                } else { 
+                    alert("❌ Error al eliminar el proveedor de la base de datos."); 
+                }
+            })
+            .catch(function(err) { 
+                console.error("Supplier elimination endpoint crash:", err); 
+                alert("❌ Error de red al intentar comunicarse con el servidor.");
+            });
         }
 
                 // 🔗 LOGISTICS MODULE: Populate the Form Select Menu with Live Ingredients
