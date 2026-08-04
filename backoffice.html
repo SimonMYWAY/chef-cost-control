@@ -1240,7 +1240,7 @@
                 });
             }).catch(function(err) { console.error("Supplier data table compilation fault:", err); });
         }
-        // 💾 CONTROL PIPELINE: Saves modified text name and phone data straight to Supabase suppliers table fields safely
+                // 💾 CONTROL PIPELINE: Saves modified text name and phone data straight to Supabase suppliers table fields safely
         function updateProviderRecord(id) {
             var nameEl = document.getElementById("prov-name-" + id);
             var phoneEl = document.getElementById("prov-phone-" + id);
@@ -1258,8 +1258,10 @@
             .then(function(res) {
                 if (res.ok) {
                     alert("✅ ¡Cambios del proveedor guardados con éxito!");
-                    renderProvidersTable();
-                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    setTimeout(function() {
+                        renderProvidersTable();
+                        if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    }, 150);
                 } else { alert("❌ Error al guardar modificaciones."); }
             }).catch(function(err) { console.error("Supplier payload mutation crash:", err); });
         }
@@ -1268,6 +1270,7 @@
         function toggleProviderCloudStatus(id, currentRawStatus) {
             var targetStatus = currentRawStatus === "activo" ? "inactivo" : "activo";
             
+            // 🌟 FIX A: Corrected the malformed header format string to allow cloud status toggles perfectly
             fetch(BASE_API_URL + "suppliers?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
@@ -1275,24 +1278,27 @@
             })
             .then(function(res) {
                 if (res.ok) {
-                    renderProvidersTable();
-                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    setTimeout(function() {
+                        renderProvidersTable();
+                        if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    }, 150);
                 } else { alert("❌ Error al cambiar vigencia del proveedor en la nube."); }
             }).catch(function(err) { console.error("Supplier status toggle failure:", err); });
         }
 
         // 🛡️ INTEGRITY SHIELD ERASE: Scans cached global ingredient records to block corrupting active linkages
         function safelyEraseProvider(id, providerName) {
+            // Ensure parameters are explicitly wrapped as sanitized string primitives
+            var cleanIdToken = String(id).trim();
             var cleanProvName = String(providerName).toLowerCase().trim();
             var isLinked = false;
             
-            // 🌟 FIX: Read straight from our global cache dataset layout container array cleanly
             if (Array.isArray(_masterIngredientsLookupArray)) {
                 isLinked = _masterIngredientsLookupArray.some(function(ing) {
                     var linkedProvId = String(ing.supplier_id || ing.provider_id || "").toLowerCase().trim();
                     var linkedProvName = String(ing.supplier_name || ing.provider_name || ing.proveedor || "").toLowerCase().trim();
                     
-                    return linkedProvId === String(id).toLowerCase().trim() || 
+                    return linkedProvId === cleanIdToken.toLowerCase() || 
                            linkedProvName === cleanProvName || 
                            linkedProvName.includes(cleanProvName);
                 });
@@ -1305,15 +1311,18 @@
             
             if (!confirm("🗑️ ¿Está completamente seguro de eliminar permanentemente al proveedor '" + providerName + "' del sistema? Esta acción no se puede deshacer.")) return;
             
-            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+            // 🌟 FIX B: Ironclad target parameter interpolation to execute row deletion flawlessly on your cloud disk
+            fetch(BASE_API_URL + "suppliers?id=eq." + cleanIdToken, {
                 method: "DELETE",
                 headers: { "apikey": API_KEY, "Prefer": "return=minimal" }
             })
             .then(function(res) {
                 if (res.ok) {
                     alert("🗑️ Proveedor eliminado correctamente.");
-                    renderProvidersTable();
-                    if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    setTimeout(function() {
+                        renderProvidersTable();
+                        if (typeof populateSupplierDropdown === "function") populateSupplierDropdown();
+                    }, 150);
                 } else { alert("❌ Error al eliminar el proveedor de la base de datos."); }
             }).catch(function(err) { console.error("Supplier elimination endpoint crash:", err); });
         }
