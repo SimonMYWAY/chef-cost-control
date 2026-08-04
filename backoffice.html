@@ -1176,8 +1176,7 @@
         }
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
-                // 📊 SUPPLIER LIFECYCLE CONTROLS: Cloud engine synchronized with your true Supabase status column
-                // 📊 SUPPLIER LIFECYCLE CONTROLS: Clean array-pointer loop synchronized natively with Supabase cloud statuses
+                // 📊 SUPPLIER LIFECYCLE CONTROLS (PART 1): Dataset-driven loop synchronized natively with Supabase cloud status
         function renderProvidersTable() {
             var rowsTarget = document.getElementById("providers-table-rows");
             if (!rowsTarget) return;
@@ -1188,10 +1187,10 @@
                 fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
-                var suppliers = results[0];
-                var ingredients = results[1];
+                var suppliers = results;
+                var ingredients = results;
                 
-                // 🌟 FIX: Secure the ingredients collection dataset safely inside our global memory register
+                // Secure the ingredients collection dataset safely inside our global memory register
                 _masterIngredientsLookupArray = Array.isArray(ingredients) ? ingredients : [];
                 
                 rowsTarget.innerHTML = "";
@@ -1217,9 +1216,6 @@
                         tr.setAttribute("style", "opacity: 0.6; background-color: #f8fafc;");
                     }
                     
-                    // 🌟 FIX: We escape single quotes on the vendor name parameter string and drop JSON stringify completely!
-                    var escapedVendorName = (item.name || "").replace(/'/g, "\\'");
-                    
                     tr.innerHTML = 
                         "<td style='padding:8px; text-align:left;'> " +
                             "<input type='text' id='prov-name-" + item.id + "' value='" + (item.name || "").replace(/'/g, "&apos;") + "' style='width:90%; padding:4px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" +
@@ -1230,17 +1226,31 @@
                         "<td style='padding:8px; text-align:center; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" + statusBadgeText + "</td>" +
                         "<td style='padding:8px; text-align:right; width:190px;'> " +
                             "<div style='display:flex; gap:4px; justify-content:flex-end;'> " +
-                                "<button class='btn btn-blue' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"updateProviderRecord('" + item.id + "')\">💾</button> " +
-                                "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleProviderCloudStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button> " +
-                                "<button class='btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' onclick=\"safelyEraseProvider('" + item.id + "', '" + escapedVendorName + "')\">🗑️</button> " +
+                                "<button class='btn btn-blue provider-save-btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' data-id='" + item.id + "'>💾</button> " +
+                                "<button class='btn " + statusBtnClass + " provider-toggle-btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' data-id='" + item.id + "' data-status='" + currentRawStatus + "'>" + statusBtnText + "</button> " +
+                                "<button class='btn provider-erase-btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' data-id='" + item.id + "' data-name=\"" + (item.name || "").replace(/"/g, "&quot;") + "\">🗑️</button> " +
                             "</div> " +
                         "</td>";
                         
                     rowsTarget.appendChild(tr);
                 });
+
+                // Attach dynamic event listeners to completely bypass inline string quote traps
+                document.querySelectorAll('.provider-save-btn').forEach(function(btn) {
+                    btn.onclick = function() { updateProviderRecord(this.getAttribute('data-id')); };
+                });
+
+                document.querySelectorAll('.provider-toggle-btn').forEach(function(btn) {
+                    btn.onclick = function() { toggleProviderCloudStatus(this.getAttribute('data-id'), this.getAttribute('data-status')); };
+                });
+
+                document.querySelectorAll('.provider-erase-btn').forEach(function(btn) {
+                    btn.onclick = function() { safelyEraseProvider(this.getAttribute('data-id'), this.getAttribute('data-name')); };
+                });
+
             }).catch(function(err) { console.error("Supplier data table compilation fault:", err); });
         }
-                // 💾 CONTROL PIPELINE: Saves modified text name and phone data straight to Supabase suppliers table fields safely
+        // 💾 SUPPLIER ACTIONS (PART 2): Saves modifications, updates cloud visibility, and protects data logs
         function updateProviderRecord(id) {
             var nameEl = document.getElementById("prov-name-" + id);
             var phoneEl = document.getElementById("prov-phone-" + id);
@@ -1266,11 +1276,9 @@
             }).catch(function(err) { console.error("Supplier payload mutation crash:", err); });
         }
 
-        // 🔄 NATIVE CLOUD TOGGLE ACTION: Mutates the status parameters directly on the remote database disk rows
         function toggleProviderCloudStatus(id, currentRawStatus) {
             var targetStatus = currentRawStatus === "activo" ? "inactivo" : "activo";
             
-            // 🌟 FIX A: Corrected the malformed header format string to allow cloud status toggles perfectly
             fetch(BASE_API_URL + "suppliers?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
@@ -1286,9 +1294,7 @@
             }).catch(function(err) { console.error("Supplier status toggle failure:", err); });
         }
 
-        // 🛡️ INTEGRITY SHIELD ERASE: Scans cached global ingredient records to block corrupting active linkages
         function safelyEraseProvider(id, providerName) {
-            // Ensure parameters are explicitly wrapped as sanitized string primitives
             var cleanIdToken = String(id).trim();
             var cleanProvName = String(providerName).toLowerCase().trim();
             var isLinked = false;
@@ -1311,7 +1317,6 @@
             
             if (!confirm("🗑️ ¿Está completamente seguro de eliminar permanentemente al proveedor '" + providerName + "' del sistema? Esta acción no se puede deshacer.")) return;
             
-            // 🌟 FIX B: Ironclad target parameter interpolation to execute row deletion flawlessly on your cloud disk
             fetch(BASE_API_URL + "suppliers?id=eq." + cleanIdToken, {
                 method: "DELETE",
                 headers: { "apikey": API_KEY, "Prefer": "return=minimal" }
