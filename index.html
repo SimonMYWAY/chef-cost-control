@@ -577,6 +577,15 @@
         const category = catEl ? catEl.value : 'Sin Categoría';
         const servings = servEl ? servEl.value : '1';
         
+        // 🌟 DYNAMIC UOM EXTRACTION: Detect if it's a Tier 2 sub-recipe to append the true custom unit
+        let resolvedPrintUOM = 'porciones';
+        if (category === 'tier2') {
+            const uomSelectEl = document.getElementById('tier2-uom');
+            if (uomSelectEl && uomSelectEl.value && uomSelectEl.value.trim() !== '') {
+                resolvedPrintUOM = uomSelectEl.value.trim(); // Pulls "cucharada", "kg", etc.
+            }
+        }
+        
         document.getElementById('print-recipe-title').innerText = name;
         document.getElementById('print-recipe-category').innerText = category.toUpperCase();
         document.getElementById('print-recipe-yield').innerText = `Porciones / Rendimiento: ${servings}`;
