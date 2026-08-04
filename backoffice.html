@@ -1176,7 +1176,7 @@
         }
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
-                // 📊 SUPPLIER LIFECYCLE CONTROLS (PART 1): Dataset-driven loop synchronized natively with Supabase cloud status
+                // 📊 SUPPLIER LIFECYCLE CONTROLS (PART 1): Clean dataset-driven loop synchronized natively with Supabase cloud status
         function renderProvidersTable() {
             var rowsTarget = document.getElementById("providers-table-rows");
             if (!rowsTarget) return;
@@ -1187,8 +1187,9 @@
                 fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
-                var suppliers = results;
-                var ingredients = results;
+                // 🌟 FIX: Extract elements correctly by their specific array positions to prevent blank row errors!
+                var suppliers = results[0];
+                var ingredients = results[1];
                 
                 // Secure the ingredients collection dataset safely inside our global memory register
                 _masterIngredientsLookupArray = Array.isArray(ingredients) ? ingredients : [];
@@ -1250,6 +1251,7 @@
 
             }).catch(function(err) { console.error("Supplier data table compilation fault:", err); });
         }
+
         // 💾 SUPPLIER ACTIONS (PART 2): Saves modifications, updates cloud visibility, and protects data logs
         function updateProviderRecord(id) {
             var nameEl = document.getElementById("prov-name-" + id);
