@@ -695,6 +695,9 @@
                 var data = results[0];
                 var formulaLinks = results[1];
                 
+                // 🌟 FIX: Secure your formula links batch data array safely inside our global memory register!
+                _masterIngredientsLookupArray = Array.isArray(formulaLinks) ? formulaLinks : [];
+                
                 container.innerHTML = "";
                 if (!data || data.message) return;
                 
@@ -711,7 +714,6 @@
                     
                     var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
                     
-                    // 🌟 PRESERVED ACCURATE VARIABLE ROLES FOR INGREDIENTS STATUS MATCHING:
                     // "pending" represents an active ingredient on your kitchen floor
                     // "approved" represents a disabled/archived item from calculations
                     var currentRawStatus = String(item.status || "pending").toLowerCase().trim();
@@ -725,28 +727,28 @@
                         tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
                     }
                     
-                    // 🌟 NEW MULTI-INPUT GRID INTERFACE: Inline inputs for Name ESP, Name ENG, Cost and pure Integer ID button triggers
+                    // 🌟 FIX: We remove JSON stringify completely and pass ONLY your item.id primitive token string!
                     tr.innerHTML = 
-                        "<td style='padding:6px; text-align:left;'>" +
-                            "<div style='display:flex; flex-direction:column; gap:4px;'>" +
-                                "<input type='text' id='ing-name-es-" + item.id + "' value='" + (item.name_es || "").replace(/'/g, "&apos;") + "' style='padding:4px; width:95%; font-size:0.85rem; font-weight:600;' placeholder='Español'>" +
-                                "<input type='text' id='ing-name-en-" + item.id + "' value='" + (item.name_en || "").replace(/'/g, "&apos;") + "' style='padding:4px; width:95%; font-size:0.8rem; color:var(--text-muted);' placeholder='English'>" +
-                            "</div>" +
-                        "</td>" +
-                        "<td style='text-align:center; color:var(--text-muted); font-size:0.85rem; font-weight:600;'>" + (item.uom || 'N/A') + "</td>" +
-                        "<td style='text-align:center; width:110px;'> " +
-                            "<div style='display:flex; align-items:center; justify-content:center; gap:2px;'>" +
-                                "<span style='font-size:0.85rem; font-weight:600; color:var(--text-muted);'>$</span>" +
-                                "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal.toFixed(4) + "' style='width:75px; padding:4px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem; text-align:right; font-family:monospace; font-weight:600;'>" +
-                            "</div>" +
-                        "</td>" +
-                        "<td style='text-align:center; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" + statusBadgeText + "</td>" +
-                        "<td style='text-align:right; width:195px;'>" +
-                            "<div style='display:flex; gap:4px; justify-content:flex-end; align-items:center; height:100%;'>" +
-                                "<button class='btn btn-blue' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"executeIngredientCloudUpdate('" + item.id + "')\">💾</button>" +
-                                "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleIngredientCloudStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button>" +
-                                "<button class='btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' onclick=\"safelyEraseIngredientRecord('" + item.id + "', " + JSON.stringify(formulaLinks) + ")\">🗑️</button>" +
-                            "</div>" +
+                        "<td style='padding:6px; text-align:left;'> " +
+                            "<div style='display:flex; flex-direction:column; gap:4px;'> " +
+                                "<input type='text' id='ing-name-es-" + item.id + "' value='" + (item.name_es || "").replace(/'/g, "&apos;") + "' style='padding:4px; width:95%; font-size:0.85rem; font-weight:600;' placeholder='Español'> " +
+                                "<input type='text' id='ing-name-en-" + item.id + "' value='" + (item.name_en || "").replace(/'/g, "&apos;") + "' style='padding:4px; width:95%; font-size:0.8rem; color:var(--text-muted);' placeholder='English'> " +
+                            "</div> " +
+                        "</td> " +
+                        "<td style='text-align:center; color:var(--text-muted); font-size:0.85rem; font-weight:600;'>" + (item.uom || 'N/A') + "</td> " +
+                        "<td style='text-align:center; width:110px;'>  " +
+                            "<div style='display:flex; align-items:center; justify-content:center; gap:2px;'> " +
+                                "<span style='font-size:0.85rem; font-weight:600; color:var(--text-muted);'>$</span> " +
+                                "<input type='number' step='0.0001' id='price-input-" + item.id + "' value='" + costVal.toFixed(4) + "' style='width:75px; padding:4px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem; text-align:right; font-family:monospace; font-weight:600;'> " +
+                            "</div> " +
+                        "</td> " +
+                        "<td style='text-align:center; font-size:0.85rem; font-weight:600; color:var(--text-main);'>" + statusBadgeText + "</td> " +
+                        "<td style='text-align:right; width:195px;'> " +
+                            "<div style='display:flex; gap:4px; justify-content:flex-end; align-items:center; height:100%;'> " +
+                                "<button class='btn btn-blue' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"executeIngredientCloudUpdate('" + item.id + "')\">💾</button> " +
+                                "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleIngredientCloudStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button> " +
+                                "<button class='btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' onclick=\"safelyEraseIngredientRecord('" + item.id + "')\">🗑️</button> " +
+                            "</div> " +
                         "</td>";
                         
                     container.appendChild(tr);
@@ -804,7 +806,7 @@
             }).catch(function(err) { console.error("Ingredient status toggle failure:", err); });
         }
 
-        function safelyEraseIngredientRecord(id, formulaLinksList) {
+                function safelyEraseIngredientRecord(id) {
             var cleanIdToken = String(id).trim();
             
             // Look up the name dynamically from the input element to bypass inline quote errors
@@ -813,9 +815,9 @@
             
             var isLinked = false;
             
-            // 🛡️ INTEGRITY SHIELD CHECK: Prevent deleting raw materials currently bound to active recipe formulas
-            if (Array.isArray(formulaLinksList)) {
-                isLinked = formulaLinksList.some(function(ri) {
+            // 🌟 FIX: Read straight from our global cache dataset layout register array cleanly!
+            if (Array.isArray(_masterIngredientsLookupArray)) {
+                isLinked = _masterIngredientsLookupArray.some(function(ri) {
                     return String(ri.ingredient_id).toLowerCase().trim() === cleanIdToken.toLowerCase();
                 });
             }
@@ -825,7 +827,7 @@
                 return;
             }
             
-            if (!confirm("🗑 Tangible Action: ¿Está seguro de eliminar permanentemente '" + ingredientName + "' del catálogo? Esta acción no se puede deshacer.")) return;
+            if (!confirm("🗑️ ¿Está seguro de eliminar permanentemente '" + ingredientName + "' del catálogo? Esta acción no se puede deshacer.")) return;
             
             fetch(BASE_API_URL + "ingredients?id=eq." + cleanIdToken, {
                 method: "DELETE",
