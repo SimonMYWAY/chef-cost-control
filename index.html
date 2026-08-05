@@ -577,19 +577,23 @@
         const category = catEl ? catEl.value : 'Sin Categoría';
         const servings = servEl ? servEl.value : '1';
         
-        // 🌟 CLOUD CACHE INTEGRATION: Extract the true custom unit directly from the permanent master catalog object
+                // 🌟 CLOUD CACHE INTEGRATION: Cross-reference your master ingredients cache array to extract the true shadow UOM directly!
         let resolvedPrintUOM = 'porciones';
         
         if (category === 'tier2' && typeof _selectedRecipeId !== 'undefined' && _selectedRecipeId) {
-            // Find the active recipe matching record inside your loaded application cache arrays
-            if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-                const activeCacheMatch = _loadedRevoCatalog.find(function(r) {
-                    return String(r.id).toLowerCase().trim() === String(_selectedRecipeId).toLowerCase().trim();
-                });
-                
-                // Extract your true structural database column parameter text strings
-                if (activeCacheMatch && activeCacheMatch.uom && activeCacheMatch.uom.trim() !== '') {
-                    resolvedPrintUOM = activeCacheMatch.uom.trim(); // Pulls "cucharada", "kg", etc.
+            // Search inside your active ingredients cache array list for a matching structural ID block
+            if (typeof _ingredientsCache !== 'undefined' && _ingredientsCache) {
+                // If your application uses an array dataset wrapper structure for caching ingredients:
+                if (Array.isArray(_ingredientsCache)) {
+                    const matchIngRecord = _ingredientsCache.find(function(i) { 
+                        return String(i.id).toLowerCase().trim() === String(_selectedRecipeId).toLowerCase().trim(); 
+                    });
+                    if (matchIngRecord && matchIngRecord.uom) resolvedPrintUOM = matchIngRecord.uom.trim();
+                } 
+                // Fallback check: If your application uses a key-value object map wrapper configuration instead:
+                else if (_ingredientsCache[String(_selectedRecipeId).toLowerCase().trim()]) {
+                    const mappedItemObj = _ingredientsCache[String(_selectedRecipeId).toLowerCase().trim()];
+                    if (mappedItemObj && mappedItemObj.uom) resolvedPrintUOM = mappedItemObj.uom.trim();
                 }
             }
         }
