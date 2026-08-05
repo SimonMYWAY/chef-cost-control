@@ -622,9 +622,9 @@
                     const qtyInput = card.querySelector('input[type="number"]');
                     const qty = qtyInput ? qtyInput.value : '0';
                     const uomSpan = card.querySelector('.qty-lbl') ? card.querySelector('.qty-lbl').innerText : 'g';
-                    const scrapInput = card.querySelector('.scrap-input');
+                    const scrapInput = card.querySelector('.ing-scrap');
                     const scrap = scrapInput ? scrapInput.value : '0';
-                    
+                  
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td style="font-weight:600; color:#1c1c1e;">${ingName}</td>
