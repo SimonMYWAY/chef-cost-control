@@ -567,79 +567,79 @@
                 
     
     
-    function openPrintPreview() {
-        // Safe validation: Fallback to empty text structures if layout boxes return null
-        const nameEl = document.getElementById('recipe-name');
-        const catEl = document.getElementById('recipe-category');
-        const servEl = document.getElementById('servings');
+            // 📊 FICHA TÉCNICA PRINT INTERFACE: Fetches true live shadow row units straight from the ingredients table disk
+        async function openPrintPreview() {
+            // Safe validation: Fallback to empty text structures if layout boxes return null
+            const nameEl = document.getElementById('recipe-name');
+            const catEl = document.getElementById('recipe-category');
+            const servEl = document.getElementById('servings');
 
-        const name = nameEl ? nameEl.value : 'Receta Sin Nombre';
-        const category = catEl ? catEl.value : 'Sin Categoría';
-        const servings = servEl ? servEl.value : '1';
-        
-                // 🌟 CLOUD CACHE INTEGRATION: Cross-reference your master ingredients cache array to extract the true shadow UOM directly!
-        let resolvedPrintUOM = 'porciones';
-        
-        if (category === 'tier2' && typeof _selectedRecipeId !== 'undefined' && _selectedRecipeId) {
-            // Search inside your active ingredients cache array list for a matching structural ID block
-            if (typeof _ingredientsCache !== 'undefined' && _ingredientsCache) {
-                // If your application uses an array dataset wrapper structure for caching ingredients:
-                if (Array.isArray(_ingredientsCache)) {
-                    const matchIngRecord = _ingredientsCache.find(function(i) { 
-                        return String(i.id).toLowerCase().trim() === String(_selectedRecipeId).toLowerCase().trim(); 
+            const name = nameEl ? nameEl.value : 'Receta Sin Nombre';
+            const category = catEl ? catEl.value : 'Sin Categoría';
+            const servings = servEl ? servEl.value : '1';
+            
+            // 🌟 NATIVE SERVER DIRECT CHECK: Async query to fetch your true custom unit directly from your ingredients table
+            let resolvedPrintUOM = 'porciones';
+            
+            if (category === 'tier2' && typeof _selectedRecipeId !== 'undefined' && _selectedRecipeId) {
+                try {
+                    // Pull a direct, targeted network query match straight from your database row
+                    const ingServerRes = await fetch(API_URL + "ingredients?id=eq." + _selectedRecipeId, { 
+                        headers: { "apikey": API_KEY } 
                     });
-                    if (matchIngRecord && matchIngRecord.uom) resolvedPrintUOM = matchIngRecord.uom.trim();
-                } 
-                // Fallback check: If your application uses a key-value object map wrapper configuration instead:
-                else if (_ingredientsCache[String(_selectedRecipeId).toLowerCase().trim()]) {
-                    const mappedItemObj = _ingredientsCache[String(_selectedRecipeId).toLowerCase().trim()];
-                    if (mappedItemObj && mappedItemObj.uom) resolvedPrintUOM = mappedItemObj.uom.trim();
+                    const ingServerData = await ingServerRes.json();
+                    
+                    if (Array.isArray(ingServerData) && ingServerData.length > 0) {
+                        const targetShadowRow = ingServerData[0];
+                        if (targetShadowRow && targetShadowRow.uom && targetShadowRow.uom.trim() !== '') {
+                            resolvedPrintUOM = targetShadowRow.uom.trim(); // 🌟 Captures your true live unit like "oz"!
+                        }
+                    }
+                } catch (err) {
+                    console.error("Ficha tecnica unit lookup network fault:", err);
                 }
             }
-        }
-        
-        document.getElementById('print-recipe-title').innerText = name;
-        document.getElementById('print-recipe-category').innerText = category.toUpperCase();
-        
-        // 🌟 DYNAMIC DISPLAY: Renders your verified unit string flawlessly right beside your yield metrics!
-        document.getElementById('print-recipe-yield').innerText = `Porciones / Rendimiento: ${servings} ${resolvedPrintUOM}`;
-    
-        document.getElementById('print-total-cost').innerText = 'Calculado en Formulario';
-        document.getElementById('print-unit-cost').innerText = 'Calculado en Formulario';
-        
-        const printBody = document.getElementById('print-table-body');
-        printBody.innerHTML = '';
-        
-        const ingCards = document.querySelectorAll('.ing-card');
-        
-        if (ingCards.length === 0) {
-            printBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8e8e93;">No hay ingredientes registrados en esta ficha.</td></tr>';
-        } else {
-            ingCards.forEach(card => {
-                const ingSelect = card.querySelector('select');
-                const ingName = ingSelect ? ingSelect.options[ingSelect.selectedIndex]?.text : 'Materia Prima';
-                
-                const inputs = card.querySelectorAll('input[type="number"]');
-                const qty = inputs[0] ? inputs[0].value : '0';
-                const scrap = inputs[1] ? inputs[1].value : '0';
-                
-                const uomSpan = card.querySelector('span');
-                const uom = uomSpan ? uomSpan.innerText : 'ud';
-                
-                printBody.innerHTML += `
-                    <tr>
+            
+            document.getElementById('print-recipe-title').innerText = name;
+            document.getElementById('print-recipe-category').innerText = category.toUpperCase();
+            
+            // Render your true custom unit text primitive right beside your yield batch numbers
+            document.getElementById('print-recipe-yield').innerText = `Porciones / Rendimiento: ${servings} ${resolvedPrintUOM}`;
+            
+            document.getElementById('print-total-cost').innerText = 'Calculado en Formulario';
+            document.getElementById('print-unit-cost').innerText = 'Calculado en Formulario';
+            
+            const printBody = document.getElementById('print-table-body');
+            printBody.innerHTML = '';
+            
+            const ingCards = document.querySelectorAll('.ing-card');
+            
+            if (ingCards.length === 0) {
+                printBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8e8e93;">No hay ingredientes registrados en esta ficha.</td></tr>';
+            } else {
+                ingCards.forEach(card => {
+                    const ingName = card.querySelector('h4') ? card.querySelector('h4').innerText : 'Ingrediente';
+                    const qtyInput = card.querySelector('input[type="number"]');
+                    const qty = qtyInput ? qtyInput.value : '0';
+                    const uomSpan = card.querySelector('.qty-lbl') ? card.querySelector('.qty-lbl').innerText : 'g';
+                    const scrapInput = card.querySelector('.scrap-input');
+                    const scrap = scrapInput ? scrapInput.value : '0';
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
                         <td style="font-weight:600; color:#1c1c1e;">${ingName}</td>
                         <td>${parseFloat(qty || 0).toFixed(3)}</td>
-                        <td>${uom}</td>
+                        <td>${uomSpan}</td>
                         <td>${scrap}%</td>
                         <td style="text-align:right; font-weight:600;">Calculado</td>
-                    </tr>
-                `;
-            });
+                    `;
+                    printBody.innerHTML += tr.innerHTML;
+                });
+            }
+            
+            document.getElementById('recipe-print-preview-modal').style.display = 'flex';
         }
-        
-        document.getElementById('print-preview-modal').style.display = 'block';
-    }
+
 
     function closePrintPreview() {
         document.getElementById('print-preview-modal').style.display = 'none';
