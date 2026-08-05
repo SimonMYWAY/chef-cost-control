@@ -309,7 +309,7 @@
                             
                             if (selectEl) selectEl.value = String(row.ingredient_id || row.ingredientId);
                             if (qtyInput) qtyInput.value = row.quantity;
-                            if (scrapInput) scrapInput.value = row.scrap || 0;
+                            if (scrapInput) scrapInput.value = row.scrap_percentage !== undefined ? row.scrap_percentage : (row.scrap || 0);
                             updateRowUOM(lastCard.id);
                         }
                     }
