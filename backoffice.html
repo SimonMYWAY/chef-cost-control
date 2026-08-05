@@ -756,7 +756,7 @@
             }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
         }
 
-                // 💾 INGREDIENTS LIFECYCLE (PART 2): Saves changes, switches visibility states, and protects active menu items
+                // 💾 INGREDIENTS LIFECYCLE (PART 2): Securely saves modifications matching your true column definitions
         function executeIngredientCloudUpdate(id) {
             var nameEsEl = document.getElementById("ing-name-es-" + id);
             var nameEnEl = document.getElementById("ing-name-en-" + id);
@@ -770,24 +770,39 @@
             
             if (cleanEs === "") { alert("⚠️ El nombre en español no puede estar vacío."); return; }
             
-            var payload = { name_es: cleanEs, name_en: cleanEn, std_cost_per_unit: parsedCost, cost: parsedCost };
+            // 🌟 FIXED SCHEMA PAYLOAD: Removed ghost cost parameters to map your exact database fields perfectly!
+            var payload = { 
+                name_es: cleanEs, 
+                name_en: cleanEn, 
+                std_cost_per_unit: parsedCost 
+            };
             
             fetch(BASE_API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
-                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=minimal" 
+                },
                 body: JSON.stringify(payload)
             })
             .then(function(res) {
                 if (res.ok) {
                     alert("✅ ¡Ingrediente actualizado con éxito en la nube!");
-                    // Trigger your existing cost cascading script if present, otherwise refresh layout
+                    
+                    // Cascade cost update values to change corresponding recipe targets automatically
                     if (typeof updateIngredientCostAndCascade === "function") {
                         updateIngredientCostAndCascade(id);
                     } else {
                         setTimeout(renderMasterIngredientsTable, 150);
                     }
-                } else { alert("❌ Error al guardar modificaciones."); }
-            }).catch(function(err) { console.error("Ingredient payload mutation crash:", err); });
+                } else { 
+                    alert("❌ Error al guardar modificaciones. Verifica la conexión con el servidor."); 
+                }
+            })
+            .catch(function(err) { 
+                console.error("Ingredient payload mutation crash:", err); 
+            });
         }
 
         function toggleIngredientCloudStatus(id, currentRawStatus) {
