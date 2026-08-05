@@ -602,21 +602,23 @@
                     });
                 }
                 
-                lines.forEach(function(line) {
+                                lines.forEach(function(line) {
                     var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
                     var dbItem = localIngMap[cleanIngId];
                     
-                    // 🌟 DYNAMIC TRACKING EXTRACTION: Pull the real name and true unit string parameter from the database row object
                     var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
                     var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
                     
                     var tr = document.createElement("tr");
-                    tr.innerHTML = "td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "/td" +
-                                   "td style='padding:8px; text-align:center; font-family:monospace;'>" + (line.quantity || 0) + " " + resolvedIngUOM + "/td" +
-                                   "td style='padding:8px; text-align:right; color:var(--text-muted);'>" + (line.scrap_percentage || 0) + "%/td";
+                    
+                    // 🌟 FIX: Added the missing < and > angle brackets to let your browser render a pristine table layout!
+                    tr.innerHTML = "<td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "</td>" +
+                                   "<td style='padding:8px; text-align:center; font-family:monospace;'>" + (line.quantity || 0) + " " + resolvedIngUOM + "</td>" +
+                                   "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + (line.scrap_percentage || 0) + "%</td>";
                                    
                     rowsTarget.appendChild(tr);
                 });
+
             })
             .catch(function(err) {
                 console.error("Inspector popup network calculation breakdown:", err);
