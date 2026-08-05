@@ -642,23 +642,32 @@
                     rowsTarget.appendChild(tr);
                 });
                 
-                // 🌟 FINANCIAL BASEROW SUM FOOTER: Computes total recipe costs and automated selling price matrices
+                // 🌟 FINANCIAL BASEROW SUM FOOTER: Dynamically forks output layout based on Tier 1 vs Tier 2 categories
                 var parsedServingsCount = parseFloat(servings) || 1;
                 var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
                 
-                // Pricing Strategy Engine: Standard Multiplier Target buffer (e.g. 3.0x markup or 33% food cost target margins)
-                var standardPricingTargetMultiplier = 3.0; 
-                var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
+                var leftBlockHTML = "";
+                var cleanCategoryToken = String(category || "").toLowerCase().trim();
                 
-                // Append financial breakdown card block right at the bottom summary line
+                if (cleanCategoryToken === "tier2") {
+                    // 🌟 TIER 2 INTELLIGENT ROUTING: Displays explicit production cost per weight/volume unit!
+                    leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Por Unidad Real</div>" +
+                                    "<div style='font-size:0.9rem; margin-top:2px;'>Costo por " + activeUnitLabel + ": <span style='color:#007afb;'>$" + singleUnitProductionCost.toFixed(2) + "</span></div>";
+                } else {
+                    // TIER 1/STANDARD ROUTING: Displays normal retail strategy pricing matrix (3.0x standard markup)
+                    var standardPricingTargetMultiplier = 3.0; 
+                    var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
+                    
+                    leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
+                                    "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>";
+                }
+                
+                // Append the fully customized financial breakdown footer bar to the matrix table bottom
                 var footerSummaryTr = document.createElement("tr");
                 footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
                 
                 footerSummaryTr.innerHTML = 
-                    "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" +
-                        "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
-                        "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>" +
-                    "</td>" +
+                    "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" + leftBlockHTML + "</td>" +
                     "<td colspan='2' style='padding:12px; text-align:right; color:var(--text-main);'>" +
                         "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Acumulado Total</div>" +
                         "<div style='font-size:0.9rem; margin-top:2px;'>Total Ficha: <span style='color:#007afb;'>$" + totalRecipeAccumulatedCost.toFixed(2) + "</span></div>" +
