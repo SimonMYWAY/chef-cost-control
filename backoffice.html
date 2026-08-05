@@ -587,11 +587,22 @@
                 .then(function(lines) {
                     rowsTarget.innerHTML = "";
                     if(!lines || lines.length === 0) { rowsTarget.innerHTML = "<tr><td colspan='3'>Sin ingredientes asociados.</td></tr>"; return; }
-                    lines.forEach(function(line) {
+                                        lines.forEach(function(line) {
                         var tr = document.createElement("tr");
-                        tr.innerHTML = "<td>" + (_ingredientsCache[line.ingredient_id] || "Desconocido") + "</td><td>" + (line.quantity || 0) + " g</td><td>" + (line.scrap_percentage || 0) + "%</td>";
+                        
+                        // 🌟 DYNAMIC INGREDIENT UOM LOOKUP: Look inside your global cache map to extract the true UOM text string
+                        var cachedIng = _ingredientsCache[line.ingredient_id];
+                        var resolvedIngUOM = (cachedIng && cachedIng.uom) ? cachedIng.uom : "g"; // Fallback to "g" only if empty
+                        var ingNameClean = (cachedIng && cachedIng.name_es) ? cachedIng.name_es : (cachedIng || "Desconocido");
+                        
+                        // 🌟 REALIGNED CELL TEMPLATE: Replaces the hardcoded "g" text with your true dynamic variable string!
+                        tr.innerHTML = "<td>" + ingNameClean + "</td>" +
+                                       "<td>" + (line.quantity || 0) + " " + resolvedIngUOM + "</td>" +
+                                       "<td>" + (line.scrap_percentage || 0) + "%</td>";
+                                       
                         rowsTarget.appendChild(tr);
                     });
+
                 });
         }
 
