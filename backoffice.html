@@ -253,18 +253,26 @@
 
     </div>
 
-    <!-- POPUP DETALLES MODAL -->
+        <!-- POPUP DETALLES MODAL -->
     <div id="recipe-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close" onclick="closeModal()">&times;</span>
             <h2 id="modal-recipe-name">Receta</h2>
             <div id="modal-recipe-meta" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">Meta</div>
             <table class="ingredient-table">
-                <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Merma</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Ingrediente</th>
+                        <th>Cantidad</th>
+                        <th>Merma</th>
+                        <th style="text-align:right;">Costo Estándar</th>
+                    </tr>
+                </thead>
                 <tbody id="modal-table-rows"></tbody>
             </table>
         </div>
     </div>
+
     <script>
         // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
         const BASE_API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
@@ -568,7 +576,7 @@
             });
         }
 
-        // Phase 3: Interactive formula inspector popup modal with dynamic live unit mapping loops
+                // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
         function viewRecipeDetails(recipeId, name, category, servings, uom) {
             var activeUnitLabel = (uom && uom !== "" && uom !== "undefined") ? uom : "porciones";
             
@@ -576,10 +584,10 @@
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
             
             var rowsTarget = document.getElementById("modal-table-rows");
-            rowsTarget.innerHTML = "<tr><td colspan='3' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
+            rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
             document.getElementById("recipe-modal").style.display = "flex";
             
-            // 🌟 NATIVE DUAL FETCH IN PARALLEL: Pull lines and live master ingredients to cross-reference uom text strings flawlessly
+            // Fetch components and live master ingredients in parallel to run financial margin checks
             Promise.all([
                 fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
@@ -590,11 +598,11 @@
                 
                 rowsTarget.innerHTML = "";
                 if (!lines || lines.length === 0 || lines.message) { 
-                    rowsTarget.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
+                    rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
                     return; 
                 }
                 
-                // Build a lightning-fast dictionary map matching your live database rows
+                // Build a lookup map matching your live database rows
                 var localIngMap = {};
                 if (Array.isArray(masterIngredients)) {
                     masterIngredients.forEach(function(ing) {
@@ -602,27 +610,65 @@
                     });
                 }
                 
-                                lines.forEach(function(line) {
+                var totalRecipeAccumulatedCost = 0;
+                
+                lines.forEach(function(line) {
                     var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
                     var dbItem = localIngMap[cleanIngId];
                     
                     var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
                     var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
                     
-                    var tr = document.createElement("tr");
+                    // Pull the real pricing structure metric from your database columns
+                    var unitStandardCost = dbItem ? (parseFloat(dbItem.std_cost_per_unit || dbItem.cost) || 0) : 0;
                     
-                    // 🌟 FIX: Added the missing < and > angle brackets to let your browser render a pristine table layout!
+                    // Standard quantity and waste calculations
+                    var lineQty = parseFloat(line.quantity || 0);
+                    var scrapPct = parseFloat(line.scrap_percentage || 0);
+                    var wasteFactor = 1 + (scrapPct / 100);
+                    
+                    // Financial Line Cost = Qty * Unit Cost * Waste Factor
+                    var lineCalculatedFinancialCost = lineQty * unitStandardCost * wasteFactor;
+                    totalRecipeAccumulatedCost += lineCalculatedFinancialCost;
+                    
+                    var tr = document.createElement("tr");
+                    tr.style.borderBottom = "1px solid var(--border-color)";
+                    
                     tr.innerHTML = "<td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "</td>" +
-                                   "<td style='padding:8px; text-align:center; font-family:monospace;'>" + (line.quantity || 0) + " " + resolvedIngUOM + "</td>" +
-                                   "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + (line.scrap_percentage || 0) + "%</td>";
+                                   "<td style='padding:8px; text-align:center; font-family:monospace;'> " + lineQty.toFixed(2) + " " + resolvedIngUOM + "</td>" +
+                                   "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + scrapPct + "%</td>" +
+                                   "<td style='padding:8px; text-align:right; font-weight:600; font-family:monospace;'>$" + lineCalculatedFinancialCost.toFixed(2) + "</td>";
                                    
                     rowsTarget.appendChild(tr);
                 });
-
+                
+                // 🌟 FINANCIAL BASEROW SUM FOOTER: Computes total recipe costs and automated selling price matrices
+                var parsedServingsCount = parseFloat(servings) || 1;
+                var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
+                
+                // Pricing Strategy Engine: Standard Multiplier Target buffer (e.g. 3.0x markup or 33% food cost target margins)
+                var standardPricingTargetMultiplier = 3.0; 
+                var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
+                
+                // Append financial breakdown card block right at the bottom summary line
+                var footerSummaryTr = document.createElement("tr");
+                footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
+                
+                footerSummaryTr.innerHTML = 
+                    "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" +
+                        "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
+                        "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>" +
+                    "</td>" +
+                    "<td colspan='2' style='padding:12px; text-align:right; color:var(--text-main);'>" +
+                        "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Acumulado Total</div>" +
+                        "<div style='font-size:0.9rem; margin-top:2px;'>Total Ficha: <span style='color:#007afb;'>$" + totalRecipeAccumulatedCost.toFixed(2) + "</span></div>" +
+                    "</td>";
+                    
+                rowsTarget.appendChild(footerSummaryTr);
             })
             .catch(function(err) {
                 console.error("Inspector popup network calculation breakdown:", err);
-                rowsTarget.innerHTML = "<tr><td colspan='3' style='color:#ef4444;'>❌ Error al cargar los componentes.</td></tr>";
+                rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; padding:10px;'>❌ Error al calcular matrices de costos de la ficha.</td></tr>";
             });
         }
 
