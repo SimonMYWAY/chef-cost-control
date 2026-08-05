@@ -568,42 +568,60 @@
             });
         }
 
-                // Phase 3: Interactive formula inspector popup modal
+        // Phase 3: Interactive formula inspector popup modal with dynamic live unit mapping loops
         function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            // 🌟 COSMETIC SYNC LAYER: Fallback to "porciones" only if no unique text unit exists
             var activeUnitLabel = (uom && uom !== "" && uom !== "undefined") ? uom : "porciones";
-
-            document.getElementById("modal-recipe-name").innerText = name;
             
-            // 🌟 VARIABLE DRIVEN HEADER: Displays "Rendimiento: 1 cucharada" dynamically on screen!
+            document.getElementById("modal-recipe-name").innerText = name;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
             
             var rowsTarget = document.getElementById("modal-table-rows");
-            rowsTarget.innerHTML = "<tr><td colspan='3' style='color:var(--text-muted); text-align:center;'>Buscando...</td></tr>";
+            rowsTarget.innerHTML = "<tr><td colspan='3' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
             document.getElementById("recipe-modal").style.display = "flex";
             
-            fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } })
-                .then(function(res) { return res.json(); })
-                .then(function(lines) {
-                    rowsTarget.innerHTML = "";
-                    if(!lines || lines.length === 0) { rowsTarget.innerHTML = "<tr><td colspan='3'>Sin ingredientes asociados.</td></tr>"; return; }
-                                        lines.forEach(function(line) {
-                        var tr = document.createElement("tr");
-                        
-                        // 🌟 DYNAMIC INGREDIENT UOM LOOKUP: Look inside your global cache map to extract the true UOM text string
-                        var cachedIng = _ingredientsCache[line.ingredient_id];
-                        var resolvedIngUOM = (cachedIng && cachedIng.uom) ? cachedIng.uom : "g"; // Fallback to "g" only if empty
-                        var ingNameClean = (cachedIng && cachedIng.name_es) ? cachedIng.name_es : (cachedIng || "Desconocido");
-                        
-                        // 🌟 REALIGNED CELL TEMPLATE: Replaces the hardcoded "g" text with your true dynamic variable string!
-                        tr.innerHTML = "<td>" + ingNameClean + "</td>" +
-                                       "<td>" + (line.quantity || 0) + " " + resolvedIngUOM + "</td>" +
-                                       "<td>" + (line.scrap_percentage || 0) + "%</td>";
-                                       
-                        rowsTarget.appendChild(tr);
+            // 🌟 NATIVE DUAL FETCH IN PARALLEL: Pull lines and live master ingredients to cross-reference uom text strings flawlessly
+            Promise.all([
+                fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ])
+            .then(function(results) {
+                var lines = results[0];
+                var masterIngredients = results[1];
+                
+                rowsTarget.innerHTML = "";
+                if (!lines || lines.length === 0 || lines.message) { 
+                    rowsTarget.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
+                    return; 
+                }
+                
+                // Build a lightning-fast dictionary map matching your live database rows
+                var localIngMap = {};
+                if (Array.isArray(masterIngredients)) {
+                    masterIngredients.forEach(function(ing) {
+                        localIngMap[String(ing.id).toLowerCase().trim()] = ing;
                     });
-
+                }
+                
+                lines.forEach(function(line) {
+                    var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+                    var dbItem = localIngMap[cleanIngId];
+                    
+                    // 🌟 DYNAMIC TRACKING EXTRACTION: Pull the real name and true unit string parameter from the database row object
+                    var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
+                    var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
+                    
+                    var tr = document.createElement("tr");
+                    tr.innerHTML = "td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "/td" +
+                                   "td style='padding:8px; text-align:center; font-family:monospace;'>" + (line.quantity || 0) + " " + resolvedIngUOM + "/td" +
+                                   "td style='padding:8px; text-align:right; color:var(--text-muted);'>" + (line.scrap_percentage || 0) + "%/td";
+                                   
+                    rowsTarget.appendChild(tr);
                 });
+            })
+            .catch(function(err) {
+                console.error("Inspector popup network calculation breakdown:", err);
+                rowsTarget.innerHTML = "<tr><td colspan='3' style='color:#ef4444;'>❌ Error al cargar los componentes.</td></tr>";
+            });
         }
 
                 // 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
