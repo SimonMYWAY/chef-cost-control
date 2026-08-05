@@ -275,8 +275,34 @@
                 const listContainer = document.getElementById('ingredients-list');
                 if (listContainer) listContainer.innerHTML = ''; 
 
-                if (match.category) categorySelect.value = match.category;
+                                if (match.category) categorySelect.value = match.category;
                 if (servingsInput) servingsInput.value = match.servings || 4;
+                
+                // 🌟 NATIVE CLOUD SYNCHRONIZATION: Fetch the true parent custom unit straight from the ingredients table row
+                if (match.category === 'tier2') {
+                    const uomBoxPanel = document.getElementById('tier2-uom-box');
+                    if (uomBoxPanel) uomBoxPanel.style.display = 'block';
+                    
+                    // Run a targeted database query to pull the master shadow row matching this recipe ID
+                    fetch(`${API_URL}ingredients?id=eq.${id}`, { headers: { "apikey": API_KEY } })
+                        .then(function(res) { return res.json(); })
+                        .then(function(ingData) {
+                            if (Array.isArray(ingData) && ingData.length > 0) {
+                                const parentShadowRow = ingData[0];
+                                const uomSelectInput = document.getElementById('tier2-uom');
+                                
+                                // 🌟 LOCKS SELECTION: Overrides defaults and freezes your true selection like "oz" securely on screen!
+                                if (uomSelectInput && parentShadowRow && parentShadowRow.uom) {
+                                    uomSelectInput.value = parentShadowRow.uom.trim();
+                                }
+                            }
+                        })
+                        .catch(function(err) { console.error("Parent tier2 UOM sync error:", err); });
+                } else {
+                    const uomBoxPanel = document.getElementById('tier2-uom-box');
+                    if (uomBoxPanel) uomBoxPanel.style.display = 'none';
+                }
+                
                 handleCategoryChange();
 
                             try {
