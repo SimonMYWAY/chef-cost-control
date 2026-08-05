@@ -809,20 +809,19 @@
                 function safelyEraseIngredientRecord(id) {
             var cleanIdToken = String(id).trim();
             
-            // Look up the name dynamically from the input element to bypass inline quote errors
             var nameInputEl = document.getElementById("ing-name-es-" + cleanIdToken);
             var ingredientName = nameInputEl ? nameInputEl.value.trim() : "Ingrediente";
             
-            var isLinked = false;
+            var isLinkedToRecipes = false;
             
-            // 🌟 FIX: Read straight from our global cache dataset layout register array cleanly!
+            // Check formula structures cache first
             if (Array.isArray(_masterIngredientsLookupArray)) {
-                isLinked = _masterIngredientsLookupArray.some(function(ri) {
+                isLinkedToRecipes = _masterIngredientsLookupArray.some(function(ri) {
                     return String(ri.ingredient_id).toLowerCase().trim() === cleanIdToken.toLowerCase();
                 });
             }
             
-            if (isLinked) {
+            if (isLinkedToRecipes) {
                 alert("🛑 Bloqueo de Integridad: No se puede eliminar el ingrediente '" + ingredientName + "' porque actualmente está siendo utilizado dentro de una o más recetas activas de tu menú.");
                 return;
             }
@@ -837,7 +836,12 @@
                 if (res.ok) {
                     alert("🗑️ Ingrediente eliminado correctamente de la nube.");
                     setTimeout(renderMasterIngredientsTable, 150);
-                } else { alert("❌ Error al eliminar el ingrediente de la base de datos."); }
+                } else if (res.status === 409) {
+                    // 🌟 HARD BLOCK INTERCEPTOR: Catches constraint conflicts gracefully to explain historical logs ties
+                    alert("🛑 Restricción Histórica (Conflicto 409): No se puede eliminar permanentemente '" + ingredientName + "' porque está vinculado a registros históricos (como facturas de compra guardadas). Para mantener la precisión de tus balances pasados, por favor déjalo configurado como 'Inactivo' en vez de borrarlo.");
+                } else { 
+                    alert("❌ Error al eliminar el ingrediente de la base de datos (Código: " + res.status + ")."); 
+                }
             }).catch(function(err) { console.error("Ingredient elimination endpoint crash:", err); });
         }
         
