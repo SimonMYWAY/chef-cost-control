@@ -2018,7 +2018,7 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE: Extracted data line items validated against your true supplier formats table columns
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Smart abbreviation normalizer and text extractor core
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
@@ -2029,10 +2029,10 @@
                 return;
             }
             
-            resultsTarget.innerHTML = "⏳ Ejecutando algoritmos de extracción y cruzando formatos de proveedores...";
+            resultsTarget.innerHTML = "⏳ Ejecutando algoritmos inteligentes de extracción y cruzando formatos...";
             
             try {
-                // 🌟 PARALLEL DATA PIPELINE: Pull ingredients and format sheets from Supabase to check relationships
+                // Fetch ingredients and format sheets from Supabase to check relationships
                 var [ingRes, formatRes] = await Promise.all([
                     fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
                     fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
@@ -2047,11 +2047,24 @@
                 var totalInsertedCount = 0;
                 var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resultados del Análisis de Formatos WhatsApp:</div>";
                 
+                // 🌟 HELPER PIPELINE: Spanish Kitchen Unit Synonym Normalizer Mapping
+                function normalizeUnitStringToken(rawUnitText) {
+                    var u = String(rawUnitText || "").toLowerCase().trim();
+                    if (u === "lb" || u === "lbs" || u === "libra" || u === "libras") return "libra";
+                    if (u === "kg" || u === "kgs" || u === "kilo" || u === "kilos" || u === "kilogramo" || u === "kilogramos") return "kg";
+                    if (u === "g" || u === "gr" || u === "grs" || u === "gramo" || u === "gramos") return "gr";
+                    if (u === "oz" || u === "ozs" || u === "onza" || u === "onzas") return "oz";
+                    if (u === "ml" || u === "mls" || u === "mililitro" || u === "mililitros") return "ml";
+                    if (u === "l" || u === "lt" || u === "lts" || u === "litro" || u === "litros") return "l";
+                    if (u === "u" || u === "uni" || u === "unit" || u === "unidad" || u === "unidades") return "unidad";
+                    return u;
+                }
+                
                 for (var i = 0; i < lines.length; i++) {
                     var currentLine = lines[i].trim();
                     if (currentLine === "") continue;
                     
-                    // 🌟 STEP A: FUZZY ITEM MATCHING
+                    // Fuzzy Item Name Mapping
                     var matchedIngredient = null;
                     for (var j = 0; j < ingRes.length; j++) {
                         var ingName = String(ingRes[j].name_es || "").toLowerCase().trim();
@@ -2066,38 +2079,44 @@
                         continue;
                     }
                     
-                    // 🌟 STEP B: EXTRACT TEXT UNIT PRIMITIVES (UOM)
-                    var currentLineLower = currentLine.toLowerCase();
-                    var detectedPurchaseUOM = "";
-                    
-                    // Filter matching your master supplier formats row options explicitly
                     var matchingFormatsList = formatRes.filter(function(f) {
                         return String(f.ingredient_id) === String(matchedIngredient.id);
                     });
                     
-                    for (var k = 0; k < matchingFormatsList.length; k++) {
-                        var possibleUOM = String(matchingFormatsList[k].purchase_uom || "").toLowerCase().trim();
-                        if (possibleUOM !== "" && currentLineLower.includes(possibleUOM)) {
-                            detectedPurchaseUOM = possibleUOM;
-                            break;
-                        }
-                    }
-                    
-                    // 🌟 STEP C: ISOLATE QUANTITIES AND COSTS VIA REGEX
                     var rawInvoiceQty = 0;
                     var rawInvoiceCost = 0;
-                    var numberRegexPattern = /([0-9]+[\.,][0-9]+|[0-9]+)/g;
-                    var allNumbersFoundInLine = currentLine.match(numberRegexPattern);
+                    var textExtractedUOMToken = "";
                     
                     if (currentLine.includes("|")) {
+                        // STRUCTURED COLUMN SPLITTING WITH POINTER ALIGNMENTS
                         var columns = currentLine.split("|");
                         if (columns.length >= 2) rawInvoiceQty = parseFloat(columns[1].trim().replace(',', '.')) || 0;
-                        if (columns.length >= 4) rawInvoiceCost = parseFloat(columns[3].replace(/[^0-9\.,]/g, "").replace(',', '.')) || 0;
+                        if (columns.length >= 3) textExtractedUOMToken = columns[2].trim();
+                        if (columns.length >= 4) {
+                            var priceColumnText = columns[columns.length - 1].replace(/[^0-9\.,]/g, "").replace(',', '.');
+                            rawInvoiceCost = parseFloat(priceColumnText) || 0;
+                        }
                     } else {
+                        // UNSTRUCTURED HANDWRITTEN REGEX SCANNING
+                        var numberRegexPattern = /([0-9]+[\.,][0-9]+|[0-9]+)/g;
+                        var allNumbersFoundInLine = currentLine.match(numberRegexPattern);
+                        
                         if (allNumbersFoundInLine && allNumbersFoundInLine.length >= 1) {
                             rawInvoiceQty = parseFloat(allNumbersFoundInLine[0].replace(',', '.'));
                             if (allNumbersFoundInLine.length >= 2) {
                                 rawInvoiceCost = parseFloat(allNumbersFoundInLine[allNumbersFoundInLine.length - 1].replace(',', '.'));
+                            }
+                        }
+                        
+                        var wordTokens = currentLine.toLowerCase().replace(/[^a-zñáéíóú\s]/g, "").split(/\s+/);
+                        for (var w = 0; w < wordTokens.length; w++) {
+                            var normalizedWord = normalizeUnitStringToken(wordTokens[w]);
+                            var matchExists = matchingFormatsList.some(function(f) {
+                                return normalizeUnitStringToken(f.purchase_uom) === normalizedWord;
+                            });
+                            if (matchExists) {
+                                textExtractedUOMToken = wordTokens[w];
+                                break;
                             }
                         }
                     }
@@ -2106,18 +2125,19 @@
                         debugLogHTML += "<div style='color:#b45309; margin-bottom:4px;'>⚠️ Línea " + (i+1) + " [" + matchedIngredient.name_es + "]: Se detectó el ingrediente pero la cantidad u costo fallaron al procesarse.</div>";
                         continue;
                     }
-                    
-                    // 🌟 STEP D: INTEGRITY SHIELD EXTRACTION & CONVERSION CHECK
-                    var finalRecipeQtyConverted = rawInvoiceQty;
+
+                    // Continue directly into Part 2 right below
+                    // 🌟 STEP C: NORMALIZE AND ALIGN CONVERSION MUTATORS
+                    var normalizedLineUOM = normalizeUnitStringToken(textExtractedUOMToken);
                     var formatRuleFound = null;
                     
-                    if (detectedPurchaseUOM !== "") {
+                    if (normalizedLineUOM !== "") {
                         formatRuleFound = matchingFormatsList.find(function(f) {
-                            return String(f.purchase_uom).toLowerCase().trim() === detectedPurchaseUOM;
+                            return normalizeUnitStringToken(f.purchase_uom) === normalizedLineUOM;
                         });
                     }
                     
-                    // If no explicit format matches, look for an unpopulated default baseline row rule
+                    // Fallback to unpopulated default row rules if any are logged
                     if (!formatRuleFound && matchingFormatsList.length > 0) {
                         formatRuleFound = matchingFormatsList.find(function(f) {
                             return !f.purchase_uom || f.purchase_uom === "";
@@ -2125,18 +2145,18 @@
                     }
                     
                     if (!formatRuleFound) {
-                        // 🛑 HARD BLOCK INTERCEPTOR: Flags row as an unmapped format exception to prevent data pollution!
-                        debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'>" +
-                                            "🛑 Bloqueo Administrativo (Falta Asociación): No existe ninguna regla de conversión registrada en tu tabla 'supplier_formats' para el ingrediente <b>" + matchedIngredient.name_es + "</b> que asocie la unidad detectada en el texto. Fila saltada para proteger tus costos." +
+                        var displayUnitMsg = textExtractedUOMToken !== "" ? "unidad '" + textExtractedUOMToken + "'" : "ninguna unidad clara";
+                        debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'> " +
+                                            "🛑 Bloqueo Administrativo: No existe regla de conversión en 'supplier_formats' para <b>" + matchedIngredient.name_es + "</b> que asocie la " + displayUnitMsg + ". Fila saltada para proteger tus costos." +
                                         "</div>";
                         continue;
                     }
                     
-                    // Execute automatic conversion calculation: Converted Qty = Purchase Qty * unit_per_purchase
+                    // Execute accurate conversion multiplication calculations
                     var conversionMultiplierFactor = parseFloat(formatRuleFound.unit_per_purchase || 1);
-                    finalRecipeQtyConverted = rawInvoiceQty * conversionMultiplierFactor;
+                    var finalRecipeQtyConverted = rawInvoiceQty * conversionMultiplierFactor;
                     
-                    // 🌟 STEP E: COMMMIT PRODUCTION DATA ROW TO SUPABASE
+                    // 🌟 STEP D: PRODUCTION DATA COMMIT PIPELINE
                     var payload = {
                         invoice_date: dateInputEl,
                         ingredient_id: matchedIngredient.id,
@@ -2152,8 +2172,9 @@
                     
                     if (commitRes.ok) {
                         totalInsertedCount++;
-                        var conversionNoteText = conversionMultiplierFactor !== 1 ? " (Convertido de " + rawInvoiceQty + " " + detectedPurchaseUOM + " a " + finalRecipeQtyConverted + " " + (matchedIngredient.uom || "g") + ")" : "";
-                        debugLogHTML += "<div style='color:#22c55e; margin-bottom:4px;'>✅ Extraído e Inyectado con Éxito: <b>" + matchedIngredient.name_es + "</b> -> Equivalencia: " + finalRecipeQtyConverted + " " + (matchedIngredient.uom || "g") + " " + conversionNoteText + " | Total Gastado: $" + rawInvoiceCost.toFixed(2) + "</div>";
+                        var recipeUnitDisplayLabel = matchedIngredient.uom || "gr";
+                        var conversionNoteText = " (Convertido de " + rawInvoiceQty + " " + textExtractedUOMToken + " a " + finalRecipeQtyConverted.toFixed(2) + " " + recipeUnitDisplayLabel + " usando factor x" + conversionMultiplierFactor + ")";
+                        debugLogHTML += "<div style='color:#22c55e; margin-bottom:4px;'>✅ Extraído e Inyectado con Éxito: <b>" + matchedIngredient.name_es + "</b> -> Equivalencia: " + finalRecipeQtyConverted.toFixed(2) + " " + recipeUnitDisplayLabel + conversionNoteText + " | Total Gastado: $" + rawInvoiceCost.toFixed(2) + "</div>";
                     } else {
                         debugLogHTML += "<div style='color:#ef4444; margin-bottom:4px;'>❌ Error de red al inyectar " + matchedIngredient.name_es + " (Status: " + commitRes.status + ")</div>";
                     }
@@ -2162,7 +2183,6 @@
                 debugLogHTML += "<div style='margin-top:8px; font-weight:700; color:#007afb;'>🚀 Proceso Terminado: " + totalInsertedCount + " líneas agregadas a invoice_items sin polución de datos.</div>";
                 resultsTarget.innerHTML = debugLogHTML;
                 
-                // Refresh small activity ledger lists if visible
                 if (typeof refreshSandboxInvoiceHistoryRowsList === "function") {
                     refreshSandboxInvoiceHistoryRowsList();
                 }
@@ -2172,7 +2192,6 @@
                 resultsTarget.innerHTML = "<div style='color:#ef4444;'>❌ Error crítico en el workbench de análisis relacional.</div>";
             }
         }
-
 
     </script>
         
