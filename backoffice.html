@@ -2092,7 +2092,7 @@
                         debugLogHTML += "<div style='color:#b45309; margin-bottom:4px;'>⚠️ Fila " + (i+1) + ": Cantidad o costo inválido.</div>"; continue;
                     }
 
-                    // 🌟 STEP 3: RECOGNITION & CONVERSION PLURAL STRING MATCHES
+                                        // 🌟 STEP 3: RECOGNITION & CONVERSION PLURAL STRING MATCHES
                     var formatRuleRecordMatch = null;
                     var searchUnitClean = textExtractedUnitToken.toLowerCase().trim();
                     
@@ -2106,14 +2106,17 @@
                                    (searchUnitClean === "lb" && dbUomClean === "libra");
                         });
                     }
-                    if (!formatRuleRecordMatch && ingredientFormatsCollection.length > 0) {
-                        formatRuleRecordMatch = ingredientFormatsCollection;
-                    }
+                    
+                    // 🌟 FIXED STRICT GUARD: Removed the loose array-grabbing loophole to intercept unmatched units!
                     if (!formatRuleRecordMatch) {
-                        debugLogHTML += "<div style='color:#ef4444; margin-bottom:4px;'>🛑 Bloqueo: No existe formato para " + (matchedIngredient.name_es || matchedIngredient.name_en) + ".</div>"; continue;
+                        var errorDisplayUnit = textExtractedUnitToken !== "" ? "'" + textExtractedUnitToken + "'" : "ninguna unidad clara";
+                        debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'>" +
+                                            "🛑 Bloqueo Administrativo (Formato Desconocido): No existe ninguna regla de conversión registrada en 'supplier_formats' para <b>" + (matchedIngredient.name_es || matchedIngredient.name_en) + "</b> que valide la unidad " + errorDisplayUnit + ". Fila omitida." +
+                                        "</div>";
+                        continue; // KILL LINE ITERATION IMMEDIATELY
                     }
                     
-                    // 🌟 FIX B: Explicit mapping to look up your plural column name key: units_per_purchase!
+                    // Explicit mapping to look up your plural column name key: units_per_purchase!
                     var conversionMultiplierFactor = 1;
                     if (formatRuleRecordMatch.units_per_purchase !== undefined && formatRuleRecordMatch.units_per_purchase !== null) {
                         conversionMultiplierFactor = parseFloat(formatRuleRecordMatch.units_per_purchase);
