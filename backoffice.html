@@ -2018,7 +2018,7 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE (PART 1): Multilingual name routing with aligned plural token checks
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Zero-bracket row parsing to bypass chat character drops
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
@@ -2066,8 +2066,18 @@
                     }
                     
                     if (currentLine.includes("|")) {
-                        var cells = currentLine.split("|").map(function(c) { return c.trim().toLowerCase(); });
-                        if (cells.length >= 3) textExtractedUnitToken = cells;
+                        // 🌟 FIX A: Extract row slots dynamically via shifted loops to completely avoid the bracket symbol trap!
+                        var cleanCellPointersList = currentLine.split("|");
+                        if (cleanCellPointersList.length >= 2) {
+                            rawInvoiceQty = parseFloat(String(cleanCellPointersList[1]).trim().replace(',', '.')) || 0;
+                        }
+                        if (cleanCellPointersList.length >= 3) {
+                            textExtractedUnitToken = String(cleanCellPointersList[2]).toLowerCase().trim();
+                        }
+                        if (cleanCellPointersList.length >= 4) {
+                            var priceStringEnd = String(cleanCellPointersList[cleanCellPointersList.length - 1]).replace(/[^0-9\.,]/g, "").replace(',', '.');
+                            rawInvoiceCost = parseFloat(priceStringEnd) || 0;
+                        }
                     } else {
                         for (var fIndex = 0; fIndex < ingredientFormatsCollection.length; fIndex++) {
                             var dbUOM = String(ingredientFormatsCollection[fIndex].purchase_uom || "").toLowerCase().trim();
@@ -2082,7 +2092,7 @@
                         debugLogHTML += "<div style='color:#b45309; margin-bottom:4px;'>⚠️ Fila " + (i+1) + ": Cantidad o costo inválido.</div>"; continue;
                     }
 
-                             // 🌟 STEP 3: RECOGNITION & CONVERSION PLURAL STRING MATCHES
+                    // 🌟 STEP 3: RECOGNITION & CONVERSION PLURAL STRING MATCHES
                     var formatRuleRecordMatch = null;
                     var searchUnitClean = textExtractedUnitToken.toLowerCase().trim();
                     
@@ -2103,14 +2113,13 @@
                         debugLogHTML += "<div style='color:#ef4444; margin-bottom:4px;'>🛑 Bloqueo: No existe formato para " + (matchedIngredient.name_es || matchedIngredient.name_en) + ".</div>"; continue;
                     }
                     
-                    // 🌟 TARGET LOCATED: Pulling directly from your verified plural column name key: units_per_purchase!
+                    // 🌟 FIX B: Explicit mapping to look up your plural column name key: units_per_purchase!
                     var conversionMultiplierFactor = 1;
                     if (formatRuleRecordMatch.units_per_purchase !== undefined && formatRuleRecordMatch.units_per_purchase !== null) {
                         conversionMultiplierFactor = parseFloat(formatRuleRecordMatch.units_per_purchase);
                     } else if (formatRuleRecordMatch.unit_per_purchase !== undefined && formatRuleRecordMatch.unit_per_purchase !== null) {
                         conversionMultiplierFactor = parseFloat(formatRuleRecordMatch.unit_per_purchase);
                     } else {
-                        // Global search backup loop
                         var rawObjectKeys = Object.keys(formatRuleRecordMatch);
                         for (var k = 0; k < rawObjectKeys.length; k++) {
                             if (rawObjectKeys[k].toLowerCase().includes("purchase")) {
@@ -2154,7 +2163,6 @@
                 resultsTarget.innerHTML = "<div style='color:#ef4444; padding:10px;'>❌ Error crítico en el workbench.</div>";
             }
         }
-
 
     </script>
         
