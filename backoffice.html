@@ -164,7 +164,30 @@
                     </div>
 
                 </div>
-
+                 <!-- 📱 WHATSAPP LIVE TEXT INVOICE PARSER WORKBENCH -->
+                <div class="card" style="margin-top: 20px; border: 1px dashed #22c55e; background-color: rgba(34, 197, 94, 0.02); padding: 15px; border-radius: 6px;">
+                    <h4 style="color: #22c55e; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                        <span>📱 WhatsApp: Workbench de Extracción de Texto</span>
+                    </h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
+                        Pega aquí un mensaje de texto de WhatsApp (estructurado o manuscrito en español) para probar cómo el motor de Inteligencia Artificial aísla las cantidades, unidades y costos totales.
+                    </p>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Fecha de Recepción:</label>
+                        <input type="date" id="parse-invoice-date" style="padding: 6px; font-size: 0.8rem; width: 160px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Mensaje de WhatsApp Recibido:</label>
+                        <textarea id="parse-whatsapp-text" rows="5" style="width: 100%; padding: 8px; font-family: monospace; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px;" placeholder="Ejemplo estructurado:&#10;Aguacate | 4 | unidad | $10.00&#10;&#10;Ejemplo manuscrito:&#10;Compré 5.5 lbs de Cebolla blanca, el total fue de $22.75"></textarea>
+                    </div>
+                    
+                    <button class="btn" style="padding: 6px 14px; font-size: 0.85rem; background-color: #22c55e; color: white;" onclick="processWhatsAppTextMessageSimulation()">Procesar Texto e Inyectar Líneas</button>
+                    
+                    <div id="parse-workbench-results" style="margin-top: 12px; font-size: 0.75rem; color: var(--text-main); line-height: 1.4;"></div>
+                </div>
+            
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
             <div id="deviation-results-container" style="margin-top: 20px;"></div>
         </div>
@@ -1995,8 +2018,127 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-
-
+                // 📱 WHATSAPP PARSING ENGINE: Extracted data line items from variable Spanish message strings
+        async function processWhatsAppTextMessageSimulation() {
+            var dateInputEl = document.getElementById("parse-invoice-date").value;
+            var rawText = document.getElementById("parse-whatsapp-text").value.trim();
+            var resultsTarget = document.getElementById("parse-workbench-results");
+            
+            if (!dateInputEl || rawText === "") {
+                alert("⚠️ Por favor ingresa una fecha y pega texto de WhatsApp para simular la extracción.");
+                return;
+            }
+            
+            resultsTarget.innerHTML = "⏳ Ejecutando algoritmos de extracción y cruzando catálogo...";
+            
+            try {
+                // Fetch master ingredients to run fuzzy string title mappings
+                var ingRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } });
+                var masterIngredients = await ingRes.json();
+                
+                if (!Array.isArray(masterIngredients)) {
+                    resultsTarget.innerHTML = "❌ Error: No se pudo descargar el catálogo maestro para el cruce de datos.";
+                    return;
+                }
+                
+                // Unroll lines from message blocks
+                var lines = rawText.split('\n');
+                var totalInsertedCount = 0;
+                var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resultados del Análisis de Texto:</div>";
+                
+                for (var i = 0; i < lines.length; i++) {
+                    var currentLine = lines[i].trim();
+                    if (currentLine === "") continue;
+                    
+                    // 🌟 STEP A: FUZZY ITEM MATCHING
+                    // Scan our master ingredients array to see if any Spanish names are written inside this text row line
+                    var matchedIngredient = null;
+                    for (var j = 0; j < masterIngredients.length; j++) {
+                        var ingName = String(masterIngredients[j].name_es || "").toLowerCase().trim();
+                        if (ingName !== "" && currentLine.toLowerCase().includes(ingName)) {
+                            matchedIngredient = masterIngredients[j];
+                            break;
+                        }
+                    }
+                    
+                    if (!matchedIngredient) {
+                        debugLogHTML += "<div style='color:#ef4444;'>❌ Línea " + (i+1) + " ignorada: No se detectó ningún ingrediente del catálogo en '" + currentLine + "'</div>";
+                        continue;
+                    }
+                    
+                    // 🌟 STEP B: REGEX EXTRACTION FOR QUANTITIES, UNITS, AND COSTS
+                    var extractedQty = 0;
+                    var extractedCost = 0;
+                    
+                    // Look for numeric expressions containing decimals or integers
+                    var numberRegexPattern = /([0-9]+[\.,][0-9]+|[0-9]+)/g;
+                    var allNumbersFoundInLine = currentLine.match(numberRegexPattern);
+                    
+                    if (currentLine.includes("|")) {
+                        // STRUCTURED DATAROOW PARSING: Split components by vertical bars
+                        var columns = currentLine.split("|");
+                        if (columns.length >= 2) {
+                            extractedQty = parseFloat(columns[1].trim().replace(',', '.')) || 0;
+                        }
+                        if (columns.length >= 3) {
+                            // If total cost is written inside columns 3 or 4, isolate it
+                            var lastColumnText = columns[columns.length - 1].replace(/[^0-9\.,]/g, "").replace(',', '.');
+                            extractedCost = parseFloat(lastColumnText) || 0;
+                        }
+                    } else {
+                        // UNSTRUCTURED/HANDWRITTEN TEXT PARSING: Deduce layout order tokens from found numbers array
+                        if (allNumbersFoundInLine && allNumbersFoundInLine.length >= 1) {
+                            // The first standalone numeric sequence typically represents product delivery volumes
+                            extractedQty = parseFloat(allNumbersFoundInLine[0].replace(',', '.')) || 0;
+                            
+                            // The final numeric sequence typically captures absolute line invoice totals spent
+                            if (allNumbersFoundInLine.length >= 2) {
+                                extractedCost = parseFloat(allNumbersFoundInLine[allNumbersFoundInLine.length - 1].replace(',', '.')) || 0;
+                            }
+                        }
+                    }
+                    
+                    if (extractedQty === 0 || extractedCost === 0) {
+                        debugLogHTML += "<div style='color:#b45309;'>⚠️ Línea " + (i+1) + " [" + matchedIngredient.name_es + "]: Se detectó ingrediente pero la cantidad (" + extractedQty + ") o el costo ($" + extractedCost + ") fallaron al procesarse.</div>";
+                        continue;
+                    }
+                    
+                    // 🌟 STEP C: DATABASE COMMIND PIPELINE
+                    // Build automated payload package structures matching schema rules perfectly
+                    var payload = {
+                        invoice_date: dateInputEl,
+                        ingredient_id: matchedIngredient.id,
+                        actual_quantity_purchased: extractedQty,
+                        actual_total_cost: extractedCost
+                    };
+                    
+                    var commitRes = await fetch(BASE_API_URL + "invoice_items", {
+                        method: "POST",
+                        headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (commitRes.ok) {
+                        totalInsertedCount++;
+                        debugLogHTML += "<div style='color:#22c55e;'>✅ Extraído e Inyectado con Éxito: <b>" + matchedIngredient.name_es + "</b> -> Cantidad: " + extractedQty + " | Total Gastado: $" + extractedCost.toFixed(2) + "</div>";
+                    } else {
+                        debugLogHTML += "<div style='color:#ef4444;'>❌ Error de red al inyectar " + matchedIngredient.name_es + " (Status: " + commitRes.status + ")</div>";
+                    }
+                }
+                
+                debugLogHTML += "<div style='margin-top:8px; font-weight:700; color:#007afb;'>🚀 Proceso Terminado: " + totalInsertedCount + " líneas agregadas a invoice_items.</div>";
+                resultsTarget.innerHTML = debugLogHTML;
+                
+                // Refresh small manual dashboard listings if visible
+                if (typeof refreshSandboxInvoiceHistoryRowsList === "function") {
+                    refreshSandboxInvoiceHistoryRowsList();
+                }
+                
+            } catch (err) {
+                console.error("WhatsApp global analyzer error:", err);
+                resultsTarget.innerHTML = "<div style='color:#ef4444;'>❌ Error crítico en la ejecución del workbench de análisis.</div>";
+            }
+        }
 
     </script>
         
