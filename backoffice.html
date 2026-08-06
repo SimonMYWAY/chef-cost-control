@@ -2018,7 +2018,7 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct array index mapping with strict cell string extraction
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct regular expression string scanner to prevent bracket dropping
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
@@ -2031,6 +2031,7 @@
             resultsTarget.innerHTML = "⏳ Analizando texto de WhatsApp contra la base de datos...";
             
             try {
+                // Direct database calls to fetch master datasets from Supabase
                 var ingRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
                 var formatRes = await fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json());
                 
@@ -2041,12 +2042,13 @@
                 
                 var lines = rawText.split('\n');
                 var totalInsertedCount = 0;
-                var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resumen de Extracción收 Mapeada:</div>";
+                var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resumen de Extracción Inteligente:</div>";
                 
                 for (var i = 0; i < lines.length; i++) {
                     var currentLine = lines[i].trim();
                     if (currentLine === "") continue;
                     
+                    // STEP 1: MATCH INGREDIENT NAME (Fuzzy search)
                     var matchedIngredient = null;
                     for (var j = 0; j < ingRes.length; j++) {
                         var ingName = String(ingRes[j].name_es || "").toLowerCase().trim();
@@ -2061,6 +2063,7 @@
                         continue;
                     }
                     
+                    // Filter the master supplier formats table down to rows matching this specific ingredient
                     var ingredientFormatsCollection = formatRes.filter(function(f) {
                         return String(f.ingredient_id) === String(matchedIngredient.id);
                     });
@@ -2069,37 +2072,36 @@
                     var rawInvoiceCost = 0;
                     var textExtractedUnitToken = "";
                     
-                    if (currentLine.includes("|")) {
-                        var cells = currentLine.split("|").map(function(c) { return c.trim(); });
+                    // Clean out currency signs and replace commas to secure numerical evaluations
+                    var cleanLineString = currentLine.replace(/\$/g, "").replace(/,/g, ".").toLowerCase();
+                    
+                    // Extract all numbers out of the line sequence string directly
+                    var allNumbersInLine = cleanLineString.match(/([0-9]+\.[0-9]+|[0-9]+)/g);
+                    
+                    if (allNumbersInLine && allNumbersInLine.length >= 1) {
+                        // The first digit sequence found always represents the quantity multiplier
+                        rawInvoiceQty = parseFloat(allNumbersInLine) || 0;
                         
-                        // 🌟 FIXED TARGET CHANNELS: Extracting from specific array indexes explicitly to prevent type crashes!
-                        if (cells.length >= 2) {
-                            var qtyStringToken = String(cells[1]).trim().replace(',', '.');
-                            rawInvoiceQty = parseFloat(qtyStringToken) || 0;
+                        // The final digit sequence found always represents the total financial cost paid
+                        if (allNumbersInLine.length >= 2) {
+                            rawInvoiceCost = parseFloat(allNumbersInLine[allNumbersInLine.length - 1]) || 0;
                         }
-                        if (cells.length >= 3) {
-                            textExtractedUnitToken = String(cells[2]).toLowerCase().trim();
+                    }
+                    
+                    // Scan the line string against your real Supabase table rows to match text unit tokens
+                    for (var fIndex = 0; fIndex < ingredientFormatsCollection.length; fIndex++) {
+                        var dbUOM = String(ingredientFormatsCollection[fIndex].purchase_uom || "").toLowerCase().trim();
+                        if (dbUOM !== "" && cleanLineString.includes(dbUOM)) {
+                            textExtractedUnitToken = dbUOM;
+                            break;
                         }
-                        if (cells.length >= 4) {
-                            var priceStringToken = String(cells[3]).replace(/[^0-9\.,]/g, "").replace(',', '.');
-                            rawInvoiceCost = parseFloat(priceStringToken) || 0;
-                        }
-                    } else {
-                        var numbers = currentLine.match(/([0-9]+[\.,][0-9]+|[0-9]+)/g);
-                        if (numbers && numbers.length >= 1) {
-                            rawInvoiceQty = parseFloat(String(numbers[0]).replace(',', '.'));
-                            if (numbers.length >= 2) {
-                                rawInvoiceCost = parseFloat(String(numbers[numbers.length - 1]).replace(',', '.'));
-                            }
-                        }
-                        
-                        for (var fIndex = 0; fIndex < ingredientFormatsCollection.length; fIndex++) {
-                            var dbUOM = String(ingredientFormatsCollection[fIndex].purchase_uom || "").toLowerCase().trim();
-                            if (dbUOM !== "" && currentLine.toLowerCase().includes(dbUOM)) {
-                                textExtractedUnitToken = dbUOM;
-                                break;
-                            }
-                        }
+                    }
+                    
+                    // Robust fallback check: check for standard abbreviations if the string includes them
+                    if (textExtractedUnitToken === "") {
+                        if (cleanLineString.includes("lb") || cleanLineString.includes("libra")) textExtractedUnitToken = "lb";
+                        else if (cleanLineString.includes("kg") || cleanLineString.includes("kilo")) textExtractedUnitToken = "kg";
+                        else if (cleanLineString.includes("gr") || cleanLineString.includes("gramo")) textExtractedUnitToken = "gr";
                     }
                     
                     if (rawInvoiceQty === 0 || rawInvoiceCost === 0) {
@@ -2109,19 +2111,21 @@
 
 
                     // Continue directly into Part 2 right below
-                                       // 🌟 STEP 3: DIRECT EXACT-MATCH CONVERSION SEARCH
+                                        // 🌟 STEP 3: DIRECT RELATIONAL MATCH SEARCH
                     var formatRuleRecordMatch = null;
                     var cleanSearchUnitToken = textExtractedUnitToken.toLowerCase().trim();
                     
                     if (cleanSearchUnitToken !== "") {
                         formatRuleRecordMatch = ingredientFormatsCollection.find(function(formatRow) {
                             var dbPurchaseUOM = String(formatRow.purchase_uom || "").toLowerCase().trim();
+                            // Checks for direct matching or fuzzy string intersections on your real table records
                             return dbPurchaseUOM === cleanSearchUnitToken || 
                                    dbPurchaseUOM.includes(cleanSearchUnitToken) || 
                                    cleanSearchUnitToken.includes(dbPurchaseUOM);
                         });
                     }
                     
+                    // Fallback to default unpopulated rule rows if logged
                     if (!formatRuleRecordMatch && ingredientFormatsCollection.length > 0) {
                         formatRuleRecordMatch = ingredientFormatsCollection.find(function(f) {
                             return !f.purchase_uom || f.purchase_uom.trim() === "";
@@ -2175,7 +2179,6 @@
                 resultsTarget.innerHTML = "<div style='color:#ef4444; padding:10px;'>❌ Error crítico en el workbench de análisis relacional.</div>";
             }
         }
-
 
     </script>
         
