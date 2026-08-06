@@ -119,7 +119,37 @@
                 
                 <button class="btn btn-blue" id="btn-process-deviation" style="padding: 8px 16px; font-size: 0.9rem;" onclick="processSalesCostDeviation()">Calcular Desviaciones</button>
             </div>
-            
+                            <!-- 🧪 WHATSAPP INVOICE SIMULATOR FORM BOX (SANDBOX TESTING AREA) -->
+                <div class="card" style="margin-top: 20px; border: 1px dashed #007afb; background-color: rgba(0, 122, 251, 0.02); padding: 15px; border-radius: 6px;">
+                    <h4 style="color: #007afb; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                        <span>🧪 Simulator Sandbox: Cargar Factura Manual</span>
+                    </h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0; margin-bottom: 15px;">
+                        Como la verificación comercial de Meta está en proceso, usa este formulario para inyectar datos simulados de facturas directamente en Supabase y auditar las desviaciones.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Fecha Factura:</label>
+                            <input type="date" id="sim-invoice-date" style="width: 100%; padding: 6px; font-size: 0.8rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Ingrediente:</label>
+                            <select id="sim-ingredient-id" style="width: 100%; padding: 6px; font-size: 0.8rem;">
+                                <option value="">-- Seleccionar --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Cant. Comprada:</label>
+                            <input type="number" id="sim-qty" step="0.01" placeholder="Ej: 5.50" style="width: 100%; padding: 6px; font-size: 0.8rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px;">Costo Total Paid ($):</label>
+                            <input type="number" id="sim-cost" step="0.01" placeholder="Ej: 22.75" style="width: 100%; padding: 6px; font-size: 0.8rem;">
+                        </div>
+                    </div>
+                    <button class="btn btn-blue" style="padding: 6px 14px; font-size: 0.85rem;" onclick="submitSimulatedInvoiceRowToCloud()">Inyectar Factura en Supabase</button>
+                </div>
+
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
             <div id="deviation-results-container" style="margin-top: 20px;"></div>
         </div>
@@ -1775,7 +1805,7 @@
 
         // Start initialization pipeline sequentially on page load
                 window.onload = function() {
-            prefetchIngredients().then(function() {
+                        prefetchIngredients().then(function() {
                 loadQueue();
                 loadMasterCatalog(); // ✅ CO-LOADED: Boots your master directory table row list on page startup!
                 renderMasterIngredientsTable();
@@ -1783,8 +1813,77 @@
                 populateIngredientDropdown();
                 populateSupplierDropdown(); 
                 renderMappingsTable();
+                
+                // 🧪 SIMULATOR INITIALIZER: Populates your sandbox vendor item selector dropdown right at startup
+                if (typeof populateSimulatorIngredientDropdownMenu === "function") {
+                    populateSimulatorIngredientDropdownMenu();
+                }
             });
+
         };
+            // 🧪 SANDBOX CONTROL: Dynamic dropdown loader for simulator ingredients matching form selections
+        function populateSimulatorIngredientDropdownMenu() {
+            var menuTarget = document.getElementById("sim-ingredient-id");
+            if (!menuTarget) return;
+            
+            fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || data.message) return;
+                    
+                    data.sort(function(a, b) { return (a.name_es || "").localeCompare(b.name_es || ""); });
+                    
+                    // Maintain standard blank option baseline elements row
+                    menuTarget.innerHTML = '<option value="">-- Seleccionar --</option>';
+                    data.forEach(function(item) {
+                        var opt = document.createElement("option");
+                        opt.value = item.id;
+                        opt.innerText = (item.name_es || "N/A") + " (" + (item.uom || "gr") + ")";
+                        menuTarget.appendChild(opt);
+                    });
+                }).catch(function(e) { console.error("Simulator menu setup fault:", e); });
+        }
+
+        // 🧪 SANDBOX PAYLOAD POST ROUTINE: Injects manual invoice transactions straight into your live database rows
+        function submitSimulatedInvoiceRowToCloud() {
+            var dateVal = document.getElementById("sim-invoice-date").value;
+            var ingIdVal = document.getElementById("sim-ingredient-id").value;
+            var qtyVal = document.getElementById("sim-qty").value;
+            var costVal = document.getElementById("sim-cost").value;
+            
+            if (!dateVal || !ingIdVal || !qtyVal || !costVal) {
+                alert("⚠️ Por favor rellene todos los campos del simulador antes de inyectar.");
+                return;
+            }
+            
+            var payload = {
+                invoice_date: dateVal,
+                ingredient_id: ingIdVal,
+                actual_quantity_purchased: parseFloat(qtyVal) || 0,
+                actual_total_cost: parseFloat(costVal) || 0
+            };
+            
+            fetch(BASE_API_URL + "invoice_items", {
+                method: "POST",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("🎯 ¡Fila de factura simulada inyectada con éxito en Supabase!");
+                    // Reset field value numbers to facilitate quick rapid subsequent inputs
+                    document.getElementById("sim-qty").value = "";
+                    document.getElementById("sim-cost").value = "";
+                } else {
+                    alert("❌ Error al inyectar fila en la tabla invoice_items (Status: " + res.status + ")");
+                }
+            }).catch(function(err) { console.error("Simulator network crash:", err); });
+        }
 
     </script>
         
