@@ -1919,30 +1919,30 @@
                 }
             }).catch(function(err) { console.error("Simulator network crash:", err); });
         }
-            // 🧪 SANDBOX HISTORY TRACKER: Loads live records matching your current calendar date selectors
+                // 🧪 SANDBOX HISTORY TRACKER: Loads live records matching your single target sandbox date selection
         function refreshSandboxInvoiceHistoryRowsList() {
             var rowsTarget = document.getElementById("sandbox-invoice-history-rows");
             if (!rowsTarget) return;
             
-            // Read your active screen calendar parameters to pull relevant rows
-            var dateFrom = document.getElementById("fecha-desde") ? document.getElementById("fecha-desde").value : "";
-            var dateTo = document.getElementById("fecha-hasta") ? document.getElementById("fecha-hasta").value : "";
+            // 🌟 FIX: Read straight from your sandbox input field date picker element box directly!
+            var targetSandboxDate = document.getElementById("sim-invoice-date") ? document.getElementById("sim-invoice-date").value : "";
             
-            if (!dateFrom || !dateTo) {
-                rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⚠️ Selecciona un rango Desde/Hasta arriba primero.</td></tr>";
+            if (!targetSandboxDate || targetSandboxDate === "") {
+                rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⚠️ Selecciona una 'Fecha Factura' en el formulario arriba primero.</td></tr>";
                 return;
             }
             
             rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⏳ Cargando historial de pruebas...</td></tr>";
             
-            var queryUrl = BASE_API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
+            // Targeted query matching your exact chosen target date parameter string
+            var queryUrl = BASE_API_URL + "invoice_items?invoice_date=eq." + targetSandboxDate;
             
             fetch(queryUrl, { headers: { "apikey": API_KEY } })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     rowsTarget.innerHTML = "";
                     if (!data || data.length === 0 || data.message) {
-                        rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>No hay facturas registradas en este rango.</td></tr>";
+                        rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>No hay facturas registradas para esta fecha.</td></tr>";
                         return;
                     }
                     
