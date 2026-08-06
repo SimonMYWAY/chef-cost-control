@@ -1919,12 +1919,11 @@
                 }
             }).catch(function(err) { console.error("Simulator network crash:", err); });
         }
-                // 🧪 SANDBOX HISTORY TRACKER: Loads live records matching your single target sandbox date selection
+                // 🧪 SANDBOX HISTORY TRACKER: Loads live records matching your single target sandbox date selection safely using UUID string keys
         function refreshSandboxInvoiceHistoryRowsList() {
             var rowsTarget = document.getElementById("sandbox-invoice-history-rows");
             if (!rowsTarget) return;
             
-            // 🌟 FIX: Read straight from your sandbox input field date picker element box directly!
             var targetSandboxDate = document.getElementById("sim-invoice-date") ? document.getElementById("sim-invoice-date").value : "";
             
             if (!targetSandboxDate || targetSandboxDate === "") {
@@ -1934,7 +1933,6 @@
             
             rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⏳ Cargando historial de pruebas...</td></tr>";
             
-            // Targeted query matching your exact chosen target date parameter string
             var queryUrl = BASE_API_URL + "invoice_items?invoice_date=eq." + targetSandboxDate;
             
             fetch(queryUrl, { headers: { "apikey": API_KEY } })
@@ -1953,13 +1951,14 @@
                         var cachedIng = _ingredientsCache[row.ingredient_id];
                         var ingName = cachedIng ? (cachedIng.name_es || cachedIng) : "Ingrediente #" + String(row.ingredient_id).substring(0,4);
                         
+                        // 🌟 CRITICAL FIX A: Wrapped row.id explicitly inside escaped single quotes ('\'' + row.id + '\'') to protect text alphanumeric UUID strings!
                         tr.innerHTML = 
                             "<td style='padding:6px; text-align:left; font-weight:600; color:var(--text-main);'>" + ingName + "</td>" +
                             "<td style='padding:6px; text-align:center; color:var(--text-muted);'>" + row.invoice_date + "</td>" +
                             "<td style='padding:6px; text-align:right; font-family:monospace;'>" + (parseFloat(row.actual_quantity_purchased) || 0).toFixed(2) + "</td>" +
                             "<td style='padding:6px; text-align:right; font-weight:700; color:var(--text-main);'>$" + (parseFloat(row.actual_total_cost) || 0).toFixed(2) + "</td>" +
                             "<td style='padding:6px; text-align:right; width:40px;'>" +
-                            "<button class='btn' style='padding:2px 4px; font-size:0.7rem; background-color:#ef4444; color:white; border-radius:3px;' onclick=\"eraseSingleSimulatedInvoiceRowRecord(" + row.id + ")\">🗑️</button>" +
+                                "<button class='btn' style='padding:2px 4px; font-size:0.7rem; background-color:#ef4444; color:white; border-radius:3px;' onclick=\"eraseSingleSimulatedInvoiceRowRecord('" + row.id + "')\">🗑️</button>" +
                             "</td>";
                             
                         rowsTarget.appendChild(tr);
@@ -1971,14 +1970,16 @@
                 });
         }
 
-        // 🗑️ HARD DELETION ACTION: Directly executes raw data erasure matching your primary key integer targets
+        // 🗑️ HARD DELETION ACTION: Directly executes raw data erasure matching text UUID key filter parameters
         function eraseSingleSimulatedInvoiceRowRecord(rowPrimaryKeyId) {
-            var numericRowId = parseInt(rowPrimaryKeyId, 10);
-            if (isNaN(numericRowId)) return;
+            // 🌟 CRITICAL FIX B: Explicitly process as a sanitized text string variable token primitive, completely stripping out parseInt locks!
+            var cleanIdToken = String(rowPrimaryKeyId).trim();
+            if (!cleanIdToken || cleanIdToken === "" || cleanIdToken === "undefined") return;
             
             if (!confirm("🗑️ ¿Deseas eliminar permanentemente esta línea de factura simulada de la base de datos?")) return;
             
-            fetch(BASE_API_URL + "invoice_items?id=eq." + numericRowId, {
+            // Passes your clean text string parameter straight into your database URL filter routing path
+            fetch(BASE_API_URL + "invoice_items?id=eq." + cleanIdToken, {
                 method: "DELETE",
                 headers: {
                     "apikey": API_KEY,
@@ -1990,10 +1991,11 @@
                     alert("🗑️ ¡Fila de prueba eliminada con éxito de Supabase!");
                     refreshSandboxInvoiceHistoryRowsList();
                 } else {
-                    alert("❌ Error al intentar eliminar la fila (Status: " + res.status + "). Asegúrate de que las políticas RLS permitan DELETE.");
+                    alert("❌ Error al intentar eliminar la fila (Status: " + res.status + "). Verifica tus políticas RLS para DELETE.");
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
+
 
 
     </script>
