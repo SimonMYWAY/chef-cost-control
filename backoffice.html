@@ -1844,7 +1844,7 @@
                 }).catch(function(e) { console.error("Simulator menu setup fault:", e); });
         }
 
-        // 🧪 SANDBOX PAYLOAD POST ROUTINE: Injects manual invoice transactions straight into your live database rows
+                // 🧪 SANDBOX PAYLOAD POST ROUTINE: Injects manual invoice transactions straight into your live database rows safely
         function submitSimulatedInvoiceRowToCloud() {
             var dateVal = document.getElementById("sim-invoice-date").value;
             var ingIdVal = document.getElementById("sim-ingredient-id").value;
@@ -1863,11 +1863,11 @@
                 actual_total_cost: parseFloat(costVal) || 0
             };
             
+            // 🌟 FIXED NETHEADERS: Removed Bearer locks to allow seamless anonymous public insert access matching your RLS structures!
             fetch(BASE_API_URL + "invoice_items", {
                 method: "POST",
                 headers: {
                     "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY,
                     "Content-Type": "application/json",
                     "Prefer": "return=minimal"
                 },
@@ -1880,10 +1880,11 @@
                     document.getElementById("sim-qty").value = "";
                     document.getElementById("sim-cost").value = "";
                 } else {
-                    alert("❌ Error al inyectar fila en la tabla invoice_items (Status: " + res.status + ")");
+                    alert("❌ Error al inyectar fila en la tabla invoice_items (Status: " + res.status + "). Verifica que RLS esté permitido para inserciones públicas.");
                 }
             }).catch(function(err) { console.error("Simulator network crash:", err); });
         }
+
 
     </script>
         
