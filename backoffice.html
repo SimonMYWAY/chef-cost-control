@@ -2018,7 +2018,7 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct relational lookups bypassing bracket character filters
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct array index mapping with strict cell string extraction
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
@@ -2031,7 +2031,6 @@
             resultsTarget.innerHTML = "⏳ Analizando texto de WhatsApp contra la base de datos...";
             
             try {
-                // Fetch datasets directly from your active Supabase cloud endpoints
                 var ingRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
                 var formatRes = await fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json());
                 
@@ -2042,13 +2041,12 @@
                 
                 var lines = rawText.split('\n');
                 var totalInsertedCount = 0;
-                var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resumen de Extracción Inteligente:</div>";
+                var debugLogHTML = "<div style='font-weight:700; margin-bottom:6px;'>Resumen de Extracción收 Mapeada:</div>";
                 
                 for (var i = 0; i < lines.length; i++) {
                     var currentLine = lines[i].trim();
                     if (currentLine === "") continue;
                     
-                    // STEP 1: MATCH INGREDIENT NAME
                     var matchedIngredient = null;
                     for (var j = 0; j < ingRes.length; j++) {
                         var ingName = String(ingRes[j].name_es || "").toLowerCase().trim();
@@ -2063,7 +2061,6 @@
                         continue;
                     }
                     
-                    // Filter the master supplier formats table down to rows matching this specific ingredient
                     var ingredientFormatsCollection = formatRes.filter(function(f) {
                         return String(f.ingredient_id) === String(matchedIngredient.id);
                     });
@@ -2073,24 +2070,29 @@
                     var textExtractedUnitToken = "";
                     
                     if (currentLine.includes("|")) {
-                        // Structured splitting: Clean and sanitize every cell text block automatically without bracket traps
                         var cells = currentLine.split("|").map(function(c) { return c.trim(); });
                         
-                        if (cells.length >= 2) rawInvoiceQty = parseFloat(cells.replace(',', '.')) || 0;
-                        if (cells.length >= 3) textExtractedUnitToken = cells.toLowerCase().trim();
+                        // 🌟 FIXED TARGET CHANNELS: Extracting from specific array indexes explicitly to prevent type crashes!
+                        if (cells.length >= 2) {
+                            var qtyStringToken = String(cells[1]).trim().replace(',', '.');
+                            rawInvoiceQty = parseFloat(qtyStringToken) || 0;
+                        }
+                        if (cells.length >= 3) {
+                            textExtractedUnitToken = String(cells[2]).toLowerCase().trim();
+                        }
                         if (cells.length >= 4) {
-                            var priceString = cells[cells.length - 1].replace(/[^0-9\.,]/g, "").replace(',', '.');
-                            rawInvoiceCost = parseFloat(priceString) || 0;
+                            var priceStringToken = String(cells[3]).replace(/[^0-9\.,]/g, "").replace(',', '.');
+                            rawInvoiceCost = parseFloat(priceStringToken) || 0;
                         }
                     } else {
-                        // Unstructured Handwritten Scanning using text sequences
                         var numbers = currentLine.match(/([0-9]+[\.,][0-9]+|[0-9]+)/g);
                         if (numbers && numbers.length >= 1) {
-                            rawInvoiceQty = parseFloat(numbers.replace(',', '.'));
-                            if (numbers.length >= 2) rawInvoiceCost = parseFloat(numbers[numbers.length - 1].replace(',', '.'));
+                            rawInvoiceQty = parseFloat(String(numbers[0]).replace(',', '.'));
+                            if (numbers.length >= 2) {
+                                rawInvoiceCost = parseFloat(String(numbers[numbers.length - 1]).replace(',', '.'));
+                            }
                         }
                         
-                        // Look for an exact format substring match inside the text
                         for (var fIndex = 0; fIndex < ingredientFormatsCollection.length; fIndex++) {
                             var dbUOM = String(ingredientFormatsCollection[fIndex].purchase_uom || "").toLowerCase().trim();
                             if (dbUOM !== "" && currentLine.toLowerCase().includes(dbUOM)) {
@@ -2105,22 +2107,21 @@
                         continue;
                     }
 
+
                     // Continue directly into Part 2 right below
-                                        // 🌟 STEP 3: DIRECT EXACT-MATCH CONVERSION SEARCH
+                                       // 🌟 STEP 3: DIRECT EXACT-MATCH CONVERSION SEARCH
                     var formatRuleRecordMatch = null;
                     var cleanSearchUnitToken = textExtractedUnitToken.toLowerCase().trim();
                     
                     if (cleanSearchUnitToken !== "") {
                         formatRuleRecordMatch = ingredientFormatsCollection.find(function(formatRow) {
                             var dbPurchaseUOM = String(formatRow.purchase_uom || "").toLowerCase().trim();
-                            // Exact string-to-string checks directly comparing your real database tokens!
                             return dbPurchaseUOM === cleanSearchUnitToken || 
                                    dbPurchaseUOM.includes(cleanSearchUnitToken) || 
                                    cleanSearchUnitToken.includes(dbPurchaseUOM);
                         });
                     }
                     
-                    // Fallback to unpopulated default base row if available
                     if (!formatRuleRecordMatch && ingredientFormatsCollection.length > 0) {
                         formatRuleRecordMatch = ingredientFormatsCollection.find(function(f) {
                             return !f.purchase_uom || f.purchase_uom.trim() === "";
@@ -2128,7 +2129,6 @@
                     }
                     
                     if (!formatRuleRecordMatch) {
-                        // HARD BLOCK INTERCEPTOR: Flags row as unmapped to prevent data pollution
                         var errorDisplayUnit = textExtractedUnitToken !== "" ? "'" + textExtractedUnitToken + "'" : "ninguna unidad clara";
                         debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'>" +
                                             "🛑 Bloqueo Administrativo: No existe regla en 'supplier_formats' para <b>" + matchedIngredient.name_es + "</b> que asocie la unidad " + errorDisplayUnit + ". Fila saltada para proteger tus costos." +
