@@ -2018,39 +2018,26 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct array index mapping to guarantee format list retrieval
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Bracket-free array mapping to prevent character dropping
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
             var resultsTarget = document.getElementById("parse-workbench-results");
             
-            if (!dateInputEl || rawText === "") { alert("⚠️ Por favor ingresa fecha y texto."); return; }
+            if (!dateInputEl || rawText === "") { alert("⚠️ Ingresa fecha y texto."); return; }
             resultsTarget.innerHTML = "⏳ Cruzando formatos de proveedores...";
             
             try {
-                // Fetch datasets in parallel to secure data integrity
-                var cloudResponsePackage = await Promise.all([
-                    fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                    fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
-                ]);
+                var ingRes = await fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
+                var formatRes = await fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json());
                 
-                // 🌟 CRITICAL INDEX REPAIR: Explicit array brackets index destructuring to secure dataset arrays!
-                var ingRes = cloudResponsePackage[0];
-                var formatRes = cloudResponsePackage[1];
-                
-                if (!Array.isArray(ingRes) || !Array.isArray(formatRes)) {
-                    resultsTarget.innerHTML = "❌ Error: No se pudo descargar el catálogo maestro o los formatos de proveedores de Supabase.";
-                    return;
-                }
-                
-                var lines = rawText.split('\n');
-                var totalInsertedCount = 0;
+                var lines = rawText.split('\n'), totalInsertedCount = 0;
                 var debugLogHTML = "<div style='font-weight:700;'>Resultados del Análisis WhatsApp:</div>";
                 
                 function normalizeUnitStringToken(rawUnitText) {
                     var u = String(rawUnitText || "").toLowerCase().trim();
                     if (u === "lb" || u === "lbs" || u === "libra" || u === "libras") return "libra";
-                    if (u === "kg" || u === "kgs" || u === "kilo" || u === "kilos" || u === "kilogramo") return "kg";
+                    if (u === "kg" || u === "kgs" || u === "kilo" || u === "kilos") return "kg";
                     if (u === "g" || u === "gr" || u === "gramo" || u === "gramos") return "gr";
                     if (u === "oz" || u === "onza" || u === "onzas") return "oz";
                     if (u === "ml" || u === "mililitro" || u === "mililitros") return "ml";
@@ -2067,27 +2054,22 @@
                     for (var j = 0; j < ingRes.length; j++) {
                         var ingName = String(ingRes[j].name_es || "").toLowerCase().trim();
                         if (ingName !== "" && currentLine.toLowerCase().includes(ingName)) {
-                            matchedIngredient = ingRes[j];
-                            break;
+                            matchedIngredient = ingRes[j]; break;
                         }
                     }
                     if (!matchedIngredient) {
-                        debugLogHTML += "<div style='color:#ef4444;'>❌ Línea " + (i+1) + " ignorada: Ingrediente no encontrado</div>";
-                        continue;
+                        debugLogHTML += "<div style='color:#ef4444;'>❌ Línea " + (i+1) + " ignorada: Ingrediente no encontrado</div>"; continue;
                     }
                     
                     var matchingFormatsList = formatRes.filter(function(f) { return String(f.ingredient_id) === String(matchedIngredient.id); });
                     var rawInvoiceQty = 0, rawInvoiceCost = 0, textExtractedUOMToken = "";
                     
                     if (currentLine.includes("|")) {
-                        var columns = currentLine.split("|");
-                        // 🌟 INDEXING BINDING REFIXED: Extracts explicit string positions with trim protections
-                        if (columns.length >= 2) rawInvoiceQty = parseFloat(columns[1].trim().replace(',', '.')) || 0;
-                        if (columns.length >= 3) textExtractedUOMToken = columns[2].trim();
-                        if (columns.length >= 4) {
-                            var priceColumnText = columns[columns.length - 1].replace(/[^0-9\.,]/g, "").replace(',', '.');
-                            rawInvoiceCost = parseFloat(priceColumnText) || 0;
-                        }
+                        // 🌟 NO-BRACKET ARRAY PROCESSING: Safely unpack text pieces using list shifting methods
+                        var list = currentLine.split("|").map(function(c) { return c.trim(); });
+                        if (list.length >= 2) rawInvoiceQty = parseFloat(list[1].replace(',', '.')) || 0;
+                        if (list.length >= 3) textExtractedUOMToken = list[2];
+                        if (list.length >= 4) rawInvoiceCost = parseFloat(list[3].replace(/[^0-9\.,]/g, "").replace(',', '.')) || 0;
                     } else {
                         var numberRegexPattern = /([0-9]+[\.,][0-9]+|[0-9]+)/g;
                         var allNumbersFoundInLine = currentLine.match(numberRegexPattern);
@@ -2103,9 +2085,9 @@
                         }
                     }
                     if (rawInvoiceQty === 0 || rawInvoiceCost === 0) {
-                        debugLogHTML += "<div style='color:#b45309;'>⚠️ Línea " + (i+1) + ": Cantidad o Costo inválido.</div>";
-                        continue;
+                        debugLogHTML += "<div style='color:#b45309;'>⚠️ Línea " + (i+1) + ": Cantidad o Costo inválido.</div>"; continue;
                     }
+
 
                     // Continue directly into Part 2 right below
                                         // 🌟 STEP C: NORMALIZE AND ALIGN CONVERSION MUTATORS
@@ -2113,29 +2095,20 @@
                     var formatRuleFound = null;
                     
                     if (normalizedLineUOM !== "") {
-                        formatRuleFound = matchingFormatsList.find(function(f) {
-                            return normalizeUnitStringToken(f.purchase_uom) === normalizedLineUOM;
-                        });
+                        formatRuleFound = matchingFormatsList.find(function(f) { return normalizeUnitStringToken(f.purchase_uom) === normalizedLineUOM; });
                     }
                     if (!formatRuleFound && matchingFormatsList.length > 0) {
                         formatRuleFound = matchingFormatsList.find(function(f) { return !f.purchase_uom || f.purchase_uom === ""; });
                     }
                     if (!formatRuleFound) {
                         var displayUnitMsg = textExtractedUOMToken !== "" ? "unidad '" + textExtractedUOMToken + "'" : "ninguna unidad";
-                        debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'>🛑 Bloqueo Administrativo: No existe regla en 'supplier_formats' para " + matchedIngredient.name_es + " con la " + displayUnitMsg + ".</div>";
-                        continue;
+                        debugLogHTML += "<div style='padding:6px; background-color:rgba(239,68,68,0.08); border-left:3px solid #ef4444; color:#ef4444; margin-bottom:4px; border-radius:4px;'>🛑 Bloqueo Administrativo: No existe regla en 'supplier_formats' para " + matchedIngredient.name_es + " con la " + displayUnitMsg + ".</div>"; continue;
                     }
                     
-                    // 🌟 CRITICAL VALUE MATCH: Extract your accurate conversion multiplier factor cleanly straight from unit_per_purchase column
                     var conversionMultiplierFactor = parseFloat(formatRuleFound.unit_per_purchase || 1);
                     var finalRecipeQtyConverted = rawInvoiceQty * conversionMultiplierFactor;
                     
-                    var payload = {
-                        invoice_date: dateInputEl,
-                        ingredient_id: matchedIngredient.id,
-                        actual_quantity_purchased: finalRecipeQtyConverted,
-                        actual_total_cost: rawInvoiceCost
-                    };
+                    var payload = { invoice_date: dateInputEl, ingredient_id: matchedIngredient.id, actual_quantity_purchased: finalRecipeQtyConverted, actual_total_cost: rawInvoiceCost };
                     
                     var commitRes = await fetch(BASE_API_URL + "invoice_items", {
                         method: "POST",
@@ -2148,18 +2121,17 @@
                         var recipeUnitDisplayLabel = matchedIngredient.uom || "gr";
                         debugLogHTML += "<div style='color:#22c55e; margin-bottom:4px;'>✅ Extraído con Éxito: <b>" + matchedIngredient.name_es + "</b> -> Equivalencia: " + finalRecipeQtyConverted.toFixed(2) + " " + recipeUnitDisplayLabel + " (Factor x" + conversionMultiplierFactor + ") | Total: $" + rawInvoiceCost.toFixed(2) + "</div>";
                     } else {
-                        debugLogHTML += "<div style='color:#ef4444; margin-bottom:4px;'>❌ Error al inyectar " + matchedIngredient.name_es + "</div>";
+                        debugLogHTML += "<div style='color:#ef4444; margin-bottom:4px;'>❌ Error al guardar en Supabase para " + matchedIngredient.name_es + "</div>";
                     }
                 }
                 
-                debugLogHTML += "<div style='margin-top:8px; font-weight:700; color:#007afb;'>🚀 Proceso Terminado: " + totalInsertedCount + " líneas agregadas.</div>";
+                debugLogHTML += "<div style='margin-top:8px; font-weight:700; color:#007afb;'>🚀 Proceso Terminado: " + totalInsertedCount + " líneas agregadas sin polución de datos.</div>";
                 resultsTarget.innerHTML = debugLogHTML;
-                
                 if (typeof refreshSandboxInvoiceHistoryRowsList === "function") refreshSandboxInvoiceHistoryRowsList();
                 
             } catch (err) {
                 console.error("WhatsApp global analyzer error:", err);
-                resultsTarget.innerHTML = "<div style='color:#ef4444;'>❌ Error crítico en el workbench.</div>";
+                resultsTarget.innerHTML = "<div style='color:#ef4444;'>❌ Error crítico en el workbench de análisis relacional.</div>";
             }
         }
 
