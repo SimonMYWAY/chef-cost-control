@@ -148,6 +148,21 @@
                         </div>
                     </div>
                     <button class="btn btn-blue" style="padding: 6px 14px; font-size: 0.85rem;" onclick="submitSimulatedInvoiceRowToCloud()">Inyectar Factura en Supabase</button>
+                                    <!-- 📋 LIVE SANDBOX RECORD LOG TRACKER CONTAINER -->
+                    <div style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Historial de Facturas en Rango</span>
+                            <button class='btn' style='padding: 2px 6px; font-size: 0.7rem; background-color: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main);' onclick="refreshSandboxInvoiceHistoryRowsList()">🔄 Actualizar Lista</button>
+                        </div>
+                        <div style="max-height: 120px; overflow-y: auto; font-size: 0.8rem; background: var(--bg-main); border-radius: 4px; padding: 4px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                <tbody id="sandbox-invoice-history-rows">
+                                    <tr><td style="padding: 6px; text-align: center; color: var(--text-muted);">Haz clic en 'Actualizar Lista' para ver o borrar filas.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
 
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
@@ -1903,6 +1918,81 @@
                     alert("❌ Error al inyectar fila en la tabla invoice_items (Status: " + res.status + "). Verifica que RLS esté permitido para inserciones públicas.");
                 }
             }).catch(function(err) { console.error("Simulator network crash:", err); });
+        }
+            // 🧪 SANDBOX HISTORY TRACKER: Loads live records matching your current calendar date selectors
+        function refreshSandboxInvoiceHistoryRowsList() {
+            var rowsTarget = document.getElementById("sandbox-invoice-history-rows");
+            if (!rowsTarget) return;
+            
+            // Read your active screen calendar parameters to pull relevant rows
+            var dateFrom = document.getElementById("fecha-desde") ? document.getElementById("fecha-desde").value : "";
+            var dateTo = document.getElementById("fecha-hasta") ? document.getElementById("fecha-hasta").value : "";
+            
+            if (!dateFrom || !dateTo) {
+                rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⚠️ Selecciona un rango Desde/Hasta arriba primero.</td></tr>";
+                return;
+            }
+            
+            rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⏳ Cargando historial de pruebas...</td></tr>";
+            
+            var queryUrl = BASE_API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
+            
+            fetch(queryUrl, { headers: { "apikey": API_KEY } })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    rowsTarget.innerHTML = "";
+                    if (!data || data.length === 0 || data.message) {
+                        rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>No hay facturas registradas en este rango.</td></tr>";
+                        return;
+                    }
+                    
+                    data.forEach(function(row) {
+                        var tr = document.createElement("tr");
+                        tr.style.borderBottom = "1px solid var(--border-color)";
+                        
+                        var cachedIng = _ingredientsCache[row.ingredient_id];
+                        var ingName = cachedIng ? (cachedIng.name_es || cachedIng) : "Ingrediente #" + String(row.ingredient_id).substring(0,4);
+                        
+                        tr.innerHTML = 
+                            "<td style='padding:6px; text-align:left; font-weight:600; color:var(--text-main);'>" + ingName + "</td>" +
+                            "<td style='padding:6px; text-align:center; color:var(--text-muted);'>" + row.invoice_date + "</td>" +
+                            "<td style='padding:6px; text-align:right; font-family:monospace;'>" + (parseFloat(row.actual_quantity_purchased) || 0).toFixed(2) + "</td>" +
+                            "<td style='padding:6px; text-align:right; font-weight:700; color:var(--text-main);'>$" + (parseFloat(row.actual_total_cost) || 0).toFixed(2) + "</td>" +
+                            "<td style='padding:6px; text-align:right; width:40px;'>" +
+                                "<button class='btn' style='padding:2px 4px; font-size:0.7rem; background-color:#ef4444; color:white; border-radius:3px;' onclick=\"eraseSingleSimulatedInvoiceRowRecord(" + row.id + ")\">🗑️</button>" +
+                            "</td>";
+                            
+                        rowsTarget.appendChild(tr);
+                    });
+                })
+                .catch(function(err) { 
+                    console.error("Sandbox history tracker breakdown:", err); 
+                    rowsTarget.innerHTML = "<tr><td style='padding:8px; color:#ef4444;'>❌ Error al cargar logs.</td></tr>";
+                });
+        }
+
+        // 🗑️ HARD DELETION ACTION: Directly executes raw data erasure matching your primary key integer targets
+        function eraseSingleSimulatedInvoiceRowRecord(rowPrimaryKeyId) {
+            var numericRowId = parseInt(rowPrimaryKeyId, 10);
+            if (isNaN(numericRowId)) return;
+            
+            if (!confirm("🗑️ ¿Deseas eliminar permanentemente esta línea de factura simulada de la base de datos?")) return;
+            
+            fetch(BASE_API_URL + "invoice_items?id=eq." + numericRowId, {
+                method: "DELETE",
+                headers: {
+                    "apikey": API_KEY,
+                    "Prefer": "return=minimal"
+                }
+            })
+            .then(function(res) {
+                if (res.ok) {
+                    alert("🗑️ ¡Fila de prueba eliminada con éxito de Supabase!");
+                    refreshSandboxInvoiceHistoryRowsList();
+                } else {
+                    alert("❌ Error al intentar eliminar la fila (Status: " + res.status + "). Asegúrate de que las políticas RLS permitan DELETE.");
+                }
+            }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
 
 
