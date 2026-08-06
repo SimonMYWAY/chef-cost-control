@@ -2018,7 +2018,7 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
-                // 📱 WHATSAPP PARSING ENGINE (PART 1): Explicit array element unpacking to prevent format loss bugs
+                // 📱 WHATSAPP PARSING ENGINE (PART 1): Direct array index mapping to guarantee format list retrieval
         async function processWhatsAppTextMessageSimulation() {
             var dateInputEl = document.getElementById("parse-invoice-date").value;
             var rawText = document.getElementById("parse-whatsapp-text").value.trim();
@@ -2034,7 +2034,7 @@
                     fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
                 ]);
                 
-                // 🌟 CRITICAL FIX A: Unpack table arrays explicitly by their exact index positions to prevent blank loops!
+                // 🌟 CRITICAL INDEX REPAIR: Explicit array brackets index destructuring to secure dataset arrays!
                 var ingRes = cloudResponsePackage[0];
                 var formatRes = cloudResponsePackage[1];
                 
@@ -2081,10 +2081,11 @@
                     
                     if (currentLine.includes("|")) {
                         var columns = currentLine.split("|");
+                        // 🌟 INDEXING BINDING REFIXED: Extracts explicit string positions with trim protections
                         if (columns.length >= 2) rawInvoiceQty = parseFloat(columns[1].trim().replace(',', '.')) || 0;
                         if (columns.length >= 3) textExtractedUOMToken = columns[2].trim();
                         if (columns.length >= 4) {
-                            var priceColumnText = columns[3].replace(/[^0-9\.,]/g, "").replace(',', '.');
+                            var priceColumnText = columns[columns.length - 1].replace(/[^0-9\.,]/g, "").replace(',', '.');
                             rawInvoiceCost = parseFloat(priceColumnText) || 0;
                         }
                     } else {
@@ -2105,8 +2106,9 @@
                         debugLogHTML += "<div style='color:#b45309;'>⚠️ Línea " + (i+1) + ": Cantidad o Costo inválido.</div>";
                         continue;
                     }
+
                     // Continue directly into Part 2 right below
-                                       // 🌟 STEP C: NORMALIZE AND ALIGN CONVERSION MUTATORS
+                                        // 🌟 STEP C: NORMALIZE AND ALIGN CONVERSION MUTATORS
                     var normalizedLineUOM = normalizeUnitStringToken(textExtractedUOMToken);
                     var formatRuleFound = null;
                     
