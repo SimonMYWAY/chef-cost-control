@@ -164,6 +164,33 @@
                     </div>
 
                 </div>
+            <!-- 📊 MASTER INVOICE AUDIT & RECONCILIATION SCREEN CONTAINER -->
+<div id="invoice-audit-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin: 25px auto; max-width: 1200px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); font-family: system-ui, -apple-system, sans-serif;">
+    
+    <!-- 🗂️ SIDEBAR PANEL: LIVE STAGING INBOX QUEUE -->
+    <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; gap: 12px; height: 600px; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 5px;">
+            <h4 style="margin: 0; color: #0f172a; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+                📥 Facturas Pendientes
+            </h4>
+            <button onclick="loadStagedInvoicesQueue()" style="background: none; border: none; color: #007afb; font-size: 1.1rem; cursor: pointer; padding: 2px;" title="Sincronizar Cola">🔄</button>
+        </div>
+        
+        <!-- Live Injection Target Container for Staged Rows List -->
+        <div id="staged-invoices-list-target" style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="color: #64748b; font-size: 0.85rem; text-align: center; padding: 20px; font-style: italic;">
+                Cargando cola de revisión...
+            </div>
+        </div>
+    </div>
+    
+    <!-- 🖥️ WORKSPACE CANVAS PANEL: GRID RECONCILIATION DATA BOARD -->
+    <div id="audit-lines-workspace-target" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 25px; min-height: 600px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #64748b; font-style: italic; font-size: 0.95rem;">
+        👈 Selecciona una factura de la cola del buzón para auditar sus líneas y conciliar el inventario base.
+    </div>
+</div>
+
+ 
 
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
             <div id="deviation-results-container" style="margin-top: 20px;"></div>
@@ -1995,7 +2022,86 @@
                 }
             }).catch(function(e) { console.error("Erase crash inside sandbox:", e); });
         }
+// 📡 DATA SYNC LOGIC ENGINE - INVOICE BUFFER AUDIT CARD
+// Fetches intermediate header records and compiles dynamic warning flags on load.
 
+async function loadStagedInvoicesQueue() {
+    var listTarget = document.getElementById("staged-invoices-list-target");
+    if (!listTarget) return;
+    
+    try {
+        // Parallel data lookup to query staging headers and item lines from Supabase
+        var [invoices, lines] = await Promise.all([
+            fetch(BASE_API_URL + "staged_invoices?status=eq.pending_review&order=invoice_date.desc", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(BASE_API_URL + "staged_invoice_lines", { headers: { "apikey": API_KEY } }).then(r => r.json())
+        ]);
+        
+        if (!Array.isArray(invoices) || !Array.isArray(lines)) {
+            listTarget.innerHTML = "<div style='color:#ef4444; font-size:0.85rem; padding:10px;'>❌ Error al cargar datos base.</div>";
+            return;
+        }
+        
+        if (invoices.length === 0) {
+            listTarget.innerHTML = "<div style='color:#64748b; font-size:0.85rem; padding:20px; text-align:center; font-style:italic;'>🎉 ¡Todo al día! No hay facturas pendientes.</div>";
+            return;
+        }
+        
+        var queueHTML = "";
+        
+        for (var i = 0; i < invoices.length; i++) {
+            var inv = invoices[i];
+            
+            // Filter all itemized records belonging to this specific invoice header row
+            var invLines = lines.filter(function(l) { return String(l.staged_invoice_id) === String(inv.id); });
+            
+            // Automated Anomaly Aggregation Counts
+            var errorCount = 0;
+            var calculatedSumTotal = 0;
+            
+            for (var j = 0; j < invLines.length; j++) {
+                var lineItem = invLines[j];
+                calculatedSumTotal += (parseFloat(lineItem.extracted_cost) || 0);
+                if (lineItem.is_undefined || lineItem.is_uom_mismatched || lineItem.is_price_spiked) {
+                    errorCount++;
+                }
+            }
+            
+            // Financial Shield check: Compare invoice paper total against item sum totals
+            var paperClaimedCost = parseFloat(inv.claimed_total_cost) || 0;
+            var balanceMismatch = Math.abs(calculatedSumTotal - paperClaimedCost) > 0.01;
+            if (balanceMismatch) { errorCount++; }
+            
+            // Determine Visual Badge Colors based on anomaly presence flags
+            var badgeBackground = errorCount > 0 ? "#fee2e2" : "#dcfce7";
+            var badgeTextColor = errorCount > 0 ? "#ef4444" : "#22c55e";
+            var borderHighlight = errorCount > 0 ? "border-left: 4px solid #ef4444;" : "border-left: 4px solid #22c55e;";
+            
+            queueHTML += "<div onclick='loadSelectedInvoiceAuditWorkspace(\"" + inv.id + "\")' style='background:#ffffff; border:1px solid #e2e8f0; " + borderHighlight + " border-radius:8px; padding:12px; cursor:pointer; transition:transform 0.15s, box-shadow:0.15s; box-shadow:0 1px 2px rgba(0,0,0,0.02);' onmouseover='this.style.transform=\"translateY(-1px)\"; this.style.shadow=\"0 4px 6px rgba(0,0,0,0.05)\"' onmouseout='this.style.transform=\"none\"; this.style.shadow=\"none\"'>" +
+                            "<div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;'>" +
+                                "<span style='font-weight:700; font-size:0.88rem; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;'>" + inv.supplier_name + "</span>" +
+                                "<span style='background:" + badgeBackground + "; color:" + badgeTextColor + "; font-size:0.72rem; font-weight:700; padding:2px 7px; border-radius:12px; white-space:nowrap;'>" +
+                                    (errorCount > 0 ? "❌ " + errorCount + " Alertas" : "✨ Listo") +
+                                "</span>" +
+                            "</div>" +
+                            "<div style='display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#64748b; font-family:monospace;'>" +
+                                "<span>📅 " + (inv.invoice_date || "S/F") + "</span>" +
+                                "<span style='font-weight:600; color:#334155;'>$" + paperClaimedCost.toFixed(2) + "</span>" +
+                            "</div>" +
+                         "</div>";
+        }
+        
+        listTarget.innerHTML = queueHTML;
+        
+    } catch (err) {
+        console.error("Staging queue engine fault:", err);
+        listTarget.innerHTML = "<div style='color:#ef4444; font-size:0.85rem; padding:10px;'>❌ Error de conexión al servidor.</div>";
+    }
+}
+
+// Automatically populate the live staging folder inbox directory immediately on view boot
+document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(loadStagedInvoicesQueue, 800);
+});
 
 
     </script>
