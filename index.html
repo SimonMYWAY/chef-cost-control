@@ -496,29 +496,41 @@
         }
         calculateTotals();
     }
-    function addIngredientRow() {
+        function addIngredientRow() {
         const container = document.getElementById('ingredients-list');
-        const rowId = 'row-' + Date.now();
+        const uniqueIdPrimitive = Date.now();
+        const rowId = 'row-' + uniqueIdPrimitive;
+        const selectId = 'select-dropdown-' + uniqueIdPrimitive;
+        const searchId = 'search-filter-' + uniqueIdPrimitive;
+        
         const card = document.createElement('div');
         card.className = 'ing-card';
         card.id = rowId;
         
-                let selectOptions = "";
+        let selectOptions = "";
         if (DB_INGREDIENTS && DB_INGREDIENTS.length > 0) {
             const sortedRowItems = [...DB_INGREDIENTS].sort((a,b) => {
                 const nameA = (currentLang === 'en' ? a.name_en : a.name_es) || "";
                 const nameB = (currentLang === 'en' ? b.name_en : b.name_es) || "";
                 return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
             });
-            selectOptions = sortedRowItems.map(i => `<option value="${i.id}">${currentLang === 'en' ? i.name_en : i.name_es}</option>`).join('');
+            // 🌟 ADD PLAIN OPTION AT TOP: Ensures a clean base line default placeholder slot
+            selectOptions = '<option value="">' + (currentLang === 'en' ? '-- Select Item --' : '-- Seleccionar --') + '</option>';
+            selectOptions += sortedRowItems.map(i => `<option value="${i.id}">${currentLang === 'en' ? i.name_en : i.name_es}</option>`).join('');
         } else {
             selectOptions = "<option value=''>Cargando catálogo maestro...</option>";
         }
 
-        
         card.innerHTML = `
             <button class="remove-btn" onclick="removeRow('${rowId}')">✕</button>
-            <select onchange="updateRowUOM('${rowId}')">${selectOptions}</select>
+            
+            <!-- 🔍 INLINE FILTER: Compact real-time search field built straight into the recipe card row layer -->
+            <div style="margin-bottom: 8px;">
+                <input type="text" id="${searchId}" oninput="executeInlineCardFilterText('${searchId}', '${selectId}')" placeholder="${currentLang === 'en' ? '🔍 Filter ingredient...' : '🔍 Filtrar ingrediente...'}" style="width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem; box-sizing: border-box; background: #fafafa;" />
+            </div>
+            
+            <select id="${selectId}" onchange="updateRowUOM('${rowId}')" style="width: 100%; margin-bottom: 8px;">${selectOptions}</select>
+            
             <div class="row">
                 <div class="col">
                     <span class="sub-label qty-lbl"></span>
@@ -533,6 +545,41 @@
         container.appendChild(card);
         updateRowUOM(rowId);
     }
+    // 🧠 REAL-TIME CARD ELEMENT TEXT FILTERING ENGINE
+    // Dynamically screens dropdown option matrices case-insensitively for individual cards.
+    function executeInlineCardFilterText(searchFieldInputId, targetSelectContainerId) {
+        const queryTextString = document.getElementById(searchFieldInputId).value.toLowerCase().trim();
+        const dropdownBoxElement = document.getElementById(targetSelectContainerId);
+        
+        if (!dropdownBoxElement) return;
+        
+        const optionsRowsList = dropdownBoxElement.options;
+        let firstMatchIndexValue = -1;
+        
+        for (let i = 0; i < optionsRowsList.length; i++) {
+            const optionRow = optionsRowsList[i];
+            const optionTextLower = optionRow.text.toLowerCase();
+            
+            if (optionRow.value === "") {
+                optionRow.style.display = ""; continue;
+            }
+            
+            if (optionTextLower.includes(queryTextString)) {
+                optionRow.style.display = "";
+                if (firstMatchIndexValue === -1) firstMatchIndexValue = i;
+            } else {
+                optionRow.style.display = "none";
+            }
+        }
+        
+        // Auto-focus selection onto the earliest matching alphabetical keyword row item
+        if (firstMatchIndexValue !== -1 && queryTextString !== "") {
+            dropdownBoxElement.selectedIndex = firstMatchIndexValue;
+            // Triggers the standard system units of measure updates automatically as selection moves!
+            dropdownBoxElement.dispatchEvent(new Event('change')); 
+        }
+    }
+
 
     function removeRow(rowId) {
         const row = document.getElementById(rowId);
