@@ -84,6 +84,11 @@
             <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
                 <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
                 <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+                <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
+                <div style="margin: 0 0 15px 0; width: 100%; box-sizing: border-box;">
+                    <input type="text" id="search-backoffice-recipes-field" oninput="executeLiveRecipeCardSearch()" placeholder="🔍 Buscar receta por nombre en catálogo..." style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; box-sizing: border-box; background: #ffffff; color: #1c1c1e !important;" />
+                </div>
+
                 <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
                     <!-- Approved and draft recipe card records will draw cleanly here -->
                 </div>
@@ -2362,6 +2367,28 @@ async function reconcileAndCommitToLiveLedger() {
         
     } catch (error) {
         console.error("Ledger flush error:", error);
+    }
+}
+// 🧠 REAL-TIME RECIPES CATALOG CARD FILTER ENGINE
+// Loops through dynamically generated recipe card divs inside the master container list
+function executeLiveRecipeCardSearch() {
+    const queryText = document.getElementById('search-backoffice-recipes-field').value.toLowerCase().trim();
+    const catalogContainer = document.getElementById('master-catalog-container');
+    if (!catalogContainer) return;
+    
+    // Target all individual sub-cards rendered by your loop script
+    const recipeCards = catalogContainer.children;
+    
+    for (let i = 0; i < recipeCards.length; i++) {
+        const card = recipeCards[i];
+        // Extracts the visual text headers inside the card row
+        const cardTextLower = card.innerText.toLowerCase();
+        
+        if (cardTextLower.includes(queryText)) {
+            card.style.display = ""; // Keeps card visible if match lands
+        } else {
+            card.style.display = "none"; // Hides card instantly from view layout matrix
+        }
     }
 }
 
