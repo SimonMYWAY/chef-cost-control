@@ -74,6 +74,11 @@
 
             <!-- LIVE REVO PENDING SELECTION CHANNEL -->
     <label class="label" style="color: #007afb; font-weight: bold;">📥 Recetas Pendientes de Revo</label>
+        <!-- 🔍 REAL-TIME REVO SEARCH FILTER FIELD -->
+    <div style="margin-bottom: 8px;">
+        <input type="text" id="search-revo-picker-field" oninput="executeLiveRevoDropdownSearch()" placeholder="🔍 Buscar plato de Revo..." style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+    </div>
+
     <select id="revo-recipe-picker" onchange="handleRevoSelection()" style="margin-bottom: 15px; background-color: #ffffff !important; color: #1c1c1e !important;">
         <option value="">⏳ Descargando catálogo de Revo...</option>
     </select>
@@ -1107,6 +1112,44 @@
 
     updateUIStrings();   // Instantly translates your layouts and populates your 11 categories
     initRevoDownload();  // Connects to your cloud tables to populate the 104 recipes list
+    // 🧠 REAL-TIME REVO DROPDOWN SEARCH FILTER MODULE
+    // Dynamically screens pending REVO recipe choices case-insensitively on user input text
+    function executeLiveRevoDropdownSearch() {
+        const queryTextString = document.getElementById('search-revo-picker-field').value.toLowerCase().trim();
+        const revoDropdownContainer = document.getElementById('revo-recipe-picker');
+        
+        if (!revoDropdownContainer) return;
+        
+        const optionRowsList = revoDropdownContainer.options;
+        let firstMatchIndexValue = -1;
+        
+        for (let i = 0; i < optionRowsList.length; i++) {
+            const optionRow = optionRowsList[i];
+            const optionTextLower = optionRow.text.toLowerCase();
+            
+            // Always preserve empty placeholder text slots visible at index zero
+            if (optionRow.value === "" || optionRow.text.includes("Descargando")) {
+                optionRow.style.display = "";
+                continue;
+            }
+            
+            if (optionTextLower.includes(queryTextString)) {
+                optionRow.style.display = ""; // Keeps item visible if keyword matches
+                if (firstMatchIndexValue === -1) firstMatchIndexValue = i;
+            } else {
+                optionRow.style.display = "none"; // Hides unmatched menu lines instantly from view
+            }
+        }
+        
+        // Auto-focus selection onto the earliest matching alphabetical row item as you type
+        if (firstMatchIndexValue !== -1 && queryTextString !== "") {
+            revoDropdownContainer.selectedIndex = firstMatchIndexValue;
+            // Fires your app's native handleRevoSelection() loop automatically on shift!
+            if (typeof handleRevoSelection === "function") {
+                handleRevoSelection();
+            }
+        }
+    }
 
 </script>
 </body>
