@@ -79,6 +79,10 @@
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
             </div>
+        <!-- 🔍 REAL-TIME SUPPLIERS LOOKUP SEARCH FIELD -->
+        <div style="margin-bottom: 10px;">
+           <input type="text" id="search-backoffice-suppliers-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-suppliers-field', 'supplier-picker')" placeholder="🔍 Buscar proveedor / formato..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+        </div>
 
             <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
             <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
@@ -2364,7 +2368,44 @@ async function reconcileAndCommitToLiveLedger() {
         console.error("Ledger flush error:", error);
     }
 }
-
+// 🧠 GLOBAL BACK-OFFICE UNIFIED TEXT-FILTERING MODULE
+// Dynamically screens option text chains case-insensitively for recipes, ingredients, and suppliers.
+function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetSelectBoxContainerId) {
+    const queryTextString = document.getElementById(inputElementFieldId).value.toLowerCase().trim();
+    const targetDropdownElement = document.getElementById(targetSelectBoxContainerId);
+    
+    if (!targetDropdownElement) return;
+    
+    const optionRowsList = targetDropdownElement.options;
+    let firstMatchIndexValue = -1;
+    
+    for (let i = 0; i < optionRowsList.length; i++) {
+        const optionRow = optionRowsList[i];
+        const optionTextLower = optionRow.text.toLowerCase();
+        
+        // Preserve empty selection placeholders or asynchronous downloading text blocks visible at the top index
+        if (optionRow.value === "" || optionRow.text.includes("Cargando") || optionRow.text.includes("Descargando")) {
+            optionRow.style.display = "";
+            continue;
+        }
+        
+        if (optionTextLower.includes(queryTextString)) {
+            optionRow.style.display = ""; // Makes option visible if match hits
+            if (firstMatchIndexValue === -1) {
+                firstMatchIndexValue = i; // Cache the earliest keyword hit to auto-focus selection list
+            }
+        } else {
+            optionRow.style.display = "none"; // Hides unmatched entries instantly from screen view
+        }
+    }
+    
+    // Smooth Interaction: Auto-scroll select window straight onto the first matching row item as you type
+    if (firstMatchIndexValue !== -1 && queryTextString !== "") {
+        targetDropdownElement.selectedIndex = firstMatchIndexValue;
+        // Automatically fires your app's native change listener triggers to update metrics panels transparently
+        targetDropdownElement.dispatchEvent(new Event('change'));
+    }
+}
 
     </script>
         
