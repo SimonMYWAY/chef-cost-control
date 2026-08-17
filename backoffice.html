@@ -2401,27 +2401,41 @@ function executeLiveRecipeCardSearch() {
         }
     }
 }
-// 🧠 UNIFIED BACK-OFFICE NATIVE DATA TABLE SEARCH ENGINE
-// Loops through dynamically generated table rows (tr) inside any designated tbody element container row layout case-insensitively.
+// 🧠 UPGRADED DYNAMIC DATA TABLE SEARCH ENGINE
+// Safely reads raw cell text alongside live interactive input values inside table rows case-insensitively.
 function executeLiveTableDataSearch(inputBoxFieldId, targetTableBodyContainerId) {
     const queryTextString = document.getElementById(inputBoxFieldId).value.toLowerCase().trim();
     const tableBodyElement = document.getElementById(targetTableBodyContainerId);
     
     if (!tableBodyElement) return;
     
-    // Target all individual live rows inside that specific table body column grid box
     const tableRowsCollection = tableBodyElement.getElementsByTagName('tr');
     
     for (let i = 0; i < tableRowsCollection.length; i++) {
         const rowItem = tableRowsCollection[i];
+        let accumulatedRowText = "";
         
-        // Pull text strings natively from all cell vectors inside that specific row layout row
-        const rowTextContent = String(rowItem.textContent || rowItem.innerText || "").toLowerCase();
+        // 🌟 STRATEGY: Isolate every individual cell cell inside this row item row
+        const cells = rowItem.getElementsByTagName('td');
+        for (let j = 0; j < cells.length; j++) {
+            const currentCell = cells[j];
+            
+            // 1. Grab any standard display text strings visible inside the cell
+            accumulatedRowText += " " + (currentCell.textContent || currentCell.innerText || "");
+            
+            // 2. Loop through and extract live typed data inside any embedded input values or text areas
+            const inputElements = currentCell.getElementsByTagName('input');
+            for (let k = 0; k < inputElements.length; k++) {
+                accumulatedRowText += " " + (inputElements[k].value || "");
+            }
+        }
         
-        if (rowTextContent.includes(queryTextString)) {
-            rowItem.style.display = ""; // Preserves table row visible if text match targets hit
+        const finalizedSearchString = accumulatedRowText.toLowerCase();
+        
+        if (finalizedSearchString.indexOf(queryTextString) > -1) {
+            rowItem.style.display = ""; // Keeps table row visible if match hits
         } else {
-            rowItem.style.display = "none"; // Hides table row instantly from user display view matrix
+            rowItem.style.display = "none"; // Hides unmatched elements instantly from display layout view
         }
     }
 }
