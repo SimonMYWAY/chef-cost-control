@@ -79,16 +79,11 @@
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
             </div>
-            
+
             <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
             <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
                 <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
                 <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
-                <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
-                <div style="margin: 0 0 15px 0; width: 100%; box-sizing: border-box;">
-                   <input type="text" id="search-backoffice-recipes-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-recipes-field', 'master-catalog-container')" placeholder="🔍 Buscar receta por nombre en catálogo..." style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; box-sizing: border-box; background: #ffffff;" />
-                </div>
-
                 <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
                     <!-- Approved and draft recipe card records will draw cleanly here -->
                 </div>
@@ -200,7 +195,7 @@
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
             <div id="deviation-results-container" style="margin-top: 20px;"></div>
         </div>
-        
+
         <!-- MODULE CANVA 3: MASTER INGREDIENT LIST -->
         <div id="view-ingredients" class="view-pane">
             <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
@@ -237,19 +232,8 @@
                         <button type="submit" class="btn btn-green" style="width:100%;">Registrar Ingrediente</button>
                     </form>
                 </div>
-                
                 <div class="card" style="flex: 2; min-width: 450px;">
                     <h3>Catálogo de Ingredientes Existentes</h3>
-                                    <div class="card" style="flex: 2; min-width: 450px;">
-                    <h3>Catálogo de Ingredientes Existentes</h3>
-                    
-                    <!-- 🔍 REAL-TIME TABLE FILTER: Positioned right above the data grid list -->
-                    <div style="margin: 5px 0 15px 0; width: 100%; box-sizing: border-box;">
-                        <input type="text" id="search-backoffice-ingredients-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-ingredients-field', 'ingredients-table-rows')" placeholder="🔍 Buscar ingrediente por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
-                    </div>
-
-                    <table class="ingredient-table">
-
                     <table class="ingredient-table">
                         <thead><tr><th>Nombre (ES / EN)</th><th>Unidad</th><th>Coste (€)</th></tr></thead>
                         <tbody id="ingredients-table-rows"></tbody>
@@ -257,7 +241,7 @@
                 </div>
             </div>
         </div>
-       
+
         <!-- MODULE CANVA 4: LIVE SUPPLIER DIRECTORY -->
         <div id="view-providers" class="view-pane">
             <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
@@ -2378,72 +2362,6 @@ async function reconcileAndCommitToLiveLedger() {
         
     } catch (error) {
         console.error("Ledger flush error:", error);
-    }
-}
-// 🧠 INTELLIGENT GLOBAL BACK-OFFICE UNIFIED TEXT-FILTERING MODULE
-// Smart adaptive engine that filters Dropdowns (select), Tables (tbody), or Card Groups (div) case-insensitively.
-function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetContainerElementId) {
-    var queryTextString = document.getElementById(inputElementFieldId).value.toLowerCase().trim();
-    var targetContainer = document.getElementById(targetContainerElementId);
-    
-    if (!targetContainer) return;
-    
-    // 🔍 PATHWAY A: If the target is your Table Rows (tbody target container)
-    if (targetContainerElementId === "ingredients-table-rows") {
-        var rowsList = targetContainer.getElementsByTagName('tr');
-        for (var i = 0; i < rowsList.length; i++) {
-            var rowItem = rowsList[i];
-            var rowTextContent = String(rowItem.textContent || rowItem.innerText || "").toLowerCase();
-            if (rowTextContent.indexOf(queryTextString) > -1) {
-                rowItem.style.display = "";
-            } else {
-                rowItem.style.display = "none";
-            }
-        }
-        return;
-    }
-    
-    // 🔍 PATHWAY B: If the target is your Direct Visual Div Cards (master-catalog-container)
-    if (targetContainerElementId === "master-catalog-container") {
-        var cardElements = targetContainer.children;
-        for (var j = 0; j < cardElements.length; j++) {
-            var cardItem = cardElements[j];
-            var cardTextContent = String(cardItem.textContent || cardItem.innerText || "").toLowerCase();
-            if (cardTextContent.indexOf(queryTextString) > -1) {
-                cardItem.style.display = "";
-            } else {
-                cardItem.style.display = "none";
-            }
-        }
-        return;
-    }
-    
-    // 🔍 PATHWAY C: Standard Dropdown Options Fallback (For select elements like supplier-picker)
-    var optionRowsList = targetContainer.options;
-    var firstMatchIndexValue = -1;
-    
-    for (var k = 0; k < optionRowsList.length; k++) {
-        var optionRow = optionRowsList[k];
-        var optionTextLower = optionRow.text.toLowerCase();
-        
-        if (optionRow.value === "" || optionTextLower.indexOf("cargando") > -1 || optionTextLower.indexOf("descargando") > -1) {
-            optionRow.style.display = "";
-            continue;
-        }
-        
-        if (optionTextLower.indexOf(queryTextString) > -1) {
-            optionRow.style.display = "";
-            if (firstMatchIndexValue === -1) firstMatchIndexValue = k;
-        } else {
-            optionRow.style.display = "none";
-        }
-    }
-    
-    if (firstMatchIndexValue !== -1 && queryTextString !== "") {
-        targetContainer.selectedIndex = firstMatchIndexValue;
-        if (typeof targetContainer.onchange === "function") {
-            targetContainer.onchange();
-        }
     }
 }
 
