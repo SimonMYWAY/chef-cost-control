@@ -2383,36 +2383,33 @@ async function reconcileAndCommitToLiveLedger() {
 // 🧠 INTELLIGENT GLOBAL BACK-OFFICE UNIFIED TEXT-FILTERING MODULE
 // Smart adaptive engine that filters Dropdowns (select), Tables (tbody), or Card Groups (div) case-insensitively.
 function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetContainerElementId) {
-    const queryTextString = document.getElementById(inputElementFieldId).value.toLowerCase().trim();
-    const targetContainer = document.getElementById(targetContainerElementId);
+    var queryTextString = document.getElementById(inputElementFieldId).value.toLowerCase().trim();
+    var targetContainer = document.getElementById(targetContainerElementId);
     
     if (!targetContainer) return;
     
-    // 🔍 PATH PATHWAY A: If the target is your Table Rows (tbody target container)
+    // 🔍 PATHWAY A: If the target is your Table Rows (tbody target container)
     if (targetContainerElementId === "ingredients-table-rows") {
-        const rowsList = targetContainer.getElementsByTagName('tr');
-        for (let i = 0; i < rowsList.length; i++) {
-            const rowItem = rowsList[i];
-            
-            // 🌟 FIXED TEXT ACQUISITION: Pulls data text natively from all text arrays inside table cells
-            const rowTextContent = String(rowItem.textContent || rowItem.innerText || "").toLowerCase();
-            
-            if (rowTextContent.includes(queryTextString)) {
-                rowItem.style.display = ""; // Keeps table row visible if text matches query
+        var rowsList = targetContainer.getElementsByTagName('tr');
+        for (var i = 0; i < rowsList.length; i++) {
+            var rowItem = rowsList[i];
+            var rowTextContent = String(rowItem.textContent || rowItem.innerText || "").toLowerCase();
+            if (rowTextContent.indexOf(queryTextString) > -1) {
+                rowItem.style.display = "";
             } else {
-                rowItem.style.display = "none"; // Hides table row instantly from screen view layout
+                rowItem.style.display = "none";
             }
         }
         return;
     }
     
-    // 🔍 PATH PATHWAY B: If the target is your Direct Visual Div Cards (master-catalog-container)
+    // 🔍 PATHWAY B: If the target is your Direct Visual Div Cards (master-catalog-container)
     if (targetContainerElementId === "master-catalog-container") {
-        const cardElements = targetContainer.children;
-        for (let i = 0; i < cardElements.length; i++) {
-            const cardItem = cardElements[i];
-            const cardTextContent = String(cardItem.textContent || cardItem.innerText || "").toLowerCase();
-            if (cardTextContent.includes(queryTextString)) {
+        var cardElements = targetContainer.children;
+        for (var j = 0; j < cardElements.length; j++) {
+            var cardItem = cardElements[j];
+            var cardTextContent = String(cardItem.textContent || cardItem.innerText || "").toLowerCase();
+            if (cardTextContent.indexOf(queryTextString) > -1) {
                 cardItem.style.display = "";
             } else {
                 cardItem.style.display = "none";
@@ -2421,22 +2418,22 @@ function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetConta
         return;
     }
     
-    // 🔍 PATH PATHWAY C: Standard Dropdown Options Fallback (For select elements like supplier-picker)
-    const optionRowsList = targetContainer.options;
-    let firstMatchIndexValue = -1;
+    // 🔍 PATHWAY C: Standard Dropdown Options Fallback (For select elements like supplier-picker)
+    var optionRowsList = targetContainer.options;
+    var firstMatchIndexValue = -1;
     
-    for (let i = 0; i < optionRowsList.length; i++) {
-        const optionRow = optionRowsList[i];
-        const optionTextLower = optionRow.text.toLowerCase();
+    for (var k = 0; k < optionRowsList.length; k++) {
+        var optionRow = optionRowsList[k];
+        var optionTextLower = optionRow.text.toLowerCase();
         
-        if (optionRow.value === "" || optionRow.text.includes("Cargando") || optionRow.text.includes("Descargando")) {
+        if (optionRow.value === "" || optionTextLower.indexOf("cargando") > -1 || optionTextLower.indexOf("descargando") > -1) {
             optionRow.style.display = "";
             continue;
         }
         
-        if (optionTextLower.includes(queryTextString)) {
+        if (optionTextLower.indexOf(queryTextString) > -1) {
             optionRow.style.display = "";
-            if (firstMatchIndexValue === -1) firstMatchIndexValue = i;
+            if (firstMatchIndexValue === -1) firstMatchIndexValue = k;
         } else {
             optionRow.style.display = "none";
         }
@@ -2444,9 +2441,12 @@ function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetConta
     
     if (firstMatchIndexValue !== -1 && queryTextString !== "") {
         targetContainer.selectedIndex = firstMatchIndexValue;
-        targetContainer.dispatchEvent(new Event('change'));
+        if (typeof targetContainer.onchange === "function") {
+            targetContainer.onchange();
+        }
     }
 }
+
 
     </script>
         
