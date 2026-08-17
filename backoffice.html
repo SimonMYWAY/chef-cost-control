@@ -236,6 +236,11 @@
                         <button type="submit" class="btn btn-green" style="width:100%;">Registrar Ingrediente</button>
                     </form>
                 </div>
+                <!-- 🔍 REAL-TIME INGREDIENTS LOOKUP SEARCH FIELD -->
+                <div style="margin-bottom: 10px;">
+                  <input type="text" id="search-backoffice-ingredients-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-ingredients-field', 'ingredient-picker')" placeholder="🔍 Buscar ingrediente por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+                </div>
+
                 <div class="card" style="flex: 2; min-width: 450px;">
                     <h3>Catálogo de Ingredientes Existentes</h3>
                     <table class="ingredient-table">
