@@ -79,10 +79,10 @@
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
             </div>
-        <!-- 🔍 REAL-TIME SUPPLIERS LOOKUP SEARCH FIELD -->
-        <div style="margin-bottom: 10px;">
-           <input type="text" id="search-backoffice-suppliers-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-suppliers-field', 'supplier-picker')" placeholder="🔍 Buscar proveedor / formato..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
-        </div>
+            <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="search-backoffice-recipes-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-recipes-field', 'recipe-picker')" placeholder="🔍 Buscar receta por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+            </div>
 
             <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
             <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
@@ -199,6 +199,10 @@
             <!-- 📊 INTERACTIVE DATA CANVAS: Reporting output placeholder area for the matrix engine results -->
             <div id="deviation-results-container" style="margin-top: 20px;"></div>
         </div>
+        <!-- 🔍 REAL-TIME INGREDIENTS LOOKUP SEARCH FIELD -->
+        <div style="margin-bottom: 10px;">
+           <input type="text" id="search-backoffice-ingredients-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-ingredients-field', 'ingredient-picker')" placeholder="🔍 Buscar ingrediente por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+        </div>
 
         <!-- MODULE CANVA 3: MASTER INGREDIENT LIST -->
         <div id="view-ingredients" class="view-pane">
@@ -244,6 +248,10 @@
                     </table>
                 </div>
             </div>
+        </div>
+        <!-- 🔍 REAL-TIME SUPPLIERS LOOKUP SEARCH FIELD -->
+        <div style="margin-bottom: 10px;">
+            <input type="text" id="search-backoffice-suppliers-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-suppliers-field', 'supplier-picker')" placeholder="🔍 Buscar proveedor / formato..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
         </div>
 
         <!-- MODULE CANVA 4: LIVE SUPPLIER DIRECTORY -->
