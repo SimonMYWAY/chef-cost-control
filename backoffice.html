@@ -79,15 +79,16 @@
                 <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
                 <div id="queue-container"></div>
             </div>
-            <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
-            <div style="margin-bottom: 10px;">
-                <input type="text" id="search-backoffice-recipes-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-recipes-field', 'recipe-picker')" placeholder="🔍 Buscar receta por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
-            </div>
-
+            
             <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
             <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
                 <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
                 <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+                <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
+                <div style="margin: 0 0 15px 0; width: 100%; box-sizing: border-box;">
+                   <input type="text" id="search-backoffice-recipes-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-recipes-field', 'master-catalog-container')" placeholder="🔍 Buscar receta por nombre en catálogo..." style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; box-sizing: border-box; background: #ffffff;" />
+                </div>
+
                 <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
                     <!-- Approved and draft recipe card records will draw cleanly here -->
                 </div>
@@ -236,13 +237,19 @@
                         <button type="submit" class="btn btn-green" style="width:100%;">Registrar Ingrediente</button>
                     </form>
                 </div>
-                <!-- 🔍 REAL-TIME INGREDIENTS LOOKUP SEARCH FIELD -->
-                <div style="margin-bottom: 10px;">
-                  <input type="text" id="search-backoffice-ingredients-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-ingredients-field', 'ingredient-picker')" placeholder="🔍 Buscar ingrediente por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
-                </div>
-
+                
                 <div class="card" style="flex: 2; min-width: 450px;">
                     <h3>Catálogo de Ingredientes Existentes</h3>
+                                    <div class="card" style="flex: 2; min-width: 450px;">
+                    <h3>Catálogo de Ingredientes Existentes</h3>
+                    
+                    <!-- 🔍 REAL-TIME TABLE FILTER: Positioned right above the data grid list -->
+                    <div style="margin: 5px 0 15px 0; width: 100%; box-sizing: border-box;">
+                        <input type="text" id="search-backoffice-ingredients-field" oninput="executeGenericBackofficeDropdownSearch('search-backoffice-ingredients-field', 'ingredients-table-rows')" placeholder="🔍 Buscar ingrediente por nombre..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+                    </div>
+
+                    <table class="ingredient-table">
+
                     <table class="ingredient-table">
                         <thead><tr><th>Nombre (ES / EN)</th><th>Unidad</th><th>Coste (€)</th></tr></thead>
                         <tbody id="ingredients-table-rows"></tbody>
@@ -2373,42 +2380,66 @@ async function reconcileAndCommitToLiveLedger() {
         console.error("Ledger flush error:", error);
     }
 }
-// 🧠 GLOBAL BACK-OFFICE UNIFIED TEXT-FILTERING MODULE
-// Dynamically screens option text chains case-insensitively for recipes, ingredients, and suppliers.
-function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetSelectBoxContainerId) {
+// 🧠 INTELLIGENT GLOBAL BACK-OFFICE UNIFIED TEXT-FILTERING MODULE
+// Smart adaptive engine that filters Dropdowns (select), Tables (tbody), or Card Groups (div) case-insensitively.
+function executeGenericBackofficeDropdownSearch(inputElementFieldId, targetContainerElementId) {
     const queryTextString = document.getElementById(inputElementFieldId).value.toLowerCase().trim();
-    const targetDropdownElement = document.getElementById(targetSelectBoxContainerId);
+    const targetContainer = document.getElementById(targetContainerElementId);
     
-    if (!targetDropdownElement) return;
+    if (!targetContainer) return;
     
-    const optionRowsList = targetDropdownElement.options;
+    // 🔍 PATH PATHWAY A: If the target is your Table Rows (tbody target container)
+    if (targetContainerElementId === "ingredients-table-rows") {
+        const rowsList = targetContainer.getElementsByTagName('tr');
+        for (let i = 0; i < rowsList.length; i++) {
+            const rowItem = rowsList[i];
+            if (rowItem.innerText.toLowerCase().includes(queryTextString)) {
+                rowItem.style.display = "";
+            } else {
+                rowItem.style.display = "none";
+            }
+        }
+        return;
+    }
+    
+    // 🔍 PATH PATHWAY B: If the target is your Direct Visual Div Cards (master-catalog-container)
+    if (targetContainerElementId === "master-catalog-container") {
+        const cardElements = targetContainer.children;
+        for (let i = 0; i < cardElements.length; i++) {
+            const cardItem = cardElements[i];
+            if (cardItem.innerText.toLowerCase().includes(queryTextString)) {
+                cardItem.style.display = "";
+            } else {
+                cardItem.style.display = "none";
+            }
+        }
+        return;
+    }
+    
+    // 🔍 PATH PATHWAY C: Standard Dropdown Options Fallback (For select elements like supplier-picker)
+    const optionRowsList = targetContainer.options;
     let firstMatchIndexValue = -1;
     
     for (let i = 0; i < optionRowsList.length; i++) {
         const optionRow = optionRowsList[i];
         const optionTextLower = optionRow.text.toLowerCase();
         
-        // Preserve empty selection placeholders or asynchronous downloading text blocks visible at the top index
         if (optionRow.value === "" || optionRow.text.includes("Cargando") || optionRow.text.includes("Descargando")) {
             optionRow.style.display = "";
             continue;
         }
         
         if (optionTextLower.includes(queryTextString)) {
-            optionRow.style.display = ""; // Makes option visible if match hits
-            if (firstMatchIndexValue === -1) {
-                firstMatchIndexValue = i; // Cache the earliest keyword hit to auto-focus selection list
-            }
+            optionRow.style.display = "";
+            if (firstMatchIndexValue === -1) firstMatchIndexValue = i;
         } else {
-            optionRow.style.display = "none"; // Hides unmatched entries instantly from screen view
+            optionRow.style.display = "none";
         }
     }
     
-    // Smooth Interaction: Auto-scroll select window straight onto the first matching row item as you type
     if (firstMatchIndexValue !== -1 && queryTextString !== "") {
-        targetDropdownElement.selectedIndex = firstMatchIndexValue;
-        // Automatically fires your app's native change listener triggers to update metrics panels transparently
-        targetDropdownElement.dispatchEvent(new Event('change'));
+        targetContainer.selectedIndex = firstMatchIndexValue;
+        targetContainer.dispatchEvent(new Event('change'));
     }
 }
 
