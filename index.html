@@ -646,7 +646,7 @@
                 
     
     
-        // 📊 UPGRADED FICHA TÉCNICA PRINT INTERFACE: Grabs true live dynamic values and calculated totals
+        // 📊 SELF-CALCULATING FICHA TÉCNICA PRINT INTERFACE: Aggregates Chef cost totals internally
         async function openPrintPreview() {
             const nameEl = document.getElementById('recipe-name');
             const catEl = document.getElementById('recipe-category');
@@ -655,6 +655,7 @@
             const name = nameEl ? nameEl.value : 'Receta Sin Nombre';
             const category = catEl ? catEl.value : 'Sin Categoría';
             const servings = servEl ? servEl.value : '1';
+            const servingsCount = parseFloat(servings) || 1;
             
             let resolvedPrintUOM = 'porciones';
             
@@ -680,29 +681,21 @@
             document.getElementById('print-recipe-category').innerText = category.toUpperCase();
             document.getElementById('print-recipe-yield').innerText = `Porciones / Rendimiento: ${servings} ${resolvedPrintUOM}`;
             
-            // 🌟 EXTRACT TOTAL COSTS: Pulls live calculations directly from your main form totals elements!
-            const mainTotalCostEl = document.getElementById('total-cost') || document.getElementById('costo-total');
-            const mainUnitCostEl = document.getElementById('unit-cost') || document.getElementById('costo-unitario');
-            
-            const liveTotalCostValue = mainTotalCostEl ? (mainTotalCostEl.innerText || mainTotalCostEl.textContent || '0.00') : '0.00';
-            const liveUnitCostValue = mainUnitCostEl ? (mainUnitCostEl.innerText || mainUnitCostEl.textContent || '0.00') : '0.00';
-            
-            document.getElementById('print-total-cost').innerText = liveTotalCostValue;
-            document.getElementById('print-unit-cost').innerText = liveUnitCostValue;
-            
             const printBody = document.getElementById('print-table-body');
             printBody.innerHTML = '';
             
             const ingCards = document.querySelectorAll('.ing-card');
             
+            // 🌟 INLINE ACCUMULATORS: Sums up financial totals natively during execution
+            let calculatedRecipeTotalCost = 0;
+            
             if (ingCards.length === 0) {
                 printBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8e8e93;">No hay ingredientes registrados en esta ficha.</td></tr>';
             } else {
                 ingCards.forEach(card => {
-                    // 🌟 FIXED INGREDIENT NAME SELECTOR: Grabs the active selected option text out of the dropdown container!
                     const selectEl = card.querySelector('select');
                     let ingName = 'Ingrediente';
-                    let liveProportionalCost = '0.00';
+                    let lineCostNumeric = 0;
                     
                     if (selectEl && selectEl.selectedIndex > -1) {
                         const activeOption = selectEl.options[selectEl.selectedIndex];
@@ -717,14 +710,17 @@
                     const scrapInput = card.querySelector('.ing-scrap');
                     const scrap = scrapInput ? scrapInput.value : '0';
                     
-                    // 🌟 CALCULATE LIVE PROPORTIONAL COST: Math calculation per row card item line
                     if (selectEl && selectEl.value && DB_INGREDIENTS) {
                         const matchedIngData = DB_INGREDIENTS.find(i => String(i.id) === String(selectEl.value));
                         if (matchedIngData) {
                             const baseCost = parseFloat(matchedIngData.avg_cost || matchedIngData.recipe_cost || matchedIngData.cost || 0);
                             const quantityParsed = parseFloat(qty || 0);
                             const scrapFactorMultiplier = 1 + ((parseFloat(scrap || 0)) / 100);
-                            liveProportionalCost = (baseCost * quantityParsed * scrapFactorMultiplier).toFixed(2);
+                            
+                            // Calculate absolute cost for this ingredient line item
+                            lineCostNumeric = baseCost * quantityParsed * scrapFactorMultiplier;
+                            // Add straight to the master recipe accumulator
+                            calculatedRecipeTotalCost += lineCostNumeric;
                         }
                     }
                   
@@ -734,15 +730,25 @@
                         <td>${parseFloat(qty || 0).toFixed(3)}</td>
                         <td>${uomSpan}</td>
                         <td>${scrap}%</td>
-                        <td style="text-align:right; font-weight:600;">$${liveProportionalCost}</td>
+                        <td style="text-align:right; font-weight:600;">$${lineCostNumeric.toFixed(2)}</td>
                     `;
                     printBody.innerHTML += tr.innerHTML;
                 });
             }
             
+                        // 🌟 ABSOLUTE OVERWRITE SYSTEM: Replaces the element content natively to wipe out the hardcoded 0.00
+            const totalCostContainer = document.getElementById('print-total-cost');
+            const unitCostContainer = document.getElementById('print-unit-cost');
+            
+            if (totalCostContainer) {
+                totalCostContainer.innerHTML = `<b>$${calculatedRecipeTotalCost.toFixed(2)}</b>`;
+            }
+            if (unitCostContainer) {
+                unitCostContainer.innerHTML = `<b>$${(calculatedRecipeTotalCost / servingsCount).toFixed(2)}</b>`;
+            }
+            
             document.getElementById('print-preview-modal').style.display = 'flex';
         }
-
 
 
     function closePrintPreview() {
