@@ -646,9 +646,8 @@
                 
     
     
-            // 📊 FICHA TÉCNICA PRINT INTERFACE: Fetches true live shadow row units straight from the ingredients table disk
+        // 📊 UPGRADED FICHA TÉCNICA PRINT INTERFACE: Grabs true live dynamic values and calculated totals
         async function openPrintPreview() {
-            // Safe validation: Fallback to empty text structures if layout boxes return null
             const nameEl = document.getElementById('recipe-name');
             const catEl = document.getElementById('recipe-category');
             const servEl = document.getElementById('servings');
@@ -657,12 +656,10 @@
             const category = catEl ? catEl.value : 'Sin Categoría';
             const servings = servEl ? servEl.value : '1';
             
-            // 🌟 NATIVE SERVER DIRECT CHECK: Async query to fetch your true custom unit directly from your ingredients table
             let resolvedPrintUOM = 'porciones';
             
             if (category === 'tier2' && typeof _selectedRecipeId !== 'undefined' && _selectedRecipeId) {
                 try {
-                    // Pull a direct, targeted network query match straight from your database row
                     const ingServerRes = await fetch(API_URL + "ingredients?id=eq." + _selectedRecipeId, { 
                         headers: { "apikey": API_KEY } 
                     });
@@ -671,7 +668,7 @@
                     if (Array.isArray(ingServerData) && ingServerData.length > 0) {
                         const targetShadowRow = ingServerData[0];
                         if (targetShadowRow && targetShadowRow.uom && targetShadowRow.uom.trim() !== '') {
-                            resolvedPrintUOM = targetShadowRow.uom.trim(); // 🌟 Captures your true live unit like "oz"!
+                            resolvedPrintUOM = targetShadowRow.uom.trim();
                         }
                     }
                 } catch (err) {
@@ -681,12 +678,17 @@
             
             document.getElementById('print-recipe-title').innerText = name;
             document.getElementById('print-recipe-category').innerText = category.toUpperCase();
-            
-            // Render your true custom unit text primitive right beside your yield batch numbers
             document.getElementById('print-recipe-yield').innerText = `Porciones / Rendimiento: ${servings} ${resolvedPrintUOM}`;
             
-            document.getElementById('print-total-cost').innerText = 'Calculado en Formulario';
-            document.getElementById('print-unit-cost').innerText = 'Calculado en Formulario';
+            // 🌟 EXTRACT TOTAL COSTS: Pulls live calculations directly from your main form totals elements!
+            const mainTotalCostEl = document.getElementById('total-cost') || document.getElementById('costo-total');
+            const mainUnitCostEl = document.getElementById('unit-cost') || document.getElementById('costo-unitario');
+            
+            const liveTotalCostValue = mainTotalCostEl ? (mainTotalCostEl.innerText || mainTotalCostEl.textContent || '0.00') : '0.00';
+            const liveUnitCostValue = mainUnitCostEl ? (mainUnitCostEl.innerText || mainUnitCostEl.textContent || '0.00') : '0.00';
+            
+            document.getElementById('print-total-cost').innerText = liveTotalCostValue;
+            document.getElementById('print-unit-cost').innerText = liveUnitCostValue;
             
             const printBody = document.getElementById('print-table-body');
             printBody.innerHTML = '';
@@ -697,12 +699,34 @@
                 printBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8e8e93;">No hay ingredientes registrados en esta ficha.</td></tr>';
             } else {
                 ingCards.forEach(card => {
-                    const ingName = card.querySelector('h4') ? card.querySelector('h4').innerText : 'Ingrediente';
-                    const qtyInput = card.querySelector('input[type="number"]');
+                    // 🌟 FIXED INGREDIENT NAME SELECTOR: Grabs the active selected option text out of the dropdown container!
+                    const selectEl = card.querySelector('select');
+                    let ingName = 'Ingrediente';
+                    let liveProportionalCost = '0.00';
+                    
+                    if (selectEl && selectEl.selectedIndex > -1) {
+                        const activeOption = selectEl.options[selectEl.selectedIndex];
+                        if (activeOption && activeOption.value !== "") {
+                            ingName = activeOption.text;
+                        }
+                    }
+                    
+                    const qtyInput = card.querySelector('.ing-qty') || card.querySelector('input[type="number"]');
                     const qty = qtyInput ? qtyInput.value : '0';
                     const uomSpan = card.querySelector('.qty-lbl') ? card.querySelector('.qty-lbl').innerText : 'g';
                     const scrapInput = card.querySelector('.ing-scrap');
                     const scrap = scrapInput ? scrapInput.value : '0';
+                    
+                    // 🌟 CALCULATE LIVE PROPORTIONAL COST: Math calculation per row card item line
+                    if (selectEl && selectEl.value && DB_INGREDIENTS) {
+                        const matchedIngData = DB_INGREDIENTS.find(i => String(i.id) === String(selectEl.value));
+                        if (matchedIngData) {
+                            const baseCost = parseFloat(matchedIngData.avg_cost || matchedIngData.recipe_cost || matchedIngData.cost || 0);
+                            const quantityParsed = parseFloat(qty || 0);
+                            const scrapFactorMultiplier = 1 + ((parseFloat(scrap || 0)) / 100);
+                            liveProportionalCost = (baseCost * quantityParsed * scrapFactorMultiplier).toFixed(2);
+                        }
+                    }
                   
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -710,7 +734,7 @@
                         <td>${parseFloat(qty || 0).toFixed(3)}</td>
                         <td>${uomSpan}</td>
                         <td>${scrap}%</td>
-                        <td style="text-align:right; font-weight:600;">Calculado</td>
+                        <td style="text-align:right; font-weight:600;">$${liveProportionalCost}</td>
                     `;
                     printBody.innerHTML += tr.innerHTML;
                 });
@@ -718,6 +742,7 @@
             
             document.getElementById('print-preview-modal').style.display = 'flex';
         }
+
 
 
     function closePrintPreview() {
