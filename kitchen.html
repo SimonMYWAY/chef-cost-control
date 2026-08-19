@@ -60,9 +60,11 @@
     let MASTER_RECIPES = [];
     let MASTER_INGREDIENTS = [];
 
-    async function initKitchenPortal() {
+        async function initKitchenPortal() {
         try {
             const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
+            
+            // 🌟 Combines the root URL with the individual database table names
             const [recipes, ingredients] = await Promise.all([
                 fetch(API_URL + "recipes?order=name_es.asc", { headers }).then(r => r.json()),
                 fetch(API_URL + "ingredients", { headers }).then(r => r.json())
@@ -77,6 +79,7 @@
             document.getElementById('kitchen-recipe-picker').innerHTML = "<option>❌ Error de conexión al servidor.</option>";
         }
     }
+
 
     function populateKitchenDropdown(list) {
         const picker = document.getElementById('kitchen-recipe-picker');
