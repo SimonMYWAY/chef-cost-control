@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taberna 99 - Visualizador de Cocina</title>
+    <style>
+        :root { --primary: #007afb; --bg: #f4f6f9; --surface: #ffffff; --text: #1c1c1e; --border: #e5e5ea; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .search-input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; box-sizing: border-box; margin-bottom: 10px; }
+        .picker-select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; background: #fff; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 0.85rem; color: #64748b; border-bottom: 2px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+        .media-box { width: 100%; max-height: 450px; border-radius: 8px; object-fit: cover; margin-top: 15px; border: 1px solid var(--border); }
+        .steps-box { background: #f8fafc; border-left: 4px solid var(--primary); padding: 15px; border-radius: 0 8px 8px 0; font-size: 1rem; line-height: 1.6; white-space: pre-line; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 🎛️ CONTROLS CARD -->
+    <div class="card">
+        <h2 style="margin:0 0 10px 0; color:#0f172a; font-size:1.3rem;">👨‍🍳 Recetario Digital de Cocina</h2>
+        <input type="text" id="kitchen-search" oninput="filterKitchenRecipes()" placeholder="🔍 Buscar receta por nombre..." class="search-input" />
+        <select id="kitchen-recipe-picker" onchange="renderSelectedKitchenRecipe()" class="picker-select">
+            <option value="">⏳ Cargando recetas desde el servidor...</option>
+        </select>
+    </div>
+
+    <!-- 🖥️ LIVE DISPLAY CANVAS -->
+    <div id="kitchen-display-canvas" class="card" style="display: none;">
+        <h1 id="view-title" style="margin: 0 0 5px 0; color: var(--text);"></h1>
+        <div id="view-yield" style="font-size: 0.9rem; color: #64748b; font-weight: 600; margin-bottom: 20px;"></div>
+        
+        <h3 style="margin: 20px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px;">📋 Ingredientes / Materia Prima</h3>
+        <table>
+            <thead><tr><th>Ingrediente</th><th style="text-align: right;">Cantidad</th><th>Unidad</th></tr></thead>
+            <tbody id="kitchen-table-body"></tbody>
+        </table>
+
+        <h3 style="margin: 25px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px;">🔥 Instrucciones de Preparación</h3>
+        <div id="view-instructions" class="steps-box"></div>
+
+        <div id="view-media-container"></div>
+    </div>
+    
+    <div id="kitchen-placeholder-msg" style="text-align:center; padding:40px; color:#64748b; font-style:italic;">
+        👈 Selecciona un plato del buscador superior para desplegar su ficha de preparación.
+    </div>
+</div>
+
+<script>
+    // SECURITY BLOCK: Uses your active keys natively to fetch configurations
+    const API_URL = " https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/kitchen.html";
+    const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x"; 
+
+    let MASTER_RECIPES = [];
+    let MASTER_INGREDIENTS = [];
+
+    async function initKitchenPortal() {
+        try {
+            const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
+            const [recipes, ingredients] = await Promise.all([
+                fetch(API_URL + "recipes?order=name_es.asc", { headers }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers }).then(r => r.json())
+            ]);
+
+            MASTER_RECIPES = Array.isArray(recipes) ? recipes : [];
+            MASTER_INGREDIENTS = Array.isArray(ingredients) ? ingredients : [];
+
+            populateKitchenDropdown(MASTER_RECIPES);
+        } catch (err) {
+            console.error(err);
+            document.getElementById('kitchen-recipe-picker').innerHTML = "<option>❌ Error de conexión al servidor.</option>";
+        }
+    }
+
+    function populateKitchenDropdown(list) {
+        const picker = document.getElementById('kitchen-recipe-picker');
+        if (list.length === 0) {
+            picker.innerHTML = '<option value="">No hay recetas disponibles</option>';
+            return;
+        }
+        let html = '<option value="">-- Seleccionar Receta / Plato --</option>';
+        html += list.map(r => `<option value="${r.id}">${r.name_es || r.name_en || 'Receta Sin Nombre'}</option>`).join('');
+        picker.innerHTML = html;
+    }
+
+    function filterKitchenRecipes() {
+        const query = document.getElementById('kitchen-search').value.toLowerCase().trim();
+        const filtered = MASTER_RECIPES.filter(r => {
+            const name = String(r.name_es || r.name_en || "").toLowerCase();
+            return name.includes(query);
+        });
+        populateKitchenDropdown(filtered);
+    }
+
+    async function renderSelectedKitchenRecipe() {
+        const picker = document.getElementById('kitchen-recipe-picker');
+        const canvas = document.getElementById('kitchen-display-canvas');
+        const msg = document.getElementById('kitchen-placeholder-msg');
+        
+        if (!picker.value) { canvas.style.display = 'none'; msg.style.display = 'block'; return; }
+        
+        const rec = MASTER_RECIPES.find(r => String(r.id) === String(picker.value));
+        if (!rec) return;
+
+        msg.style.display = 'none';
+        canvas.style.display = 'block';
+
+        document.getElementById('view-title').innerText = rec.name_es || rec.name_en || 'Receta';
+        document.getElementById('view-yield').innerText = `Rendimiento Base: ${rec.servings || 1} porciones`;
+        
+        // Render Instructions (Prefers Spanish, fallbacks to English if empty)
+        document.getElementById('view-instructions').innerText = rec.instructions_es || rec.instructions_en || 'No hay instrucciones cargadas para esta receta.';
+
+        // Parse and Render Ingredients list without any price attributes
+        const tableBody = document.getElementById('kitchen-table-body');
+        tableBody.innerHTML = '';
+        
+        // Safely extract ingredient rows mapping metrics
+        let ingredientsArray = [];
+        try {
+            ingredientsArray = typeof rec.ingredients === 'string' ? JSON.parse(rec.ingredients) : (rec.ingredients || []);
+        } catch(e) { ingredientsArray = []; }
+
+        if (!Array.isArray(ingredientsArray) || ingredientsArray.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3" style="color:#8e8e93; text-align:center;">No hay ingredientes registrados.</td></tr>';
+        } else {
+            tableBody.innerHTML = ingredientsArray.map(item => {
+                const matchedIng = MASTER_INGREDIENTS.find(i => String(i.id) === String(item.id));
+                const ingName = matchedIng ? (matchedIng.name_es || matchedIng.name_en) : 'Ingrediente Desconocido';
+                const ingUOM = matchedIng ? (matchedIng.uom || 'gr') : 'gr';
+                return `<tr>
+                    <td style="font-weight:600;">${ingName}</td>
+                    <td style="text-align:right; font-family:monospace; font-weight:700;">${parseFloat(item.qty || 0).toFixed(1)}</td>
+                    <td style="color:#64748b; font-family:monospace;">${ingUOM}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Render Media Files Container (Detects if video, image link or empty)
+        const mediaContainer = document.getElementById('view-media-container');
+        mediaContainer.innerHTML = '';
+        
+        if (rec.media_url && rec.media_url.trim() !== '') {
+            const url = rec.media_url.trim();
+            if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com')) {
+                // If it is a video clip link container box asset row
+                let embedUrl = url;
+                if (url.includes('watch?v=')) embedUrl = url.replace('watch?v=', 'embed/');
+                mediaContainer.innerHTML = `<iframe class="media-box" src="${embedUrl}" style="height:350px; border:none;" allowfullscreen></iframe>`;
+            } else {
+                // Treats as standard static plating photo asset image frame layout
+                mediaContainer.innerHTML = `<img src="${url}" class="media-box" alt="Foto de Emplatado" onerror="this.style.display='none';" />`;
+            }
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", initKitchenPortal);
+</script>
+</body>
+</html>
