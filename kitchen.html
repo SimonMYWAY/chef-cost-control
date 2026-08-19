@@ -64,11 +64,12 @@
         try {
             const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
             
-            // 🌟 Combines the root URL with the individual database table names
+                        // 🌟 REALIGNED DATA INGESTION: Sorting by your true primary text column 'name'
             const [recipes, ingredients] = await Promise.all([
-                fetch(API_URL + "recipes?order=name_es.asc", { headers }).then(r => r.json()),
+                fetch(API_URL + "recipes?order=name.asc", { headers }).then(r => r.json()),
                 fetch(API_URL + "ingredients", { headers }).then(r => r.json())
             ]);
+
 
             MASTER_RECIPES = Array.isArray(recipes) ? recipes : [];
             MASTER_INGREDIENTS = Array.isArray(ingredients) ? ingredients : [];
@@ -88,7 +89,7 @@
             return;
         }
         let html = '<option value="">-- Seleccionar Receta / Plato --</option>';
-        html += list.map(r => `<option value="${r.id}">${r.name_es || r.name_en || 'Receta Sin Nombre'}</option>`).join('');
+            html += list.map(r => `<option value="${r.id}">${r.name || 'Receta Sin Nombre'}</option>`).join('');
         picker.innerHTML = html;
     }
 
