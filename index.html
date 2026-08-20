@@ -50,6 +50,29 @@
     </style>
 </head>
 <body>
+    <!-- 🔐 GATEWAY SECURITY LOGIN OVERLAY (BLOCKS ENTIRE SCREEN ON INTERFACE BOOT) -->
+<div id="security-gateway-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 400px; padding: 30px; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
+        <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Recetas.</p>
+        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event)">
+            <div style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
+                <input type="text" id="gateway-input-user" required placeholder="ej: simon.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            <div style="text-align: left; margin-bottom: 22px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña de Personal</label>
+                <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            <button type="submit" style="width: 100%; background: #007afb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 122, 251, 0.25);">
+                🔓 Iniciar Sesión en Fichas
+            </button>
+        </form>
+        <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
+    </div>
+</div>
+
     <div class="header">
         <h1 id="app-title" class="title">Recipe Builder v3</h1>
         <button id="lang-toggle" class="lang-btn" onclick="toggleLanguage()">ESP</button>
@@ -1141,8 +1164,60 @@
 
 
 
-    updateUIStrings();   // Instantly translates your layouts and populates your 11 categories
-    initRevoDownload();  // Connects to your cloud tables to populate the 104 recipes list
+     // 🧠 UNIFIED LOCAL ENGINE: INDEX.HTML AUTH SHIELD
+    async function executeNewLocalGatewayAuthenticationChallenge(event) {
+        event.preventDefault();
+        const feedbackEl = document.getElementById("gateway-login-error-feedback");
+        feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+        
+        const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+        const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+        
+        try {
+            const headers = { "apikey": API_KEY };
+            const queryUrl = `${API_URL}profiles`; // Uses your standard native API_URL variable constant
+            
+            const res = await fetch(queryUrl, { headers }).then(r => r.json());
+            if (!Array.isArray(res) || res.length === 0) {
+                feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
+                return;
+            }
+            
+            let matchedProfile = null;
+            for (let i = 0; i < res.length; i++) {
+                const profileRow = res[i];
+                if (String(profileRow.username || "").toLowerCase().trim() === userInputVal || String(profileRow.email || "").toLowerCase().trim() === userInputVal) {
+                    matchedProfile = profileRow;
+                    break;
+                }
+            }
+            if (!matchedProfile) {
+                feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
+                return;
+            }
+            if (String(matchedProfile.password_hash) !== passInputVal) {
+                feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
+                return;
+            }
+            
+            // 🔒 SECURITY ROLE FILTER: Only 'chef' or 'owner' profiles can access index.html
+            const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+            if (userRole === "chef" || userRole === "owner") {
+                feedbackEl.innerText = "";
+                document.getElementById("security-gateway-lock-screen").style.display = "none";
+                
+                // 🌟 WAKE UP APP NATIVE CHANNELS ON SUCCESSFUL LOGIN LOCK DROPS
+                updateUIStrings();   // Instantly translates your layouts and populates your 11 categories
+                initRevoDownload();  // Connects to your cloud tables to populate the 104 recipes list
+            } else {
+                feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene rango para el panel maestro.";
+            }
+        } catch (err) {
+            console.error(err);
+            feedbackEl.innerText = "❌ Error de conexión con el servidor.";
+        }
+    }
+
     // 🧠 REAL-TIME REVO DROPDOWN SEARCH FILTER MODULE
     // Dynamically screens pending REVO recipe choices case-insensitively on user input text
     function executeLiveRevoDropdownSearch() {
@@ -1158,24 +1233,21 @@
             const optionRow = optionRowsList[i];
             const optionTextLower = optionRow.text.toLowerCase();
             
-            // Always preserve empty placeholder text slots visible at index zero
             if (optionRow.value === "" || optionRow.text.includes("Descargando")) {
                 optionRow.style.display = "";
                 continue;
             }
             
             if (optionTextLower.includes(queryTextString)) {
-                optionRow.style.display = ""; // Keeps item visible if keyword matches
+                optionRow.style.display = "";
                 if (firstMatchIndexValue === -1) firstMatchIndexValue = i;
             } else {
-                optionRow.style.display = "none"; // Hides unmatched menu lines instantly from view
+                optionRow.style.display = "none";
             }
         }
         
-        // Auto-focus selection onto the earliest matching alphabetical row item as you type
         if (firstMatchIndexValue !== -1 && queryTextString !== "") {
             revoDropdownContainer.selectedIndex = firstMatchIndexValue;
-            // Fires your app's native handleRevoSelection() loop automatically on shift!
             if (typeof handleRevoSelection === "function") {
                 handleRevoSelection();
             }
