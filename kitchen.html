@@ -66,29 +66,20 @@
     const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x"; 
 
     let MASTER_RECIPES = [];
-    let MASTER_INGREDIENTS = [];
 
-        async function initKitchenPortal() {
+    async function initKitchenPortal() {
         try {
             const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
-            
-                        // 🌟 REALIGNED DATA INGESTION: Sorting by your true primary text column 'name'
-            const [recipes, ingredients] = await Promise.all([
-                fetch(API_URL + "recipes?order=name.asc", { headers }).then(r => r.json()),
-                fetch(API_URL + "ingredients", { headers }).then(r => r.json())
-            ]);
-
+            // Fetch recipes cleanly sorted by name
+            const recipes = await fetch(BASE_API_URL + "recipes?order=name.asc", { headers }).then(r => r.json());
 
             MASTER_RECIPES = Array.isArray(recipes) ? recipes : [];
-            MASTER_INGREDIENTS = Array.isArray(ingredients) ? ingredients : [];
-
             populateKitchenDropdown(MASTER_RECIPES);
         } catch (err) {
             console.error(err);
             document.getElementById('kitchen-recipe-picker').innerHTML = "<option>❌ Error de conexión al servidor.</option>";
         }
     }
-
 
     function populateKitchenDropdown(list) {
         const picker = document.getElementById('kitchen-recipe-picker');
@@ -97,20 +88,20 @@
             return;
         }
         let html = '<option value="">-- Seleccionar Receta / Plato --</option>';
-            html += list.map(r => `<option value="${r.id}">${r.name || 'Receta Sin Nombre'}</option>`).join('');
+        html += list.map(r => `<option value="${r.id}">${r.name || 'Receta Sin Nombre'}</option>`).join('');
         picker.innerHTML = html;
     }
 
     function filterKitchenRecipes() {
         const query = document.getElementById('kitchen-search').value.toLowerCase().trim();
         const filtered = MASTER_RECIPES.filter(r => {
-            const name = String(r.name_es || r.name_en || "").toLowerCase();
+            const name = String(r.name || "").toLowerCase();
             return name.includes(query);
         });
         populateKitchenDropdown(filtered);
     }
 
-        async function renderSelectedKitchenRecipe() {
+    async function renderSelectedKitchenRecipe() {
         const picker = document.getElementById('kitchen-recipe-picker');
         const canvas = document.getElementById('kitchen-display-canvas');
         const msg = document.getElementById('kitchen-placeholder-msg');
@@ -123,50 +114,63 @@
         msg.style.display = 'none';
         canvas.style.display = 'block';
 
+        var activeUnitLabel = (rec.uom && rec.uom !== "" && rec.uom !== "undefined") ? rec.uom : "porciones";
+
         document.getElementById('view-title').innerText = rec.name || 'Receta';
-        document.getElementById('view-yield').innerText = `Rendimiento Base: ${rec.servings || 1} porciones`;
+        document.getElementById('view-yield').innerText = `Rendimiento Base: ${rec.servings || 1} ${activeUnitLabel}`;
         
-        // Render Instructions (Prefers Spanish, fallbacks to English if empty)
+        // Render Instructions (Prefers Spanish text tracks)
         document.getElementById('view-instructions').innerText = rec.instructions_es || rec.instructions_en || 'No hay instrucciones cargadas para esta receta.';
 
-        // Parse and Render Ingredients list without any price attributes
         const tableBody = document.getElementById('kitchen-table-body');
-        tableBody.innerHTML = '';
-        
-        // 🌟 ADAPTIVE EXTRACTION ROUTINE: Robust fallback sequence for your json data string columns
-        let rawSourceData = rec.recipe_ingredients || rec.ingredients || [];
-        let ingredientsArray = [];
+        tableBody.innerHTML = '<tr><td colspan="4" style="color:#007afb; text-align:center; padding:15px;">⏳ Buscando ingredientes...</td></tr>';
         
         try {
-            ingredientsArray = typeof rawSourceData === 'string' ? JSON.parse(rawSourceData) : (rawSourceData || []);
-        } catch(e) { 
-            console.error("JSON parse failure on ingredients list:", e);
-            ingredientsArray = []; 
-        }
+            // Mirroring the exact parallel tables query from your administrative popup card
+            const [lines, masterIngredients] = await Promise.all([
+                fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + rec.id, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ]);
 
-        if (!Array.isArray(ingredientsArray) || ingredientsArray.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="4" style="color:#8e8e93; text-align:center; padding:15px;">No hay ingredientes registrados en esta receta.</td></tr>';
-        } else {
-            // Update table structure dynamically to inject the new Merma column values
-            tableBody.innerHTML = ingredientsArray.map(item => {
-                // Adaptive lookup strategy targeting item.id, item.ingredient_id, or item.id_ingredient
-                const targetId = item.id || item.ingredient_id || item.ingredient;
-                const matchedIng = MASTER_INGREDIENTS.find(i => String(i.id) === String(targetId));
+            tableBody.innerHTML = '';
+
+            if (!lines || lines.length === 0 || lines.message) {
+                tableBody.innerHTML = '<tr><td colspan="4" style="color:#8e8e93; text-align:center; padding:15px;">Sin ingredientes asociados.</td></tr>';
+                return;
+            }
+
+            // Build look-up map matching your administrative panel logic
+            var localIngMap = {};
+            if (Array.isArray(masterIngredients)) {
+                masterIngredients.forEach(function(ing) {
+                    localIngMap[String(ing.id).toLowerCase().trim()] = ing;
+                });
+            }
+
+            // Loop lines and append data rows leaving out line costs entirely
+            lines.forEach(function(line) {
+                var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+                var dbItem = localIngMap[cleanIngId];
                 
-                const ingName = matchedIng ? (matchedIng.name_es || matchedIng.name_en || matchedIng.name) : 'Ingrediente Desconocido';
-                const ingUOM = matchedIng ? (matchedIng.uom || 'gr') : 'gr';
+                var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
+                var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g";
                 
-                const displayQty = parseFloat(item.qty || item.quantity || 0).toFixed(1);
-                const displayScrap = parseFloat(item.scrap || item.merma || item.waste || 0).toFixed(0);
-                
-                return `<tr>
-                    <td style="font-weight:600; padding:12px; border-bottom:1px solid var(--border);">${ingName}</td>
-                    <td style="text-align:right; font-family:monospace; font-weight:700; padding:12px; border-bottom:1px solid var(--border);">${displayQty}</td>
-                    <td style="color:#64748b; font-family:monospace; padding:12px; border-bottom:1px solid var(--border);">${ingUOM}</td>
-                    <!-- 🌟 NEW MERMA / SCRAP ACCURATE ROW CELL -->
-                    <td style="text-align:center; color:#b45309; font-weight:600; font-family:monospace; padding:12px; border-bottom:1px solid var(--border); background:#fffbeb;">${displayScrap}%</td>
-                </tr>`;
-            }).join('');
+                var lineQty = parseFloat(line.quantity || 0);
+                var scrapPct = parseFloat(line.scrap_percentage || 0);
+
+                var tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight:600; padding:12px;">${ingNameClean}</td>
+                    <td style="text-align:right; font-family:monospace; font-weight:700; padding:12px;">${lineQty.toFixed(2)}</td>
+                    <td style="color:#64748b; font-family:monospace; padding:12px;">${resolvedIngUOM}</td>
+                    <td style="text-align:center; color:#b45309; font-weight:600; font-family:monospace; padding:12px; background:#fffbeb;">${scrapPct}%</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+        } catch (err) {
+            console.error("Kitchen rendering pipeline fault:", err);
+            tableBody.innerHTML = '<tr><td colspan="4" style="color:#ef4444; text-align:center; padding:15px;">❌ Error al conectar con las tablas de ingredientes.</td></tr>';
         }
 
         // Render Media Files Container (Detects if video, image link or empty)
@@ -178,13 +182,12 @@
             if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com')) {
                 let embedUrl = url;
                 if (url.includes('watch?v=')) embedUrl = url.replace('watch?v=', 'embed/');
-                mediaContainer.innerHTML = `<iframe class="media-box" src="${embedUrl}" style="height:350px; border:none; width:100%;" allowfullscreen></iframe>`;
+                mediaContainer.innerHTML = `<iframe class="media-box" src="${embedUrl}" style="height:400px; border:none; width:100%; margin-top:20px;" allowfullscreen></iframe>`;
             } else {
-                mediaContainer.innerHTML = `<img src="${url}" class="media-box" alt="Foto de Emplatado" onerror="this.style.display='none';" style="width:100%;" />`;
+                mediaContainer.innerHTML = `<img src="${url}" class="media-box" alt="Foto de Emplatado" onerror="this.style.display='none';" style="width:100%; margin-top:20px;" />`;
             }
         }
     }
-
 
     document.addEventListener("DOMContentLoaded", initKitchenPortal);
 </script>
