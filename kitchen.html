@@ -220,7 +220,7 @@
     }
 
 // 🧠 GATEWAY INTERACTIVE AUTHENTICATION ENGINE
-// Queries your profiles table to validate typed username/email and credentials
+// Fetches standard profile vectors and runs an exact local matching lookup loop.
 async function executeGatewayAuthenticationChallenge(event) {
     event.preventDefault();
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
@@ -231,20 +231,35 @@ async function executeGatewayAuthenticationChallenge(event) {
     
     try {
         const headers = { "apikey": API_KEY };
-        
-        // 🌟 DIRECT TARGETING MATCH: Clean URL filter without nested literal quotes
-        const queryUrl = `${API_URL}profiles?or=(username.ieq.${userInputVal},email.ieq.${userInputVal})`;
+        // Fetch all active profiles in a standard, clean list to run local evaluations
+        const queryUrl = `${API_URL}profiles`;
         
         const res = await fetch(queryUrl, { headers }).then(r => r.json());
         
         if (!Array.isArray(res) || res.length === 0) {
+            feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
+            return;
+        }
+        
+        // 🌟 LOCAL EVALUATION SHIELD: Scans your user rows securely using native javascript matching
+        let matchedProfile = null;
+        for (let i = 0; i < res.length; i++) {
+            const profileRow = res[i];
+            const dbUsername = String(profileRow.username || "").toLowerCase().trim();
+            const dbEmail = String(profileRow.email || "").toLowerCase().trim();
+            
+            if (dbUsername === userInputVal || dbEmail === userInputVal) {
+                matchedProfile = profileRow;
+                break;
+            }
+        }
+        
+        if (!matchedProfile) {
             feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
             return;
         }
         
-        const matchedProfile = res[0]; // Target the exact user record row natively!
-        
-        if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
+        if (String(matchedProfile.password_hash) !== passInputVal) {
             feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
             return;
         }
@@ -264,11 +279,10 @@ async function executeGatewayAuthenticationChallenge(event) {
         }
         
     } catch (err) {
-        console.error("Gateway authentication system failure:", err);
+        console.error("Gateway authentication local loop failure:", err);
         feedbackEl.innerText = "❌ Error de conexión con el servidor de seguridad.";
     }
 }
-
 
 // 🌟 SECURITY ACTION GATING: Overrides automatic load to force user login roadblock first
 document.addEventListener("DOMContentLoaded", function() {
