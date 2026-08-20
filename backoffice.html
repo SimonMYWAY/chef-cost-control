@@ -50,6 +50,34 @@
     </style>
 </head>
 <body>
+    <!-- 🔐 GATEWAY SECURITY LOGIN OVERLAY (BLOCKS ENTIRE SCREEN ON INTERFACE BOOT) -->
+<div id="security-gateway-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 400px; padding: 30px; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); text-align: center;">
+        
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">🔒</div>
+        <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Administrativo</h2>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar el Panel Central Back-Office.</p>
+        
+        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event)">
+            <div style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Usuario / Email de Administrador</label>
+                <input type="text" id="gateway-input-user" required placeholder="ej: admin.simon" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            
+            <div style="text-align: left; margin-bottom: 22px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña Maestra</label>
+                <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            
+            <button type="submit" style="width: 100%; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.25);">
+                🔓 Iniciar Sesión en Control deck
+            </button>
+        </form>
+        
+        <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
+    </div>
+</div>
+
     <div class="sidebar">
         <div class="sidebar-brand">SimonMYWAY Admin</div>
         <div class="nav-group">
@@ -2578,10 +2606,70 @@ async function deleteStaffProfileRow(userId) {
     try { await fetch(API_URL + "profiles?id=eq." + userId, { method: "DELETE", headers: { "apikey": API_KEY } }); fetchActiveStaffProfiles(); } catch (err) { console.error(err); }
 }
 
-// Attach sync loop safely
-document.addEventListener("DOMContentLoaded", function() { setTimeout(fetchActiveStaffProfiles, 1000); });
+// 🧠 UNIFIED LOCAL ENGINE: BACKOFFICE.HTML MASTER AUTH SHIELD
+async function executeNewLocalGatewayAuthenticationChallenge(event) {
+    event.preventDefault();
+    const feedbackEl = document.getElementById("gateway-login-error-feedback");
+    feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+    
+    const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+    const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+    
+    try {
+        const headers = { "apikey": API_KEY };
+        const queryUrl = `${API_URL}profiles`;
+        
+        const res = await fetch(queryUrl, { headers }).then(r => r.json());
+        if (!Array.isArray(res) || res.length === 0) {
+            feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
+            return;
+        }
+        
+        let matchedProfile = null;
+        for (let i = 0; i < res.length; i++) {
+            const profileRow = res[i];
+            if (String(profileRow.username || "").toLowerCase().trim() === userInputVal || String(profileRow.email || "").toLowerCase().trim() === userInputVal) {
+                matchedProfile = profileRow;
+                break;
+            }
+        }
+        if (!matchedProfile) {
+            feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
+            return;
+        }
+        if (String(matchedProfile.password_hash) !== passInputVal) {
+            feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
+            return;
+        }
+        
+        // 🔒 SECURITY ROLE FILTER: Only 'owner' profiles can unlock backoffice.html
+        const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+        if (userRole === "owner") {
+            feedbackEl.innerText = "";
+            document.getElementById("security-gateway-lock-screen").style.display = "none";
+            
+            // 🌟 WAKE UP BACKOFFICE SYSTEMS ON SUCCESSFUL LOGIN LOCK DROPS
+            // Fires your original active boot initialization routine
+            if (typeof initDashboardDataLoad === "function") {
+                initDashboardDataLoad();
+            }
+            // Safely sync your active profiles directory layout
+            setTimeout(fetchActiveStaffProfiles, 500);
+        } else {
+            feedbackEl.innerText = "🛑 Acceso Denegado: Se requieren credenciales de Administrador / Owner.";
+        }
+    } catch (err) {
+        console.error(err);
+        feedbackEl.innerText = "❌ Error de conexión con el servidor.";
+    }
+}
 
-    </script>
+// 🌟 SECURITY ACTION GATING: Freezes automatic load to force administrative blockade first
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("🔒 Back-Office Security Gateway Active. Dashboard data engine frozen.");
+});
+
+</script>
         
 </body>
 </html>
