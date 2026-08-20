@@ -231,18 +231,18 @@ async function executeGatewayAuthenticationChallenge(event) {
     
     try {
         const headers = { "apikey": API_KEY };
-        // Fetch profiles matching either username or email exactly
-        const queryUrl = `${API_URL}profiles?or=(username.eq.${userInputVal},email.eq.${userInputVal})`;
+        
+        // 🌟 DIRECT TARGETING MATCH: Clean URL filter without nested literal quotes
+        const queryUrl = `${API_URL}profiles?or=(username.ieq.${userInputVal},email.ieq.${userInputVal})`;
         
         const res = await fetch(queryUrl, { headers }).then(r => r.json());
         
-        // 🌟 FIXED OBJECT INDEX: Ensures the code accurately verifies the first returned profile array item
         if (!Array.isArray(res) || res.length === 0) {
             feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
             return;
         }
         
-        const matchedProfile = res[0]; // 🚀 Target the exact user record row natively!
+        const matchedProfile = res[0]; // Target the exact user record row natively!
         
         if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
             feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
@@ -268,6 +268,7 @@ async function executeGatewayAuthenticationChallenge(event) {
         feedbackEl.innerText = "❌ Error de conexión con el servidor de seguridad.";
     }
 }
+
 
 // 🌟 SECURITY ACTION GATING: Overrides automatic load to force user login roadblock first
 document.addEventListener("DOMContentLoaded", function() {
