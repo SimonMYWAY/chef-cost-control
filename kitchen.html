@@ -42,7 +42,7 @@
                     <th style="padding:12px; border-bottom:2px solid var(--border);">Ingrediente</th>
                     <th style="text-align: right; padding:12px; border-bottom:2px solid var(--border);">Cantidad</th>
                     <th style="padding:12px; border-bottom:2px solid var(--border);">Unidad</th>
-                    <th style="text-align: center; padding:12px; border-bottom:2px solid var(--border); background:#fef3c7; color:#b45309; font-weight:700;">Merma</th>
+                    <th style="text-align: center; padding:12px; border-bottom:2px solid var(--border); font-weight:600; color:#64748b;">Merma</th>
                 </tr>
             </thead>
             <tbody id="kitchen-table-body"></tbody>
@@ -163,7 +163,7 @@
                     <td style="font-weight:600; padding:12px;">${ingNameClean}</td>
                     <td style="text-align:right; font-family:monospace; font-weight:700; padding:12px;">${lineQty.toFixed(2)}</td>
                     <td style="color:#64748b; font-family:monospace; padding:12px;">${resolvedIngUOM}</td>
-                    <td style="text-align:center; color:#b45309; font-weight:600; font-family:monospace; padding:12px; background:#fffbeb;">${scrapPct}%</td>
+                    <td style="text-align:center; color:var(--text); font-weight:600; font-family:monospace; padding:12px; border-bottom:1px solid var(--border);">${scrapPct}%</td>
                 `;
                 tableBody.appendChild(tr);
             });
