@@ -427,7 +427,7 @@
     
     <script>
         // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
-        const BASE_API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
+        const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
         const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
                 // 🛡️ RESTRUCTURING BLACKLIST: Permanently blocks cached server records from resurfacing post-deletion
         var _deletedRecipeIds = [];
@@ -448,7 +448,7 @@
 
         // Phase 1: Prefetch database labels to match lines cleanly
         function prefetchIngredients() {
-            return fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+            return fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) { if(data && !data.message) { data.forEach(function(item) { _ingredientsCache[item.id] = item.name_es || item.name_en || item.name; }); } })
                 .catch(function(err) { console.error(err); });
@@ -462,8 +462,8 @@
             
             // 🌟 FETCH IN PARALLEL: Pull both pending recipe reviews AND live ingredients to align cosmetic text labels
             Promise.all([
-                fetch(BASE_API_URL + "recipes?status=eq.waiting", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                fetch(API_URL + "recipes?status=eq.waiting", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
                 var pendingRecipes = results[0];
@@ -522,7 +522,7 @@
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
             
-            fetch(BASE_API_URL + "recipes", { 
+            fetch(API_URL + "recipes", { 
                 headers: { 
                     "apikey": API_KEY,
                     "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -622,7 +622,7 @@
             var targetActive = !currentStatus;
             var payload = { locked_multiplier: targetActive ? 1.0 : 0.0 };
             
-            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+            fetch(API_URL + "recipes?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify(payload)
@@ -649,7 +649,7 @@
                 is_approved: false
             };
             
-            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+            fetch(API_URL + "recipes?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify(payload)
@@ -674,7 +674,7 @@
                 is_approved: false
             };
             
-            fetch(BASE_API_URL + "recipes?id=eq." + id, {
+            fetch(API_URL + "recipes?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify(payload)
@@ -703,7 +703,7 @@
             if (upperRow) upperRow.remove();
             if (lowerRow) lowerRow.remove();
 
-            fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+            fetch(API_URL + "recipes?id=eq." + id, { 
                 method: "PATCH", 
                 headers: { 
                     "apikey": API_KEY, 
@@ -741,8 +741,8 @@
             
             // Fetch components and live master ingredients in parallel to run financial margin checks
             Promise.all([
-                fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
                 var lines = results[0];
@@ -840,8 +840,8 @@
             
             // Parallel fetch to obtain active ingredients and formula mapping links to build delete shields
             Promise.all([
-                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
                 var data = results[0];
@@ -929,7 +929,7 @@
                 std_cost_per_unit: parsedCost 
             };
             
-            fetch(BASE_API_URL + "ingredients?id=eq." + id, {
+            fetch(API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
                 headers: { 
                     "apikey": API_KEY, 
@@ -961,7 +961,7 @@
             // "pending" represents Active, "approved" represents Inactive/Archived
             var targetStatus = currentRawStatus === "pending" ? "approved" : "pending";
             
-            fetch(BASE_API_URL + "ingredients?id=eq." + id, {
+            fetch(API_URL + "ingredients?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ status: targetStatus })
@@ -995,7 +995,7 @@
             
             if (!confirm("🗑️ ¿Está seguro de eliminar permanentemente '" + ingredientName + "' del catálogo? Esta acción no se puede deshacer.")) return;
             
-            fetch(BASE_API_URL + "ingredients?id=eq." + cleanIdToken, {
+            fetch(API_URL + "ingredients?id=eq." + cleanIdToken, {
                 method: "DELETE",
                 headers: { "apikey": API_KEY, "Prefer": "return=minimal" }
             })
@@ -1027,7 +1027,7 @@
                 var targetRootId = String(ingredientId).toLowerCase().trim();
 
                 // 1. Update the base material cost inside the ingredients table first
-                var baseUpdateRes = await fetch(BASE_API_URL + "ingredients?id=eq." + ingredientId, {
+                var baseUpdateRes = await fetch(API_URL + "ingredients?id=eq." + ingredientId, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify({ std_cost_per_unit: newCost })
@@ -1036,9 +1036,9 @@
 
                 // 2. Fetch full configuration maps from all tables simultaneously
                 var results = await Promise.all([
-                    fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                    fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                    fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                    fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                    fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                    fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
                 ]);
 
                 var mappings = results[0];
@@ -1108,7 +1108,7 @@
                     }
 
                     // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
-                    var patchRecipeRes = await fetch(BASE_API_URL + "recipes?id=eq." + targetRecipeId, {
+                    var patchRecipeRes = await fetch(API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ cost_per_serving: newCostPerServing })
@@ -1126,7 +1126,7 @@
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
                         
                         // 💾 INGREDIENT MATRIX SECURE LOCK: Wait until the shadow row is fully updated on the server disk
-                        var patchIngRes = await fetch(BASE_API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
+                        var patchIngRes = await fetch(API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
                             method: "PATCH",
                             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                             body: JSON.stringify({ std_cost_per_unit: newCostPerServing })
@@ -1203,9 +1203,9 @@
                     
                     // Fetch full data parameters from Supabase in parallel
                     var results = await Promise.all([
-                        fetch(BASE_API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                        fetch(BASE_API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                        fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                        fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                        fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
                     ]);
                     
                     var mappings = results[0];
@@ -1364,7 +1364,7 @@
             // Continue directly into Part 2 right below
             try {
                 // 2. 🌐 NETWORK INVOICE INTEGRATOR LAYER: Fetch live delivery records from invoice_items table filtered by selected dates
-                var invoiceUrl = BASE_API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
+                var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
                 var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
                 var realPurchasedLines = await invoiceRes.json();
                 
@@ -1539,8 +1539,8 @@
             if (!rowsTarget) return;
             
             Promise.all([
-                fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                fetch(API_URL + "suppliers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
                 var suppliers = results[0];
@@ -1603,7 +1603,7 @@
             var cleanPhone = phoneEl.value.trim();
             if (cleanName === "") { alert("⚠️ El nombre del proveedor no puede estar vacío."); return; }
             
-            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+            fetch(API_URL + "suppliers?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ name: cleanName, phone: cleanPhone })
@@ -1622,7 +1622,7 @@
         function toggleProviderCloudStatus(id, currentRawStatus) {
             var targetStatus = currentRawStatus === "activo" ? "inactivo" : "activo";
             
-            fetch(BASE_API_URL + "suppliers?id=eq." + id, {
+            fetch(API_URL + "suppliers?id=eq." + id, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ status: targetStatus })
@@ -1672,7 +1672,7 @@
             if (!confirm("🗑️ ¿Está completamente seguro de eliminar permanentemente al proveedor '" + providerName + "' del sistema? Esta acción no se puede deshacer.")) return;
             
             // 🌟 CRITICAL BINDING FIXED: No string conversions! Passes the clean integer variable straight into your query URL parameter paths
-            fetch(BASE_API_URL + "suppliers?id=eq." + numericId, {
+            fetch(API_URL + "suppliers?id=eq." + numericId, {
                 method: "DELETE",
                 headers: { 
                     "apikey": API_KEY, 
@@ -1701,7 +1701,7 @@
             var selectMenu = document.getElementById("map-ing-id");
             if (!selectMenu) return;
 
-            fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+            fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     if (!data || data.message) return;
@@ -1723,7 +1723,7 @@
             var provMenu = document.getElementById("map-prov-id");
             if (!provMenu) return;
 
-            fetch(BASE_API_URL + "suppliers", { headers: { "apikey": API_KEY } })
+            fetch(API_URL + "suppliers", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     if (!data || data.message) return;
@@ -1744,7 +1744,7 @@
             var rowsTarget = document.getElementById("mappings-table-rows");
             if (!rowsTarget) return;
 
-            fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } })
+            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     rowsTarget.innerHTML = "";
@@ -1792,7 +1792,7 @@
                 units_per_purchase: factorInput
             };
 
-            fetch(BASE_API_URL + "supplier_formats", {
+            fetch(API_URL + "supplier_formats", {
                 method: "POST",
                 headers: { 
                     "apikey": API_KEY, 
@@ -1823,7 +1823,7 @@
             var nameEs = document.getElementById("ing-name-es").value.trim();
             var uomVal = document.getElementById("ing-uom").value;
             var costVal = parseFloat(document.getElementById("ing-cost").value) || 0;
-            fetch(BASE_API_URL + "ingredients", {
+            fetch(API_URL + "ingredients", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ name_en: nameEn, name_es: nameEs, uom: uomVal, std_cost_per_unit: costVal })
@@ -1835,7 +1835,7 @@
             event.preventDefault();
             var nameVal = document.getElementById("prov-name").value.trim();
             var phoneVal = document.getElementById("prov-phone").value.trim();
-            fetch(BASE_API_URL + "suppliers", {
+            fetch(API_URL + "suppliers", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                 body: JSON.stringify({ name: nameVal, phone: phoneVal })
@@ -1849,18 +1849,18 @@
             if (el) el.style.opacity = "0.3";
             
             // 1. Fetch the full recipe metadata details first to check its category parameters
-            fetch(BASE_API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
+            fetch(API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
             .then(function(recipeData) {
                 if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
                 var recipe = recipeData[0]; 
                 
                 // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
-                return fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
+                return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(recipeIngredients) {
                     
-                    return fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+                    return fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
                     .then(function(res) { return res.json(); })
                     .then(function(masterIngredients) {
                         
@@ -1884,7 +1884,7 @@
                         var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                         // 3. Patch valid table columns, including your brand new cost_per_serving column asset
-                        return fetch(BASE_API_URL + "recipes?id=eq." + id, { 
+                        return fetch(API_URL + "recipes?id=eq." + id, { 
                             method: "PATCH", 
                             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
                             body: JSON.stringify({ 
@@ -1920,7 +1920,7 @@
                                 };
 
                                 // Execute direct PATCH update to synchronize your existing shadow row perfectly
-                                return fetch(BASE_API_URL + "ingredients?id=eq." + id, {
+                                return fetch(API_URL + "ingredients?id=eq." + id, {
                                     method: "PATCH",
                                     headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                                     body: JSON.stringify(ingPayload)
@@ -1968,7 +1968,7 @@
             var menuTarget = document.getElementById("sim-ingredient-id");
             if (!menuTarget) return;
             
-            fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } })
+            fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
                 .then(function(res) { return res.json(); })
                 .then(function(data) {
                     if (!data || data.message) return;
@@ -2006,7 +2006,7 @@
             };
             
             // 🌟 FIXED NETHEADERS: Removed Bearer locks to allow seamless anonymous public insert access matching your RLS structures!
-            fetch(BASE_API_URL + "invoice_items", {
+            fetch(API_URL + "invoice_items", {
                 method: "POST",
                 headers: {
                     "apikey": API_KEY,
@@ -2040,7 +2040,7 @@
             
             rowsTarget.innerHTML = "<tr><td style='padding:8px; text-align:center; color:var(--text-muted);'>⏳ Cargando historial de pruebas...</td></tr>";
             
-            var queryUrl = BASE_API_URL + "invoice_items?invoice_date=eq." + targetSandboxDate;
+            var queryUrl = API_URL + "invoice_items?invoice_date=eq." + targetSandboxDate;
             
             fetch(queryUrl, { headers: { "apikey": API_KEY } })
                 .then(function(r) { return r.json(); })
@@ -2086,7 +2086,7 @@
             if (!confirm("🗑️ ¿Deseas eliminar permanentemente esta línea de factura simulada de la base de datos?")) return;
             
             // Passes your clean text string parameter straight into your database URL filter routing path
-            fetch(BASE_API_URL + "invoice_items?id=eq." + cleanIdToken, {
+            fetch(API_URL + "invoice_items?id=eq." + cleanIdToken, {
                 method: "DELETE",
                 headers: {
                     "apikey": API_KEY,
@@ -2112,8 +2112,8 @@ async function loadStagedInvoicesQueue() {
     try {
         // Parallel data lookup to query staging headers and item lines from Supabase
         var [invoices, lines] = await Promise.all([
-            fetch(BASE_API_URL + "staged_invoices?status=eq.pending_review&order=invoice_date.desc", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(BASE_API_URL + "staged_invoice_lines", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            fetch(API_URL + "staged_invoices?status=eq.pending_review&order=invoice_date.desc", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "staged_invoice_lines", { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
         
         if (!Array.isArray(invoices) || !Array.isArray(lines)) {
@@ -2195,10 +2195,10 @@ async function loadSelectedInvoiceAuditWorkspace(stagedInvoiceId) {
     try {
         // Parallel data lookups to sync staging elements with master catalog tables
         var [invoices, lines, masterIngredients, formatCatalog] = await Promise.all([
-            fetch(BASE_API_URL + "staged_invoices?id=eq." + stagedInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(BASE_API_URL + "staged_invoice_lines?staged_invoice_id=eq." + stagedInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(BASE_API_URL + "ingredients?order=name_es.asc", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            fetch(API_URL + "staged_invoices?id=eq." + stagedInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "staged_invoice_lines?staged_invoice_id=eq." + stagedInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "ingredients?order=name_es.asc", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
         
         var invHeader = invoices[0];
@@ -2340,7 +2340,7 @@ async function updateStagedLineIngredientLink(lineId, selectedIngredientId) {
         var cleanValue = selectedIngredientId === "" ? null : selectedIngredientId;
         var isUndefinedFlag = selectedIngredientId === "";
         
-        await fetch(BASE_API_URL + "staged_invoice_lines?id=eq." + lineId, {
+        await fetch(API_URL + "staged_invoice_lines?id=eq." + lineId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ 
@@ -2362,7 +2362,7 @@ async function updateStagedLineNumericCell(lineId, columnKey, numericValue) {
         var patchPayload = {};
         patchPayload[columnKey] = parseFloat(numericValue) || 0;
         
-        await fetch(BASE_API_URL + "staged_invoice_lines?id=eq." + lineId, {
+        await fetch(API_URL + "staged_invoice_lines?id=eq." + lineId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify(patchPayload)
@@ -2379,7 +2379,7 @@ async function reconcileAndCommitToLiveLedger() {
     
     try {
         // Fetch target invoice rows to confirm zero uncleared dependencies persist
-        var lines = await fetch(BASE_API_URL + "staged_invoice_lines?staged_invoice_id=eq." + currentlyAuditingInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json());
+        var lines = await fetch(API_URL + "staged_invoice_lines?staged_invoice_id=eq." + currentlyAuditingInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json());
         
         var hasUnclearedAnomalies = lines.some(function(l) { return l.is_undefined || l.ingredient_id === null; });
         if (hasUnclearedAnomalies) {
@@ -2387,11 +2387,11 @@ async function reconcileAndCommitToLiveLedger() {
             return;
         }
         
-        var invoices = await fetch(BASE_API_URL + "staged_invoices?id=eq." + currentlyAuditingInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json());
+        var invoices = await fetch(API_URL + "staged_invoices?id=eq." + currentlyAuditingInvoiceId, { headers: { "apikey": API_KEY } }).then(r => r.json());
         var invHeader = invoices[0];
         
         // Fetch master formats catalog maps to perform the precise base multiplier conversion weights sweep on commit
-        var formatCatalog = await fetch(BASE_API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json());
+        var formatCatalog = await fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json());
         
         console.log("🚀 Flashing records from staging table straight into active production ledger...");
         
@@ -2414,7 +2414,7 @@ async function reconcileAndCommitToLiveLedger() {
             var baseRecipeQtyCalculated = (parseFloat(sLine.extracted_qty) || 0) * scaleMultiplier;
             
             // Post row cleanly into live active ledger table!
-            await fetch(BASE_API_URL + "invoice_items", {
+            await fetch(API_URL + "invoice_items", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2427,7 +2427,7 @@ async function reconcileAndCommitToLiveLedger() {
         }
         
         // Update header status flag to clear from review queue
-        await fetch(BASE_API_URL + "staged_invoices?id=eq." + currentlyAuditingInvoiceId, {
+        await fetch(API_URL + "staged_invoices?id=eq." + currentlyAuditingInvoiceId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ status: "verified" })
