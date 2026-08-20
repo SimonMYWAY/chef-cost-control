@@ -71,7 +71,7 @@
         try {
             const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
             // Fetch recipes cleanly sorted by name
-            const recipes = await fetch(BASE_API_URL + "recipes?order=name.asc", { headers }).then(r => r.json());
+            const recipes = await fetch(API_URL + "recipes?order=name.asc", { headers }).then(r => r.json());
 
             MASTER_RECIPES = Array.isArray(recipes) ? recipes : [];
             populateKitchenDropdown(MASTER_RECIPES);
@@ -128,8 +128,8 @@
         try {
             // Mirroring the exact parallel tables query from your administrative popup card
             const [lines, masterIngredients] = await Promise.all([
-                fetch(BASE_API_URL + "recipe_ingredients?recipe_id=eq." + rec.id, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(BASE_API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+                fetch(API_URL + "recipe_ingredients?recipe_id=eq." + rec.id, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ]);
 
             tableBody.innerHTML = '';
