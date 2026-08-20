@@ -115,7 +115,7 @@
         msg.style.display = 'none';
         canvas.style.display = 'block';
 
-        document.getElementById('view-title').innerText = rec.name_es || rec.name_en || 'Receta';
+        document.getElementById('view-title').innerText = rec.name || 'Receta';
         document.getElementById('view-yield').innerText = `Rendimiento Base: ${rec.servings || 1} porciones`;
         
         // Render Instructions (Prefers Spanish, fallbacks to English if empty)
@@ -125,11 +125,12 @@
         const tableBody = document.getElementById('kitchen-table-body');
         tableBody.innerHTML = '';
         
-        // Safely extract ingredient rows mapping metrics
+                // 🌟 FIXED PROPERTY MATCH: Targets your true database column 'recipe_ingredients'
         let ingredientsArray = [];
         try {
-            ingredientsArray = typeof rec.ingredients === 'string' ? JSON.parse(rec.ingredients) : (rec.ingredients || []);
+            ingredientsArray = typeof rec.recipe_ingredients === 'string' ? JSON.parse(rec.recipe_ingredients) : (rec.recipe_ingredients || []);
         } catch(e) { ingredientsArray = []; }
+
 
         if (!Array.isArray(ingredientsArray) || ingredientsArray.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="3" style="color:#8e8e93; text-align:center;">No hay ingredientes registrados.</td></tr>';
