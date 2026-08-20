@@ -35,11 +35,19 @@
         <h1 id="view-title" style="margin: 0 0 5px 0; color: var(--text);"></h1>
         <div id="view-yield" style="font-size: 0.9rem; color: #64748b; font-weight: 600; margin-bottom: 20px;"></div>
         
-        <h3 style="margin: 20px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px;">📋 Ingredientes / Materia Prima</h3>
+                <h3 style="margin: 20px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px;">📋 Ingredientes / Materia Prima</h3>
         <table>
-            <thead><tr><th>Ingrediente</th><th style="text-align: right;">Cantidad</th><th>Unidad</th></tr></thead>
+            <thead>
+                <tr>
+                    <th style="padding:12px; border-bottom:2px solid var(--border);">Ingrediente</th>
+                    <th style="text-align: right; padding:12px; border-bottom:2px solid var(--border);">Cantidad</th>
+                    <th style="padding:12px; border-bottom:2px solid var(--border);">Unidad</th>
+                    <th style="text-align: center; padding:12px; border-bottom:2px solid var(--border); background:#fef3c7; color:#b45309; font-weight:700;">Merma</th>
+                </tr>
+            </thead>
             <tbody id="kitchen-table-body"></tbody>
         </table>
+
 
         <h3 style="margin: 25px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px;">🔥 Instrucciones de Preparación</h3>
         <div id="view-instructions" class="steps-box"></div>
@@ -102,7 +110,7 @@
         populateKitchenDropdown(filtered);
     }
 
-    async function renderSelectedKitchenRecipe() {
+        async function renderSelectedKitchenRecipe() {
         const picker = document.getElementById('kitchen-recipe-picker');
         const canvas = document.getElementById('kitchen-display-canvas');
         const msg = document.getElementById('kitchen-placeholder-msg');
@@ -125,24 +133,38 @@
         const tableBody = document.getElementById('kitchen-table-body');
         tableBody.innerHTML = '';
         
-                // 🌟 FIXED PROPERTY MATCH: Targets your true database column 'recipe_ingredients'
+        // 🌟 ADAPTIVE EXTRACTION ROUTINE: Robust fallback sequence for your json data string columns
+        let rawSourceData = rec.recipe_ingredients || rec.ingredients || [];
         let ingredientsArray = [];
+        
         try {
-            ingredientsArray = typeof rec.recipe_ingredients === 'string' ? JSON.parse(rec.recipe_ingredients) : (rec.recipe_ingredients || []);
-        } catch(e) { ingredientsArray = []; }
-
+            ingredientsArray = typeof rawSourceData === 'string' ? JSON.parse(rawSourceData) : (rawSourceData || []);
+        } catch(e) { 
+            console.error("JSON parse failure on ingredients list:", e);
+            ingredientsArray = []; 
+        }
 
         if (!Array.isArray(ingredientsArray) || ingredientsArray.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="3" style="color:#8e8e93; text-align:center;">No hay ingredientes registrados.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="4" style="color:#8e8e93; text-align:center; padding:15px;">No hay ingredientes registrados en esta receta.</td></tr>';
         } else {
+            // Update table structure dynamically to inject the new Merma column values
             tableBody.innerHTML = ingredientsArray.map(item => {
-                const matchedIng = MASTER_INGREDIENTS.find(i => String(i.id) === String(item.id));
-                const ingName = matchedIng ? (matchedIng.name_es || matchedIng.name_en) : 'Ingrediente Desconocido';
+                // Adaptive lookup strategy targeting item.id, item.ingredient_id, or item.id_ingredient
+                const targetId = item.id || item.ingredient_id || item.ingredient;
+                const matchedIng = MASTER_INGREDIENTS.find(i => String(i.id) === String(targetId));
+                
+                const ingName = matchedIng ? (matchedIng.name_es || matchedIng.name_en || matchedIng.name) : 'Ingrediente Desconocido';
                 const ingUOM = matchedIng ? (matchedIng.uom || 'gr') : 'gr';
+                
+                const displayQty = parseFloat(item.qty || item.quantity || 0).toFixed(1);
+                const displayScrap = parseFloat(item.scrap || item.merma || item.waste || 0).toFixed(0);
+                
                 return `<tr>
-                    <td style="font-weight:600;">${ingName}</td>
-                    <td style="text-align:right; font-family:monospace; font-weight:700;">${parseFloat(item.qty || 0).toFixed(1)}</td>
-                    <td style="color:#64748b; font-family:monospace;">${ingUOM}</td>
+                    <td style="font-weight:600; padding:12px; border-bottom:1px solid var(--border);">${ingName}</td>
+                    <td style="text-align:right; font-family:monospace; font-weight:700; padding:12px; border-bottom:1px solid var(--border);">${displayQty}</td>
+                    <td style="color:#64748b; font-family:monospace; padding:12px; border-bottom:1px solid var(--border);">${ingUOM}</td>
+                    <!-- 🌟 NEW MERMA / SCRAP ACCURATE ROW CELL -->
+                    <td style="text-align:center; color:#b45309; font-weight:600; font-family:monospace; padding:12px; border-bottom:1px solid var(--border); background:#fffbeb;">${displayScrap}%</td>
                 </tr>`;
             }).join('');
         }
@@ -154,16 +176,15 @@
         if (rec.media_url && rec.media_url.trim() !== '') {
             const url = rec.media_url.trim();
             if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com')) {
-                // If it is a video clip link container box asset row
                 let embedUrl = url;
                 if (url.includes('watch?v=')) embedUrl = url.replace('watch?v=', 'embed/');
-                mediaContainer.innerHTML = `<iframe class="media-box" src="${embedUrl}" style="height:350px; border:none;" allowfullscreen></iframe>`;
+                mediaContainer.innerHTML = `<iframe class="media-box" src="${embedUrl}" style="height:350px; border:none; width:100%;" allowfullscreen></iframe>`;
             } else {
-                // Treats as standard static plating photo asset image frame layout
-                mediaContainer.innerHTML = `<img src="${url}" class="media-box" alt="Foto de Emplatado" onerror="this.style.display='none';" />`;
+                mediaContainer.innerHTML = `<img src="${url}" class="media-box" alt="Foto de Emplatado" onerror="this.style.display='none';" style="width:100%;" />`;
             }
         }
     }
+
 
     document.addEventListener("DOMContentLoaded", initKitchenPortal);
 </script>
