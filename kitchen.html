@@ -219,9 +219,8 @@
         }
     }
 
-    // 🧠 GATEWAY INTERACTIVE AUTHENTICATION ENGINE
+// 🧠 GATEWAY INTERACTIVE AUTHENTICATION ENGINE
 // Queries your profiles table to validate typed username/email and credentials
-
 async function executeGatewayAuthenticationChallenge(event) {
     event.preventDefault();
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
@@ -237,21 +236,20 @@ async function executeGatewayAuthenticationChallenge(event) {
         
         const res = await fetch(queryUrl, { headers }).then(r => r.json());
         
+        // 🌟 FIXED OBJECT INDEX: Ensures the code accurately verifies the first returned profile array item
         if (!Array.isArray(res) || res.length === 0) {
             feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
             return;
         }
         
-        const matchedProfile = res[0];
+        const matchedProfile = res[0]; // 🚀 Target the exact user record row natively!
         
-        // Match the plain text password hash for tonight's testing checkpoint
-        if (String(matchedProfile.password_hash) !== passInputVal) {
+        if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
             feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
             return;
         }
         
         // 🔒 ROLE LEVEL GATEWAY SECURITY AUDIT
-        // Kitchen staff terminal only allows 'kitchen', 'chef', or 'owner' profiles
         const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
         
         if (userRole === "kitchen" || userRole === "chef" || userRole === "owner") {
