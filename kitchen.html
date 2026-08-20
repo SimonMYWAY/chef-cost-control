@@ -29,7 +29,7 @@
         <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
         <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Cocina.</p>
         
-        <form id="gateway-login-form" onsubmit="executeGatewayAuthenticationChallenge(event)">
+        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event)">
             <div style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
                 <input type="text" id="gateway-input-user" required placeholder="ej: simon.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
@@ -219,9 +219,8 @@
         }
     }
 
-// 🧠 GATEWAY INTERACTIVE AUTHENTICATION ENGINE
-// Fetches standard profile vectors and runs an exact local matching lookup loop.
-async function executeGatewayAuthenticationChallenge(event) {
+// 🧠 UNIFIED LOCAL ENGINE: FORCED ROUTING LAYER TO BYPASS CACHED STRINGS
+async function executeNewLocalGatewayAuthenticationChallenge(event) {
     event.preventDefault();
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
     feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
@@ -231,7 +230,7 @@ async function executeGatewayAuthenticationChallenge(event) {
     
     try {
         const headers = { "apikey": API_KEY };
-        // Fetch all active profiles in a standard, clean list to run local evaluations
+        // Clean, vanilla request without complex conditional string chains
         const queryUrl = `${API_URL}profiles`;
         
         const res = await fetch(queryUrl, { headers }).then(r => r.json());
@@ -241,7 +240,6 @@ async function executeGatewayAuthenticationChallenge(event) {
             return;
         }
         
-        // 🌟 LOCAL EVALUATION SHIELD: Scans your user rows securely using native javascript matching
         let matchedProfile = null;
         for (let i = 0; i < res.length; i++) {
             const profileRow = res[i];
@@ -264,23 +262,19 @@ async function executeGatewayAuthenticationChallenge(event) {
             return;
         }
         
-        // 🔒 ROLE LEVEL GATEWAY SECURITY AUDIT
         const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
         
         if (userRole === "kitchen" || userRole === "chef" || userRole === "owner") {
             feedbackEl.innerText = "";
-            // Dropping the visual overlay mask completely from the view canvas container
             document.getElementById("security-gateway-lock-screen").style.display = "none";
-            
-            // Wake up your primary data fetch processes natively on successful login
             initKitchenPortal();
         } else {
             feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene permisos para esta app.";
         }
         
     } catch (err) {
-        console.error("Gateway authentication local loop failure:", err);
-        feedbackEl.innerText = "❌ Error de conexión con el servidor de seguridad.";
+        console.error("Gateway local fallback error:", err);
+        feedbackEl.innerText = "❌ Error de conexión con el servidor.";
     }
 }
 
