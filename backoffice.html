@@ -2552,16 +2552,19 @@ async function handleStaffUserCreation(event) {
     var feedback = document.getElementById("user-creation-feedback");
     feedback.innerHTML = "<span style='color:#007afb;'>⏳ Registrando credenciales...</span>";
     try {
+                // 🌟 FIXED PAYLOAD KEY: Explicitly assigns a unique UUID key token to bypass the 409 conflict rules
         var res = await fetch(API_URL + "profiles", {
             method: "POST",
             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
             body: JSON.stringify({
+                id: crypto.randomUUID(), // 🚀 Forces a brand-new unique ID token key right from the browser!
                 username: document.getElementById("user-admin-username").value.trim(),
                 email: document.getElementById("user-admin-email").value.trim(),
                 password_hash: document.getElementById("user-admin-password").value.trim(),
                 role: document.getElementById("user-admin-role").value
             })
         });
+
         if (res.ok) {
             feedback.innerHTML = "<span style='color:#22c55e; font-weight:600;'>🎉 ¡Usuario registrado!</span>";
             document.getElementById("user-admin-form").reset();
