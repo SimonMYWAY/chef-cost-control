@@ -157,6 +157,8 @@
 
     </div>
     <button id="btn-submit" class="save-btn" onclick="submitRecipe()">Submit for Admin Approval</button>
+    <button class="btn" onclick="_selectedRecipeId = null; const nameEl = document.getElementById('recipe-name'); if(nameEl && nameEl.value) { nameEl.value += ' (CLON)'; } document.getElementById('revo-recipe-picker').value = ''; alert('ℹ️ ¡Receta desvinculada! Cambia el nombre y dale a Enviar para guardarla como un clon nuevo.');" style="margin-left: 10px; background: #6366f1; color: white;">👥 Clonar Receta</button>
+
     <!-- Lifecyle Action Module: Submits the local draft asset into the cloud approval queue -->
         <button id="btn-review" class="save-btn" style="background:#0050b3; margin-top: 10px;" onclick="submitForApproval()">Enviar a Revisión</button>
 
