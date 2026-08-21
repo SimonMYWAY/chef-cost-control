@@ -157,9 +157,7 @@
 
     </div>
     <button id="btn-submit" class="save-btn" onclick="submitRecipe()">Submit for Admin Approval</button>
-    <button class="btn btn-blue" onclick="prepareRecipeForCloning()" style="margin-left: 10px; background: #6366f1;">👥 Clonar Receta</button>
-    
-    <!-- Lifecyle Action Module: Submits the local draft asset into the cloud approval queue -->
+            <!-- Lifecyle Action Module: Submits the local draft asset into the cloud approval queue -->
         <button id="btn-review" class="save-btn" style="background:#0050b3; margin-top: 10px;" onclick="submitForApproval()">Enviar a Revisión</button>
 
     <!-- PRINTABLE DOCUMENT FILE & VISUALIZER CHASSIS OVERLAY -->
@@ -1015,14 +1013,15 @@
         }
     }
 
-            // 📊 UPGRADED FORMULA SUBMISSION & CLONING MATRIX ENGINE
-    async function submitRecipe() {
+            async function submitRecipe() {
         const nameInput = document.getElementById('recipe-name');
         const name = nameInput ? nameInput.value.trim() : '';
         const categorySelect = document.getElementById('recipe-category');
         const category = categorySelect ? categorySelect.value : '';
         const servingsInput = document.getElementById('servings');
+        // SCHEMA MATCH: Forcing strict integer typing resolves your 400 Bad Request parameter errors!
         const servings = parseInt(servingsInput ? servingsInput.value : 4, 10) || 4;
+
 
         if (!name) {
             alert(currentLang === 'en' ? 'Please enter a recipe name!' : '¡Por favor ingrese un nombre de receta!');
@@ -1031,9 +1030,8 @@
 
         try {
             const pickerEl = document.getElementById('revo-recipe-picker');
-            let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
-            
-            // 🛡️ LOCK GUARD INJECTION: Freeze submissions completely if the recipe is already approved
+                let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
+                        // 🛡️ LOCK GUARD INJECTION: Freeze submissions completely if the recipe is already approved
             if (recipeId && typeof _loadedRevoCatalog !== 'undefined') {
                 const cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
                 if (cloudRecord && cloudRecord.status === 'approved') {
@@ -1051,6 +1049,7 @@
             if (!recipeId || recipeId === "" || recipeId === "null") {
                 console.log("🚀 New formula name recognized. Registering master row in Supabase cloud...");
                 
+                // RE-ADDED PREFER HEADER: Explicitly tells Supabase to return the generated record array
                 const newRecipeResponse = await fetch(API_URL + "recipes", {
                     method: "POST",
                     headers: {
@@ -1059,23 +1058,28 @@
                         "Content-Type": "application/json",
                         "Prefer": "return=representation"
                     },
-                    body: JSON.stringify({
+                                        body: JSON.stringify({
                         name: name,
+                        // RESTORED: Keep your clean, original UI category string safely intact!
                         category: category,
                         servings: parseInt(servings) || 4,
                         is_approved: false 
                     })
+
                 });
 
-                if (!newRecipeResponse.ok) {
+                 if (!newRecipeResponse.ok) {
+                    // EXTRACT REAL DATABASE EXCEPTION LOG: Unmasks the true error string payload
                     const errBody = await newRecipeResponse.json();
                     console.error("❌ RAW DATABASE SUBMISSION FAULT DETAILED:", errBody);
                     alert("Supabase Error: " + (errBody.message || JSON.stringify(errBody)));
                     throw new Error("Could not create master row on Supabase cloud.");
                 }
 
+
                 const newRecipeData = await newRecipeResponse.json();
                 
+                // CRUCIAL REPAIR: Extract the numeric identifier safely out of Index Row 0 of the array!
                 if (newRecipeData && newRecipeData.length > 0 && newRecipeData[0].id) {
                     recipeId = newRecipeData[0].id; 
                     _selectedRecipeId = recipeId; // Cache dynamically in your active tracking array
@@ -1083,106 +1087,7 @@
                 } else {
                     throw new Error("Could not verify or create a master reference ID.");
                 }
-            } else {
-                // 🔄 UPDATE EXISTING MASTER METADATA (Bypasses ghost duplications on resubmission)
-                console.log("🔄 Updating existing master recipe metadata row for ID:", recipeId);
-                await fetch(API_URL + "recipes?id=eq." + recipeId, {
-                    method: "PATCH",
-                    headers: {
-                        "apikey": API_KEY,
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        name: name,
-                        category: category,
-                        servings: parseInt(servings) || 4,
-                        is_approved: false
-                    })
-                });
             }
-
-            // =======================================================================
-            // 🧼 PURGE OLD RELATIONAL ENTRIES (Fixes the disappearing ingredients bug)
-            // =======================================================================
-            console.log("🧼 Purging any previous ingredient rows to ensure synchronization consistency...");
-            await fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, {
-                method: "DELETE",
-                headers: {
-                    "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY
-                }
-            });
-
-            // =======================================================================
-            // 📥 INJECT NEW INGREDIENT ROWS (Pushes fresh inputs cleanly)
-            // =======================================================================
-            const ingCards = document.querySelectorAll('.ing-card');
-            const ingredientPromises = [];
-
-            ingCards.forEach(card => {
-                const selectEl = card.querySelector('select');
-                const qtyInput = card.querySelector('.ing-qty') || card.querySelector('input[type="number"]');
-                const scrapInput = card.querySelector('.ing-scrap');
-
-                const ingredientId = selectEl ? selectEl.value : null;
-                const quantity = qtyInput ? parseFloat(qtyInput.value) || 0 : 0;
-                const scrapPct = scrapInput ? parseFloat(scrapInput.value) || 0 : 0;
-
-                if (ingredientId && quantity > 0) {
-                    ingredientPromises.push(
-                        fetch(API_URL + "recipe_ingredients", {
-                            method: "POST",
-                            headers: {
-                                "apikey": API_KEY,
-                                "Authorization": "Bearer " + API_KEY,
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                recipe_id: recipeId,
-                                ingredient_id: ingredientId,
-                                quantity: quantity,
-                                scrap_percentage: scrapPct
-                            })
-                        })
-                    );
-                }
-            });
-
-            if (ingredientPromises.length > 0) {
-                await Promise.all(ingredientPromises);
-            }
-
-            alert(currentLang === 'en' ? '🎉 Recipe submitted successfully!' : '🎉 ¡Receta enviada con éxito!');
-            
-            // Clean interface triggers to refresh dropdown lists cleanly
-            if (typeof initRevoDownload === 'function') initRevoDownload();
-
-        } catch (err) {
-            console.error("Master processing pipeline error:", err);
-            alert("Error: " + err.message);
-        }
-    }
-// 👥 RECIPE CLONING HOOK INTERFACE
-// Strips tracking memory IDs cleanly to turn the layout view into a fresh recipe format duplicate
-function prepareRecipeForCloning() {
-    // 1. Unlink the internal tracker IDs completely
-    _selectedRecipeId = null;
-    const pickerEl = document.getElementById('revo-recipe-picker');
-    if (pickerEl) pickerEl.value = "";
-
-    // 2. Append a clean text string layout indicator to the name field box
-    const nameInput = document.getElementById('recipe-name');
-    if (nameInput && nameInput.value.trim() !== "") {
-        nameInput.value = nameInput.value.trim() + " (CLON)";
-    }
-    
-    alert(currentLang === 'en' 
-        ? "👥 Recipe detached! Change the name and click 'Submit' to register this clone as a brand-new distinct record!" 
-        : "👥 ¡Receta desvinculada! Cambie el nombre y haga clic en 'Enviar' para registrar este clon como un registro completamente nuevo."
-    );
-}
-
             // =======================================================================
             // 🌐 END CLOUD REGISTER ENGINE
             // =======================================================================
