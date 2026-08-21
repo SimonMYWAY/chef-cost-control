@@ -1249,7 +1249,7 @@ function prepareRecipeForCloning() {
             alert(currentLang === 'en' ? 'Draft saved successfully!' : '¡Borrador guardado con éxito!');
             
             if (typeof initRevoDownload === 'function') initRevoDownload();
-
+         
         } catch (err) {
             console.error("Local storage transaction lock crash:", err);
             alert(currentLang === 'en' ? 'Error saving formula layout.' : 'Error al guardar los campos de la fórmula.');
