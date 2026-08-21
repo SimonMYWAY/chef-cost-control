@@ -721,7 +721,7 @@
 
 
        // 🗑️ HARD REMOVAL LIFELINE: Permanently purges a recipe row and its ingredients from Supabase
-        function deleteRecipeFromSystem(id) {
+        async function deleteRecipeFromSystem(id) {
             if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba? Desaparecerá de todas las pantallas al instante.")) return;
             
             // Push directly to blocking list and clear layout elements instantly
@@ -731,32 +731,46 @@
             if (upperRow) upperRow.remove();
             if (lowerRow) lowerRow.remove();
 
-            // 🌟 STEP A: Purge relational lines from recipe_ingredients first to avoid foreign key conflicts
-            fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, {
-                method: "DELETE",
-                headers: { "apikey": API_KEY }
-            })
-            .then(function() {
-                // 🌟 STEP B: Permanently delete the primary row inside your master recipes table disk!
-                return fetch(API_URL + "recipes?id=eq." + id, { 
-                    method: "DELETE", 
-                    headers: { "apikey": API_KEY }
+            try {
+                // 🌟 STEP A: Build complete authorization headers required by Supabase API
+                const headers = { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json"
+                };
+
+                // 🌟 STEP B: Purge relational lines from recipe_ingredients first
+                console.log("🧼 Deleting ingredient rows for recipe:", id);
+                await fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, {
+                    method: "DELETE",
+                    headers: headers
                 });
-            })
-            .then(function(res) {
-                if (!res.ok) throw new Error("Database absolute row deletion failed.");
+
+                // 🌟 STEP C: Permanently delete the primary row inside your master recipes table disk!
+                console.log("🚀 Purging master recipe row from cloud:", id);
+                const res = await fetch(API_URL + "recipes?id=eq." + id, { 
+                    method: "DELETE", 
+                    headers: headers
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error("Server rejected row removal: " + errText);
+                }
+
                 alert("🗑️ ¡Receta eliminada permanentemente del servidor con éxito!");
                 
-                // Refresh downsteam active interfaces
+                // Refresh downstream active interfaces
                 if (typeof loadMasterCatalog === "function") loadMasterCatalog();
                 if (typeof loadQueue === "function") loadQueue();
                 if (typeof initDashboardDataLoad === "function") initDashboardDataLoad();
-            })
-            .catch(function(err) { 
-                console.error("Deletion pathway failure:", err); 
-                alert("❌ Error al procesar la eliminación permanente.");
-            });
+
+            } catch (err) { 
+                console.error("Absolute deletion pathway failure:", err); 
+                alert("❌ Error al procesar la eliminación permanente: " + err.message);
+            }
         }
+
 
                 // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
         function viewRecipeDetails(recipeId, name, category, servings, uom) {
