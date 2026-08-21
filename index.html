@@ -355,6 +355,9 @@
                     savedRows = await response.json() || [];
                 }
                 
+                // 🧼 CRUCIAL REPAIR: Empty any visual elements immediately before the generation loop fires!
+                if (listContainer) listContainer.innerHTML = '';
+
                 if (Array.isArray(savedRows)) {
                     for (const row of savedRows) {
                         addIngredientRow();
