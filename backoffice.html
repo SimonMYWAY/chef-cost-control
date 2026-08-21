@@ -720,7 +720,7 @@
         }
 
 
-        // 🗑️ HARD REMOVAL LIFELINE: Soft-deletes a record by stamping -9.0 to clean layout instantly across ecosystems
+       // 🗑️ HARD REMOVAL LIFELINE: Permanently purges a recipe row and its ingredients from Supabase
         function deleteRecipeFromSystem(id) {
             if (!confirm("⚠️ ¿Está completamente seguro de que desea ELIMINAR permanentemente esta receta de prueba? Desaparecerá de todas las pantallas al instante.")) return;
             
@@ -731,28 +731,30 @@
             if (upperRow) upperRow.remove();
             if (lowerRow) lowerRow.remove();
 
-            fetch(API_URL + "recipes?id=eq." + id, { 
-                method: "PATCH", 
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
-                },
-                body: JSON.stringify({
-                    is_approved: true,
-                    status: "approved",
-                    locked_multiplier: -9.0 
-                })
+            // 🌟 STEP A: Purge relational lines from recipe_ingredients first to avoid foreign key conflicts
+            fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, {
+                method: "DELETE",
+                headers: { "apikey": API_KEY }
+            })
+            .then(function() {
+                // 🌟 STEP B: Permanently delete the primary row inside your master recipes table disk!
+                return fetch(API_URL + "recipes?id=eq." + id, { 
+                    method: "DELETE", 
+                    headers: { "apikey": API_KEY }
+                });
             })
             .then(function(res) {
-                if (!res.ok) throw new Error("Database removal flag update failed.");
-                alert("🗑️ ¡Receta de prueba eliminada con éxito!");
-                loadMasterCatalog();
+                if (!res.ok) throw new Error("Database absolute row deletion failed.");
+                alert("🗑️ ¡Receta eliminada permanentemente del servidor con éxito!");
+                
+                // Refresh downsteam active interfaces
+                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
                 if (typeof loadQueue === "function") loadQueue();
+                if (typeof initDashboardDataLoad === "function") initDashboardDataLoad();
             })
             .catch(function(err) { 
                 console.error("Deletion pathway failure:", err); 
-                alert("❌ Error al procesar la eliminación.");
+                alert("❌ Error al procesar la eliminación permanente.");
             });
         }
 
