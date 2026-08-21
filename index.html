@@ -157,8 +157,7 @@
 
     </div>
     <button id="btn-submit" class="save-btn" onclick="submitRecipe()">Submit for Admin Approval</button>
-    <button class="btn" onclick="_selectedRecipeId = null; const nameEl = document.getElementById('recipe-name'); if(nameEl && nameEl.value) { nameEl.value += ' (CLON)'; } document.getElementById('revo-recipe-picker').value = ''; alert('ℹ️ ¡Receta desvinculada! Cambia el nombre y dale a Enviar para guardarla como un clon nuevo.');" style="margin-left: 10px; background: #6366f1; color: white;">👥 Clonar Receta</button>
-
+    
     <!-- Lifecyle Action Module: Submits the local draft asset into the cloud approval queue -->
         <button id="btn-review" class="save-btn" style="background:#0050b3; margin-top: 10px;" onclick="submitForApproval()">Enviar a Revisión</button>
 
@@ -1031,6 +1030,27 @@
         if (!name) {
             alert(currentLang === 'en' ? 'Please enter a recipe name!' : '¡Por favor ingrese un nombre de receta!');
             return;
+        }
+                // 🛡️ SECURITY GUARD: Block duplicate names to prevent ghost duplicates in the back office!
+        if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
+            const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+            
+            // Check if any other record in your local catalog already carries this exact text name
+            const duplicateFound = _loadedRevoCatalog.find(function(r) {
+                // If we are editing the CURRENT active recipe, ignore it (editing your own name is allowed)
+                if (_selectedRecipeId && String(r.id) === String(_selectedRecipeId)) return false;
+                
+                const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
+                return existingNameClean === normalizedNewName;
+            });
+
+            if (duplicateFound) {
+                alert(currentLang === 'en'
+                    ? `⚠️ Error: The recipe name "${name}" already exists! Please use a unique name.`
+                    : `⚠️ Error: ¡El nombre de receta "${name}" ya existe en el sistema! Por favor use un nombre único.`
+                );
+                return; // KILL ROUTINE IMMEDIELY — BLOCKS SUBMISSION Completely!
+            }
         }
 
         try {
