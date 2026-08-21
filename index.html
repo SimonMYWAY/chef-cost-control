@@ -1130,6 +1130,7 @@
                 finalStatus = activeItem.status === "rejected" ? "rejected" : "draft";
             }
 
+            localStorage.removeItem(`recipe_draft_${recipeId}`);
             const recipeStorageKey = `recipe_draft_${recipeId}`;
             const draftPayload = {
                 category: category,
