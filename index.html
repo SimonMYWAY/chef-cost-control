@@ -75,6 +75,11 @@
 
     <div class="header">
         <h1 id="app-title" class="title">Recipe Builder v3</h1>
+        <!-- 🔄 GLOBAL SYSTEM REAL-TIME DATA REFRESH MATRIX TRIGGER -->
+<button class="btn" onclick="executeGlobalApplicationForceRefresh(event)" id="global-sync-action-btn" style="margin-left: 10px; background: #0f172a; color: white; display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.25);">
+    <span id="global-sync-icon-spin">🔄</span> <span id="global-sync-text-lbl">Sincronizar Todo</span>
+</button>
+
         <button id="lang-toggle" class="lang-btn" onclick="toggleLanguage()">ESP</button>
     </div>
     <div class="card">
@@ -1279,6 +1284,77 @@
             }
         }
     }
+// 🧠 GLOBAL RE-SYNC DATA PIPELINE ENGINE
+// Forces parallel background network fetches across both recipes and ingredients tables simultaneously.
+async function executeGlobalApplicationForceRefresh(event) {
+    if (event) event.preventDefault();
+    
+    const btnText = document.getElementById("global-sync-text-lbl");
+    const btnIcon = document.getElementById("global-sync-icon-spin");
+    const syncBtn = document.getElementById("global-sync-action-btn");
+    
+    if (!btnText || !btnIcon || !syncBtn) return;
+    
+    // 🎨 VISUAL INTERFACE LOCK: Signal to user that the data pipeline is active
+    syncBtn.style.opacity = "0.7";
+    syncBtn.style.pointerEvents = "none";
+    btnText.innerText = currentLang === 'en' ? "Syncing App..." : "Sincronizando Sistema...";
+    btnIcon.style.display = "inline-block";
+    btnIcon.style.transition = "transform 1s linear";
+    btnIcon.style.transform = "rotate(360deg)";
+    
+    try {
+        console.log("📡 Global application sync handshake initiated. Fetching all master tables...");
+        
+        // 🌟 PARALLEL HANDSHAKE SYSTEM: Pull down both catalogs simultaneously to save time
+        const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY };
+        const [freshRecipes, freshIngredients] = await Promise.all([
+            fetch(API_URL + "recipes?order=name.asc", { headers }).then(r => r.json()),
+            fetch(API_URL + "ingredients", { headers }).then(r => r.json())
+        ]);
+        
+        // Update global background memory variables word-for-word
+        if (Array.isArray(freshRecipes)) {
+            _loadedRevoCatalog = freshRecipes;
+            console.log(`✅ Loaded ${_loadedRevoCatalog.length} recipes cleanly into background memory.`);
+        }
+        if (Array.isArray(freshIngredients)) {
+            DB_INGREDIENTS = freshIngredients;
+            console.log(`✅ Loaded ${DB_INGREDIENTS.length} ingredients cleanly into background memory.`);
+        }
+        
+        // 🔄 WAKE UP UI HANDLERS: Force selectors and layout dictionaries to redraw instantly
+        if (typeof updateUIStrings === "function") updateUIStrings();
+        if (typeof initRevoDownload === "function") initRevoDownload();
+        
+        // If a recipe is currently loaded on screen, trigger a re-calculation to capture new ingredient costs
+        if (typeof calculateTotals === "function") calculateTotals();
+        
+        // Flash clear success feedback on screen canvas monitor
+        btnText.innerText = currentLang === 'en' ? "Fully Synced!" : "¡Sistema Sincronizado!";
+        btnIcon.style.transform = "rotate(0deg)";
+        syncBtn.style.background = "#22c55e"; // Shifts to green briefly to mark absolute success
+        
+        setTimeout(function() {
+            btnText.innerText = currentLang === 'en' ? "Sincronizar Todo" : "Sincronizar Todo";
+            syncBtn.style.background = "#0f172a";
+            syncBtn.style.opacity = "1";
+            syncBtn.style.pointerEvents = "auto";
+        }, 1500);
+        
+    } catch (err) {
+        console.error("Global system force refresh network fault:", err);
+        btnText.innerText = currentLang === 'en' ? "Connection Error!" : "¡Error de Servidor!";
+        syncBtn.style.background = "#ef4444";
+        
+        setTimeout(function() {
+            btnText.innerText = currentLang === 'en' ? "Sincronizar Todo" : "Sincronizar Todo";
+            syncBtn.style.background = "#0f172a";
+            syncBtn.style.opacity = "1";
+            syncBtn.style.pointerEvents = "auto";
+        }, 3000);
+    }
+}
 
 </script>
 </body>
