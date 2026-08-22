@@ -103,10 +103,10 @@
         </select>
 
             <!-- LIVE REVO PENDING SELECTION CHANNEL -->
-    <label class="label" style="color: #007afb; font-weight: bold;">📥 Recetas Pendientes de Revo</label>
+    <label class="label" style="color: #007afb; font-weight: bold;">📥 Recetas Pendientes</label>
         <!-- 🔍 REAL-TIME REVO SEARCH FILTER FIELD -->
     <div style="margin-bottom: 8px;">
-        <input type="text" id="search-revo-picker-field" oninput="executeLiveRevoDropdownSearch()" placeholder="🔍 Buscar plato de Revo..." style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
+        <input type="text" id="search-revo-picker-field" oninput="executeLiveRevoDropdownSearch()" placeholder="🔍 Buscar plato" style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; background: #ffffff;" />
     </div>
 
     <select id="revo-recipe-picker" onchange="handleRevoSelection()" style="margin-bottom: 15px; background-color: #ffffff !important; color: #1c1c1e !important;">
@@ -226,7 +226,7 @@
             function populateRevoDropdownMenu() {
             const select = document.getElementById('revo-recipe-picker');
             if (!select) return;
-                        select.innerHTML = '<option value="">-- Seleccionar Receta Revo --</option>';
+                        select.innerHTML = '<option value="">-- Seleccionar Receta Existente --</option>';
 
             // 🔤 STEP-BY-STEP ALPHABETICAL SORT (A to Z)
             _loadedRevoCatalog.sort(function(a, b) {
