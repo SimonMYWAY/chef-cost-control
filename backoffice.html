@@ -2945,73 +2945,183 @@ async function initializePurchasingSystemDependencies() {
     } catch (e) { console.error("Failed loading procurement dependencies:", e); }
 }
 
-function processDailySalesFileIngestion(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+// =======================================================================
+// 📋 REAL-TIME REVO CSV SALES PIPELINE & PREDICTIVE INVENTORY EXPLOSION
+// =======================================================================
 
-    const feedback = document.getElementById("procurement-wizard-feedback");
+async function processDailySalesFileIngestion(event) {
+    var fileInput = event.target;
+    if (!fileInput || fileInput.files.length === 0) return;
+    
+    var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
         feedback.style.display = "block";
-        feedback.innerHTML = `⏳ <b>Procesando archivo:</b> ${file.name}... Ejecutando explosión de recetas contra inventario teórico...`;
+        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión de consumos sobre el CSV Revo...</div>";
     }
 
-    // System Engine Routine: Reads ingredients and triggers your explicit ordering formula matrix
-    setTimeout(async function() {
+    var file = fileInput.files[0];
+    var reader = new FileReader();
+
+    reader.onload = async function(e) {
         try {
-            await fetchInventoryMatrixData(); 
+            var text = e.target.result;
 
-            TEMPORARY_STAGED_PURCHASE_LINES = [];
-            let componentsConsumedCount = 0;
+            // Fetch master system configuration data records from Supabase in parallel
+            var results = await Promise.all([
+                fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ]);
 
-            MASTER_INVENTORY_ITEMS.forEach(function(ing) {
-                let calculatedConsumption = 0;
-                // Simulating standard consumption algorithm deductions based on active ingredients
-                if (ing.name_es.includes("Pescado") || ing.name_es.includes("Limón") || ing.name_es.includes("Cebolla")) {
-                    calculatedConsumption = (Math.random() * 5 + 2) * 1.15; 
+            var mappings = results[0];
+            var recipes = results[1];
+            var ingredients = results[2];
+
+            if (!mappings || !recipes || !ingredients) {
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con los servidores de base de datos.</div>";
+                return;
+            }
+
+            // Build lookup maps exactly matching your Desviación de Costes logic tracking
+            var recMapById = {};
+            var recMapByRevo = {};
+            var recMapByName = {};
+            recipes.forEach(r => {
+                var multiplier = r.locked_multiplier !== null && r.locked_multiplier !== undefined ? parseFloat(r.locked_multiplier) : 1.0;
+                if (multiplier === 0.0 || multiplier === -9.0) return; // Skip deactivated recipes
+                
+                var cleanId = String(r.id).toLowerCase().trim();
+                recMapById[cleanId] = r;
+                if (r.revo_id) recMapByRevo[String(r.revo_id).toLowerCase().trim()] = r;
+                if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
+            });
+
+            // Map out a running usage ledger tracking object dictionary
+            var ingredientUsageLedger = {};
+            ingredients.forEach(i => { ingredientUsageLedger[String(i.id)] = 0.0; });
+
+            // Split file rows into lines array
+            var lines = text.split(/\r?\n/);
+            if (lines.length <= 1) {
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ El archivo CSV seleccionado está vacío o corrupto.</div>";
+                return;
+            }
+
+            // Extract headers exactly matching your variance engine tokens
+            var headers = lines[0].split(",");
+            var idxQty = -1, idxProd = -1, idxId = -1;
+
+            for (var h = 0; h < headers.length; h++) {
+                var headTxt = headers[h].replace(/["']/g, "").trim().toLowerCase();
+                if (headTxt === "cantidad") idxQty = h;
+                if (headTxt === "producto") idxProd = h;
+                if (headTxt === "id") idxId = h;
+            }
+
+            if (idxQty === -1 || idxProd === -1 || idxId === -1) {
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Asegúrese de que contenga las columnas: Cantidad, Producto, Id.</div>";
+                return;
+            }
+
+            // 🧠 STEP 1: RECIPE EXPLOSION LOOP
+            // Parse through every line row in your live Revo sales sheet file
+            for (var l = 1; l < lines.length; l++) {
+                if (!lines[l].trim()) continue;
+                var columns = lines[l].split(",");
+                if (columns.length <= Math.max(idxQty, idxProd, idxId)) continue;
+
+                var rawQty = columns[idxQty].replace(/["']/g, "").trim();
+                var rawProdName = columns[idxProd].replace(/["']/g, "").trim().toLowerCase();
+                var rawRevoId = columns[idxId].replace(/["']/g, "").trim().toLowerCase();
+
+                var quantitySold = parseFloat(rawQty) || 0;
+                if (quantitySold <= 0) continue;
+
+                // Match with active recipes via Revo ID or text string name match keys
+                var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
+                if (matchedRecipe) {
+                    var parentRecipeId = String(matchedRecipe.id);
+                    
+                    // Cross-reference lines matching this recipe inside your recipe_ingredients table rows
+                    mappings.forEach(mapRow => {
+                        if (String(mapRow.recipe_id) === parentRecipeId) {
+                            var ingId = String(mapRow.ingredient_id);
+                            var weightUsedPerPortion = parseFloat(mapRow.quantity) || 0;
+                            var scrapPct = parseFloat(mapRow.scrap_percentage || mapRow.scrap || 0);
+                            
+                            // Adjust consumption directly using your Merma factor: weight * portions * (1 + scrap/100)
+                            var consumptionAmount = weightUsedPerPortion * quantitySold * (1 + (scrapPct / 100));
+                            if (ingredientUsageLedger[ingId] !== undefined) {
+                                ingredientUsageLedger[ingId] += consumptionAmount;
+                            }
+                        }
+                    });
                 }
+            }
 
-                const currentStock = parseFloat(ing.std_inventory || 0);
-                const actualStdInventory = currentStock - calculatedConsumption;
-                const pointOfOrder = parseFloat(ing.point_of_order || 0);
-                const stockMax = parseFloat(ing.stock_max || 0);
+            // 🧠 STEP 2 & 3: EVALUATE PARAMETERS & PROJECT PURCHASE REORDERINGS
+            TEMPORARY_STAGED_PURCHASE_LINES = [];
+            let totalInsumosDeduados = 0;
 
-                // 🌟 EXPLICIT PROCUREMENT FORMULA RULE-SET: if actual std_inventory < point of order
+            ingredients.forEach(ing => {
+                var usageToday = ingredientUsageLedger[String(ing.id)] || 0.0;
+                var currentStock = parseFloat(ing.std_inventory || 0);
+                
+                // formula: actual std_inventory = last std_inventory minus consumption of the day
+                var actualStdInventory = currentStock - usageToday;
+                var pointOfOrder = parseFloat(ing.point_of_order || 0);
+                var stockMax = parseFloat(ing.stock_max || 0);
+
+                if (usageToday > 0) totalInsumosDeduados++;
+
+                // formula: if actual std_inventory < point of order -> suggestion = stock_max - actual_inventory
                 if (actualStdInventory < pointOfOrder && stockMax > actualStdInventory) {
-                    const basePurchaseQtyNeeded = stockMax - actualStdInventory;
-                    const defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
+                    var purchaseQtyNeeded = stockMax - actualStdInventory;
+                    var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
 
                     TEMPORARY_STAGED_PURCHASE_LINES.push({
                         ingredient_id: ing.id,
                         ingredient_name: ing.name_es || ing.name,
                         uom: ing.uom || "gr",
                         last_std_inventory: currentStock,
-                        consumption: calculatedConsumption,
+                        consumption: usageToday,
                         actual_std_inventory: actualStdInventory,
                         point_of_order: pointOfOrder,
                         stock_max: stockMax,
-                        suggested_quantity: basePurchaseQtyNeeded,
-                        approved_quantity: basePurchaseQtyNeeded, 
+                        suggested_quantity: purchaseQtyNeeded,
+                        approved_quantity: purchasePurchaseQtyConstraintMatch(purchaseQtyNeeded, ing.id), 
                         supplier_id: defaultSupplierId,
                         is_approved: true
                     });
-                    if (calculatedConsumption > 0) componentsConsumedCount++;
                 }
             });
 
+            // Cache global list array variables natively
+            MASTER_INVENTORY_ITEMS = ingredients;
+
             if (feedback) {
-                feedback.innerHTML = `🎉 <b>Procesamiento de Ventas Exitoso:</b> Se calcularon deducciones teóricas en ${componentsConsumedCount} insumos. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} líneas críticas</b> por debajo del Punto de Pedido.`;
+                feedback.innerHTML = `🎉 <b>Cálculo Completado Exitosamente:</b> Se dedujeron porciones sobre <b>${totalInsumosDeduados} insumos primarios</b>. Se generaron propuestas de compra para <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} artículos críticos</b>.`;
             }
-            const commitBtn = document.getElementById("btn-commit-all-orders");
-            if (commitBtn) commitBtn.style.display = "inline-flex";
             
+            var commitBtn = document.getElementById("btn-commit-all-orders");
+            if (commitBtn) commitBtn.style.display = "inline-flex";
+
             renderGroupedSupplierProcurementAccordion();
 
         } catch (err) {
-            console.error(err);
-            if (feedback) feedback.innerHTML = `❌ <b>Fallo Estructural:</b> El archivo no pudo procesarse correctamente.`;
+            console.error("Purchasing explosion thread failure:", err);
+            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al descomponer el CSV de ventas.</div>";
         }
-    }, 1500);
+    };
+
+    reader.readAsText(file);
 }
+
+// Helper calculation alignment selector fallback function
+function purchasePurchaseQtyConstraintMatch(qty, id) {
+    return qty; // Keeps direct raw balance weights active
+}
+
 function renderGroupedSupplierProcurementAccordion() {
     const container = document.getElementById("supplier-orders-accordion-container");
     const workspace = document.getElementById("procurement-suggestions-workspace");
