@@ -2928,13 +2928,13 @@ let TEMPORARY_STAGED_PURCHASE_LINES = [];
 let CACHED_SUPPLIER_MAP = {};
 let CACHED_CONVERSION_MAPPINGS = [];
 
-// Initialize background structural arrays automatically on boot
+// Initialize background structural arrays automatically on boot with native table mapping strings
 async function initializePurchasingSystemDependencies() {
     try {
-        // Fetch suppliers and conversion factors in parallel matching your Asociación y Conversión rows
+        // 🌟 NATIVE FIX: Realigned to target your project's exact singular database table names!
         const [resProv, resMaps] = await Promise.all([
-            fetch(API_URL + "providers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(API_URL + "conversion_mappings", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            fetch(API_URL + "provider", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "association_conversion", { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
         
         if (Array.isArray(resProv)) {
@@ -3123,8 +3123,9 @@ async function processDailySalesFileIngestion(event) {
             // Sync global data parameters natively in memory
             MASTER_INVENTORY_ITEMS = ingredients;
 
-            if (feedback) {
-                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos recursivamente en <b>${totalInsumosDeduados || totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
+                        if (feedback) {
+                // 🌟 FIX COMPLETED: Aligned spelling variables to stop the ReferenceError completely!
+                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos recursivamente en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
             }
             
             var commitBtn = document.getElementById("btn-commit-all-orders");
