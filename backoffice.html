@@ -2946,7 +2946,7 @@ async function initializePurchasingSystemDependencies() {
 }
 
 // =======================================================================
-// 📋 REAL-TIME REVO CSV SALES PIPELINE & PREDICTIVE INVENTORY EXPLOSION
+// 📋 REAL-TIME REVO CSV SALES PIPELINE & DEEP RECURSIVE INVENTORY EXPLOSION
 // =======================================================================
 
 async function processDailySalesFileIngestion(event) {
@@ -2956,7 +2956,7 @@ async function processDailySalesFileIngestion(event) {
     var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
         feedback.style.display = "block";
-        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión de consumos sobre el CSV Revo...</div>";
+        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión profunda de consumos teóricos...</div>";
     }
 
     var file = fileInput.files[0];
@@ -2982,7 +2982,7 @@ async function processDailySalesFileIngestion(event) {
                 return;
             }
 
-            // Build lookup maps exactly matching your Desviación de Costes logic tracking
+            // Build lookup maps matching your Desviación de Costes logic tracking precisely
             var recMapById = {};
             var recMapByRevo = {};
             var recMapByName = {};
@@ -3007,7 +3007,7 @@ async function processDailySalesFileIngestion(event) {
                 return;
             }
 
-            // Extract headers exactly matching your variance engine tokens
+            // Extract headers matching your variance engine tokens word-for-word
             var headers = lines[0].split(",");
             var idxQty = -1, idxProd = -1, idxId = -1;
 
@@ -3019,11 +3019,49 @@ async function processDailySalesFileIngestion(event) {
             }
 
             if (idxQty === -1 || idxProd === -1 || idxId === -1) {
-                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Asegúrese de que contenga las columnas: Cantidad, Producto, Id.</div>";
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Revo requiere columnas: Cantidad, Producto, Id.</div>";
                 return;
             }
 
-            // 🧠 STEP 1: RECIPE EXPLOSION LOOP
+            // 🌟 DEEP INFINITE RECURSION ENGINE: Cascades down until it hits basic components
+            function explodeRecipeUsageRecursive(recipeId, salesQty) {
+                var parentRecipeId = String(recipeId).toLowerCase().trim();
+                
+                mappings.forEach(mapRow => {
+                    if (String(mapRow.recipe_id).toLowerCase().trim() === parentRecipeId) {
+                        var ingId = String(mapRow.ingredient_id).toLowerCase().trim();
+                        var weightPerPortion = parseFloat(mapRow.quantity) || 0;
+                        var scrapPct = parseFloat(mapRow.scrap_percentage || mapRow.scrap || 0);
+                        
+                        // formula: consumption = weight * portions * (1 + scrap/100)
+                        var baseConsumption = weightPerPortion * salesQty * (1 + (scrapPct / 100));
+                        
+                        // Check if this component acts as a sub-recipe row in the recipes schema
+                        var subRecipeFound = recipes.find(function(r) { 
+                            return String(r.id).toLowerCase().trim() === ingId; 
+                        });
+                        
+                        // Check if it has child items mapping to it, proving it's an unexploded sub-recipe block
+                        var hasChildLines = mappings.some(function(m) { 
+                            return String(m.recipe_id).toLowerCase().trim() === ingId; 
+                        });
+
+                        if (subRecipeFound && hasChildLines) {
+                            console.log(`🌀 Sub-Recipe explosion layer matched for "${subRecipeFound.name}". Re-entering loop recursively...`);
+                            // 🚀 CASCADES INDEFINITELY DOWN UNTIL BASIC CORE RAW MATERIALS ARE REACHED
+                            explodeRecipeUsageRecursive(subRecipeFound.id, baseConsumption);
+                        } else {
+                            // If it's a structural component leaf, log the absolute consumption to the ledger track
+                            if (ingredientUsageLedger[ingId] !== undefined) {
+                                ingredientUsageLedger[ingId] += baseConsumption;
+                            } else {
+                                ingredientUsageLedger[ingId] = baseConsumption;
+                            }
+                        }
+                    }
+                });
+            }
+
             // Parse through every line row in your live Revo sales sheet file
             for (var l = 1; l < lines.length; l++) {
                 if (!lines[l].trim()) continue;
@@ -3040,41 +3078,27 @@ async function processDailySalesFileIngestion(event) {
                 // Match with active recipes via Revo ID or text string name match keys
                 var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
                 if (matchedRecipe) {
-                    var parentRecipeId = String(matchedRecipe.id);
-                    
-                    // Cross-reference lines matching this recipe inside your recipe_ingredients table rows
-                    mappings.forEach(mapRow => {
-                        if (String(mapRow.recipe_id) === parentRecipeId) {
-                            var ingId = String(mapRow.ingredient_id);
-                            var weightUsedPerPortion = parseFloat(mapRow.quantity) || 0;
-                            var scrapPct = parseFloat(mapRow.scrap_percentage || mapRow.scrap || 0);
-                            
-                            // Adjust consumption directly using your Merma factor: weight * portions * (1 + scrap/100)
-                            var consumptionAmount = weightUsedPerPortion * quantitySold * (1 + (scrapPct / 100));
-                            if (ingredientUsageLedger[ingId] !== undefined) {
-                                ingredientUsageLedger[ingId] += consumptionAmount;
-                            }
-                        }
-                    });
+                    explodeRecipeUsageRecursive(matchedRecipe.id, quantitySold);
                 }
             }
-
-            // 🧠 STEP 2 & 3: EVALUATE PARAMETERS & PROJECT PURCHASE REORDERINGS
+            // =======================================================================
+            // 🧠 STEP 2 & 3: EVALUATE INVENTORY PARAMETERS & PURCHASE ORDER SUGGESTIONS
+            // =======================================================================
             TEMPORARY_STAGED_PURCHASE_LINES = [];
-            let totalInsumosDeduados = 0;
+            let totalInsumosDeducidos = 0;
 
             ingredients.forEach(ing => {
                 var usageToday = ingredientUsageLedger[String(ing.id)] || 0.0;
                 var currentStock = parseFloat(ing.std_inventory || 0);
                 
-                // formula: actual std_inventory = last std_inventory minus consumption of the day
+                // 🌟 STEP 2 FORMULA: actual std_inventory = last std_inventory minus consumption of the day
                 var actualStdInventory = currentStock - usageToday;
                 var pointOfOrder = parseFloat(ing.point_of_order || 0);
                 var stockMax = parseFloat(ing.stock_max || 0);
 
-                if (usageToday > 0) totalInsumosDeduados++;
+                if (usageToday > 0) totalInsumosDeducidos++;
 
-                // formula: if actual std_inventory < point of order -> suggestion = stock_max - actual_inventory
+                // 🌟 STEP 3 FORMULA: if actual std_inventory < point of order -> suggestion = stock_max - actual_inventory
                 if (actualStdInventory < pointOfOrder && stockMax > actualStdInventory) {
                     var purchaseQtyNeeded = stockMax - actualStdInventory;
                     var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
@@ -3085,32 +3109,33 @@ async function processDailySalesFileIngestion(event) {
                         uom: ing.uom || "gr",
                         last_std_inventory: currentStock,
                         consumption: usageToday,
-                        actual_std_inventory: actualStdInventory,
+                        actual_std_inventory: actualStdInventory, // Records negative tracks cleanly
                         point_of_order: pointOfOrder,
                         stock_max: stockMax,
                         suggested_quantity: purchaseQtyNeeded,
-                        approved_quantity: purchasePurchaseQtyConstraintMatch(purchaseQtyNeeded, ing.id), 
+                        approved_quantity: purchaseQtyNeeded, 
                         supplier_id: defaultSupplierId,
                         is_approved: true
                     });
                 }
             });
 
-            // Cache global list array variables natively
+            // Sync global data parameters natively in memory
             MASTER_INVENTORY_ITEMS = ingredients;
 
             if (feedback) {
-                feedback.innerHTML = `🎉 <b>Cálculo Completado Exitosamente:</b> Se dedujeron porciones sobre <b>${totalInsumosDeduados} insumos primarios</b>. Se generaron propuestas de compra para <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} artículos críticos</b>.`;
+                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos recursivamente en <b>${totalInsumosDeduados || totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
             }
             
             var commitBtn = document.getElementById("btn-commit-all-orders");
             if (commitBtn) commitBtn.style.display = "inline-flex";
 
+            // Trigger visual multi-supplier accordion grid arrays instantly
             renderGroupedSupplierProcurementAccordion();
 
         } catch (err) {
-            console.error("Purchasing explosion thread failure:", err);
-            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al descomponer el CSV de ventas.</div>";
+            console.error("Deep purchasing explosion pipeline layout crash:", err);
+            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al ejecutar la de-composición recursiva del archivo CSV.</div>";
         }
     };
 
