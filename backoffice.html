@@ -3255,21 +3255,9 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
     }
 }
 
-// 🌟 STEP 5: MASTER INVENTORY ACTUALIZATION & EXCEL GENERATION EXPORT
+// 🌟 STEP 5: MASTER INVENTORY ACTUALIZATION & NATIVE DATA EXPORT STREAM
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
-    
-    // 📊 ON-DEMAND INJECTOR: Loads the sheet engine dynamically to bypass JSX strict compiler blocks completely!
-    if (typeof XLSX === "undefined") {
-        if (feedback) feedback.innerHTML = "⏳ Inicializando motores de generación Excel...";
-        await new Promise((resolve) => {
-            const script = document.createElement("script");
-            script.src = "https://cloudflare.com";
-            script.onload = () => resolve();
-            document.head.appendChild(script);
-        });
-    }
-
     const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
 
     if (approvedLines.length === 0) {
@@ -3277,12 +3265,14 @@ async function executeFinalInventoryProcurementCommit() {
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ Actualizando stock en Supabase cloud y empaquetando libro Excel...";
-
+    if (feedback) feedback.innerHTML = "⏳ Actualizando stock en Supabase cloud y empaquetando reporte de compras...";
 
     try {
         const updatePromises = [];
-        const excelRowsData = [];
+        
+        // 📊 Initialize a clean CSV data text array with standard scannable headers
+        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters (like Ó, í, ñ) perfectly!
+        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado,Unidad (UOM),Punto de Pedido,Stock Maximo,Cantidad Sugerida,Cantidad Comprada\r\n";
 
         approvedLines.forEach(line => {
             // formula: std inventory actualization = actual inventory + approved purchased orders
@@ -3304,44 +3294,43 @@ async function executeFinalInventoryProcurementCommit() {
             const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
             const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
 
-            // Package data row for Excel Sheet conversion array mapping
-            excelRowsData.push({
-                "Proveedor / Distribuidor": supplierName,
-                "Ingrediente": line.ingredient_name,
-                "Stock Proyectado": parseFloat(line.actual_std_inventory.toFixed(2)),
-                "Unidad (UOM)": line.uom,
-                "Punto de Pedido": parseFloat(line.point_of_order.toFixed(2)),
-                "Stock Máximo": parseFloat(line.stock_max.toFixed(2)),
-                "Cantidad Sugerida": parseFloat(line.suggested_quantity.toFixed(2)),
-                "Cantidad Comprada": parseFloat(line.approved_quantity.toFixed(2))
-            });
+            // Clean text row entries by removing commas to prevent file splitting errors
+            const cleanSupName = supplierName.replace(/,/g, " ");
+            const cleanIngName = line.ingredient_name.replace(/,/g, " ");
+            const cleanUOM = line.uom.replace(/,/g, " ");
+
+            // Append structured text line to our export data bundle stream
+            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${line.point_of_order.toFixed(2)},${line.stock_max.toFixed(2)},${line.suggested_quantity.toFixed(2)},${line.approved_quantity.toFixed(2)}\r\n`;
         });
 
         // Fire your database update handshakes in parallel to save time
         await Promise.all(updatePromises);
 
-        // 🌟 EXCEL WORKBOOK ENGINE FIX: Aligned variable names to trigger download instantly!
-        const worksheet = XLSX.utils.json_to_sheet(excelRowsData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Pedidos del Dia");
+        // 🌟 NATIVE BROWSER DOWNLOAD ENGINE: Triggers an instant download prompt without any library!
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const downloadUrl = URL.createObjectURL(blob);
         
-        // Auto-adjust column widths for scannability geometry
-        const maxLenProps = [{"wch": 35}, {"wch": 25}, {"wch": 16}, {"wch": 12}, {"wch": 16}, {"wch": 16}, {"wch": 18}, {"wch": 18}];
-        worksheet["!cols"] = maxLenProps;
+        link.setAttribute("href", downloadUrl);
+        link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = "hidden";
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-        // Force browser to pop open file save download frame dialog box natively
-        XLSX.writeFile(workbook, `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Libro Excel descargado y base de datos actualizada.`;
-        alert("📊 ¡Archivo Excel generado! Revisa la carpeta de Descargas de tu computadora.");
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Reporte de compras descargado y niveles de stock actualizados en la nube.`;
+        alert("📊 ¡Reporte generado con éxito! Revisa la carpeta de Descargas de tu computadora.");
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
-        document.getElementById("procurement-suggestions-workspace").style.display = "none";
-        document.getElementById("btn-commit-all-orders").style.display = "none";
+        const workspace = document.getElementById("procurement-suggestions-workspace");
+        const commitBtn = document.getElementById("btn-commit-all-orders");
+        if (workspace) workspace.style.display = "none";
+        if (commitBtn) commitBtn.style.display = "none";
 
     } catch (err) {
         console.error("Procurement commit error:", err);
-        if (feedback) feedback.innerHTML = "❌ Error al procesar transacciones.";
+        if (feedback) feedback.innerHTML = "❌ Error al procesar transacciones en el servidor.";
     }
 }
 
