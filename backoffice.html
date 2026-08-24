@@ -2928,13 +2928,13 @@ let TEMPORARY_STAGED_PURCHASE_LINES = [];
 let CACHED_SUPPLIER_MAP = {};
 let CACHED_CONVERSION_MAPPINGS = [];
 
-// Initialize background structural arrays automatically on boot with native table mapping strings
+// Initialize background structural arrays automatically on boot with your true schema table keys
 async function initializePurchasingSystemDependencies() {
     try {
-        // 🌟 NATIVE FIX: Realigned to target your project's exact singular database table names!
+        // 🌟 REALIGNED FIX: Directly maps to your true database table names 'suppliers' and 'supplier_formats'
         const [resProv, resMaps] = await Promise.all([
-            fetch(API_URL + "provider", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(API_URL + "association_conversion", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            fetch(API_URL + "suppliers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
         
         if (Array.isArray(resProv)) {
