@@ -3276,25 +3276,45 @@ async function executeFinalInventoryProcurementCommit() {
 
         approvedLines.forEach(line => {
             // formula: std inventory actualization = actual inventory + approved purchased orders
-            // 🌟 ALIGNMENT CORRECTION: Forces explicit floating-point variables to avoid case mismatch anomalies!
             const baseActualInventory = parseFloat(line.actual_std_inventory || 0);
             const baseApprovedPurchase = parseFloat(line.approved_quantity || 0);
             const definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
             
-            console.log(`📡 Pushing Stock Update for Insumo ID [${line.ingredient_id}]: New std_inventory -> ${definitiveNewInventoryLevel}`);
+            // 🛡️ CAST INTEGRATION TRACK: Forcing explicit clean tracking lookups to avoid text-string filtering drops
+            const targetIngId = String(line.ingredient_id).trim();
+
+            console.log(`📡 Pushing Stock Update for Insumo ID [${targetIngId}]: New std_inventory -> ${definitiveNewInventoryLevel}`);
+
+            // 🌟 FIXED ROUTING FILTER: Uses an explicit clean query sequence to guarantee Supabase intercepts the row target match
+            const targetUrl = `${API_URL}ingredients?id=eq.${targetIngId}`;
 
             updatePromises.push(
-                fetch(API_URL + "ingredients?id=eq." + line.ingredient_id, {
+                fetch(targetUrl, {
                     method: "PATCH",
                     headers: {
                         "apikey": API_KEY,
                         "Authorization": "Bearer " + API_KEY,
                         "Content-Type": "application/json",
-                        "Prefer": "return=minimal" // Tells Supabase to acknowledge the patch silently
+                        "Prefer": "return=representation" // 🚀 Forces Supabase to return the modified row array, proving disk write success!
                     },
                     body: JSON.stringify({ 
-                        std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2)) // 🚀 Matches your Supabase table field column signature exactly!
+                        std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                     })
+                })
+                .then(async function(response) {
+                    if (!response.ok) {
+                        const errTxt = await response.text();
+                        console.error(`❌ DB WRITE REJECTED for ID ${targetIngId}:`, errTxt);
+                        return null;
+                    }
+                    const writeCheckData = await response.json();
+                    console.log(`📊 DB CONFIRMATION FOR ID ${targetIngId}:`, writeCheckData);
+                    
+                    // If the server returns an empty array, it means the URL ID parameters did not match any row!
+                    if (!writeCheckData || writeCheckData.length === 0) {
+                        console.warn(`⚠️ WARNING: Supabase found ZERO rows matching ID "${targetIngId}". Check if column name is 'id' or if record exists.`);
+                    }
+                    return writeCheckData;
                 })
             );
 
