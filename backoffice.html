@@ -3270,23 +3270,31 @@ async function executeFinalInventoryProcurementCommit() {
     try {
         const updatePromises = [];
         
-        // 📊 Initialize a clean CSV data text array with standard scannable headers
-        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters (like Ó, í, ñ) perfectly!
+        // Initialize a clean CSV data text array with standard scannable headers
+        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters perfectly!
         csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado,Unidad (UOM),Punto de Pedido,Stock Maximo,Cantidad Sugerida,Cantidad Comprada\r\n";
 
         approvedLines.forEach(line => {
             // formula: std inventory actualization = actual inventory + approved purchased orders
-            const definitiveNewInventoryLevel = parseFloat(line.actual_std_inventory) + parseFloat(line.approved_quantity);
+            // 🌟 ALIGNMENT CORRECTION: Forces explicit floating-point variables to avoid case mismatch anomalies!
+            const baseActualInventory = parseFloat(line.actual_std_inventory || 0);
+            const baseApprovedPurchase = parseFloat(line.approved_quantity || 0);
+            const definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
             
+            console.log(`📡 Pushing Stock Update for Insumo ID [${line.ingredient_id}]: New std_inventory -> ${definitiveNewInventoryLevel}`);
+
             updatePromises.push(
                 fetch(API_URL + "ingredients?id=eq." + line.ingredient_id, {
                     method: "PATCH",
                     headers: {
                         "apikey": API_KEY,
                         "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal" // Tells Supabase to acknowledge the patch silently
                     },
-                    body: JSON.stringify({ std_inventory: definitiveNewInventoryLevel })
+                    body: JSON.stringify({ 
+                        std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2)) // 🚀 Matches your Supabase table field column signature exactly!
+                    })
                 })
             );
 
@@ -3294,19 +3302,19 @@ async function executeFinalInventoryProcurementCommit() {
             const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
             const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
 
-            // Clean text row entries by removing commas to prevent file splitting errors
             const cleanSupName = supplierName.replace(/,/g, " ");
             const cleanIngName = line.ingredient_name.replace(/,/g, " ");
             const cleanUOM = line.uom.replace(/,/g, " ");
 
             // Append structured text line to our export data bundle stream
-            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${line.point_of_order.toFixed(2)},${line.stock_max.toFixed(2)},${line.suggested_quantity.toFixed(2)},${line.approved_quantity.toFixed(2)}\r\n`;
+            csvContent += `"${cleanSupName}","${cleanIngName}",${baseActualInventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${baseApprovedPurchase.toFixed(2)}\r\n`;
         });
 
         // Fire your database update handshakes in parallel to save time
         await Promise.all(updatePromises);
+        console.log("🚀 All Supabase stock update promises completed successfully!");
 
-        // 🌟 NATIVE BROWSER DOWNLOAD ENGINE: Triggers an instant download prompt without any library!
+        // NATIVE BROWSER DOWNLOAD ENGINE: Triggers an instant download prompt without any library!
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const link = document.createElement("a");
         const downloadUrl = URL.createObjectURL(blob);
@@ -3320,13 +3328,16 @@ async function executeFinalInventoryProcurementCommit() {
         document.body.removeChild(link);
 
         if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Reporte de compras descargado y niveles de stock actualizados en la nube.`;
-        alert("📊 ¡Reporte generado con éxito! Revisa la carpeta de Descargas de tu computadora.");
+        alert("📊 ¡Reporte de Compras Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         const workspace = document.getElementById("procurement-suggestions-workspace");
         const commitBtn = document.getElementById("btn-commit-all-orders");
         if (workspace) workspace.style.display = "none";
         if (commitBtn) commitBtn.style.display = "none";
+
+        // Refresh your active stock spreadsheet adjustments grid instantly to view changes hands-free!
+        if (typeof fetchInventoryMatrixData === "function") fetchInventoryMatrixData();
 
     } catch (err) {
         console.error("Procurement commit error:", err);
