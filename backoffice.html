@@ -3265,13 +3265,14 @@ async function executeFinalInventoryProcurementCommit() {
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ <b>Guardando transacciones:</b> Actualizando niveles std_inventory de las líneas aprobadas en Supabase cloud y descartando rechazos...";
+    if (feedback) feedback.innerHTML = "⏳ Actualizando stock en Supabase cloud y empaquetando libro Excel...";
 
     try {
         const updatePromises = [];
+        const excelRowsData = [];
 
         approvedLines.forEach(line => {
-            // Actualization inventory calculation: actual inventory + approved purchased orders
+            // formula: std inventory actualization = actual inventory + approved purchased orders
             const definitiveNewInventoryLevel = parseFloat(line.actual_std_inventory) + parseFloat(line.approved_quantity);
             
             updatePromises.push(
@@ -3282,27 +3283,52 @@ async function executeFinalInventoryProcurementCommit() {
                         "Authorization": "Bearer " + API_KEY,
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({
-                        std_inventory: definitiveNewInventoryLevel
-                    })
+                    body: JSON.stringify({ std_inventory: definitiveNewInventoryLevel })
                 })
             );
+
+            // Fetch supplier names dynamically from background memory layout
+            const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
+            const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
+
+            // Package data row for Excel Sheet conversion array mapping
+            excelRowsData.push({
+                "Proveedor / Distribuidor": supplierName,
+                "Ingrediente": line.ingredient_name,
+                "Stock Proyectado": parseFloat(line.actual_std_inventory.toFixed(2)),
+                "Unidad (UOM)": line.uom,
+                "Punto de Pedido": parseFloat(line.point_of_order.toFixed(2)),
+                "Stock Máximo": parseFloat(line.stock_max.toFixed(2)),
+                "Cantidad Sugerida": parseFloat(line.suggested_quantity.toFixed(2)),
+                "Cantidad Comprada": parseFloat(line.approved_quantity.toFixed(2))
+            });
         });
 
+        // Fire your database update handshakes in parallel to save time
         await Promise.all(updatePromises);
 
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Inventario Actualizado con Éxito!</b> Se incrementaron los niveles de stock de <b>${approvedLines.length} insumos aprobados</b>. Descargando libro de órdenes de compra Excel para proveedores...`;
-        alert("📊 ¡Órdenes de Compra Procesadas! Se ha generado tu archivo Excel consolidado agrupado por proveedor.");
+        // 🌟 EXCEL WORKBOOK ENGINE FIX: Aligned variable names to trigger download instantly!
+        const worksheet = XLSX.utils.json_to_sheet(excelRowsData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Pedidos del Dia");
+        
+        // Auto-adjust column widths for scannability geometry
+        const maxLenProps = [{"wch": 35}, {"wch": 25}, {"wch": 16}, {"wch": 12}, {"wch": 16}, {"wch": 16}, {"wch": 18}, {"wch": 18}];
+        worksheet["!cols"] = maxLenProps;
+
+        // Force browser to pop open file save download frame dialog box natively
+        XLSX.writeFile(workbook, `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Libro Excel descargado y base de datos actualizada.`;
+        alert("📊 ¡Archivo Excel generado! Revisa la carpeta de Descargas de tu computadora.");
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
-        const workspace = document.getElementById("procurement-suggestions-workspace");
-        const commitBtn = document.getElementById("btn-commit-all-orders");
-        if (workspace) workspace.style.display = "none";
-        if (commitBtn) commitBtn.style.display = "none";
+        document.getElementById("procurement-suggestions-workspace").style.display = "none";
+        document.getElementById("btn-commit-all-orders").style.display = "none";
 
     } catch (err) {
-        console.error("Master inventory commit failure:", err);
-        if (feedback) feedback.innerHTML = "❌ <b>Error de Sincronización:</b> No se pudieron actualizar los registros de stock de la base de datos.";
+        console.error("Procurement commit error:", err);
+        if (feedback) feedback.innerHTML = "❌ Error al procesar transacciones.";
     }
 }
 
