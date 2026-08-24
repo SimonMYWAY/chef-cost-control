@@ -3258,6 +3258,18 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
 // 🌟 STEP 5: MASTER INVENTORY ACTUALIZATION & EXCEL GENERATION EXPORT
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
+    
+    // 📊 ON-DEMAND INJECTOR: Loads the sheet engine dynamically to bypass JSX strict compiler blocks completely!
+    if (typeof XLSX === "undefined") {
+        if (feedback) feedback.innerHTML = "⏳ Inicializando motores de generación Excel...";
+        await new Promise((resolve) => {
+            const script = document.createElement("script");
+            script.src = "https://cloudflare.com";
+            script.onload = () => resolve();
+            document.head.appendChild(script);
+        });
+    }
+
     const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
 
     if (approvedLines.length === 0) {
@@ -3266,6 +3278,7 @@ async function executeFinalInventoryProcurementCommit() {
     }
 
     if (feedback) feedback.innerHTML = "⏳ Actualizando stock en Supabase cloud y empaquetando libro Excel...";
+
 
     try {
         const updatePromises = [];
