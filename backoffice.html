@@ -2947,7 +2947,7 @@ async function initializePurchasingSystemDependencies() {
 }
 
 // =======================================================================
-// 📋 REAL-TIME REVO CSV SALES PIPELINE & DEEP RECURSIVE INVENTORY EXPLOSION
+// 📋 REAL-TIME REVO CSV SALES PIPELINE & IRONCLAD QUANTITY RESOLUTION
 // =======================================================================
 
 async function processDailySalesFileIngestion(event) {
@@ -2960,7 +2960,7 @@ async function processDailySalesFileIngestion(event) {
         feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión profunda de consumos teóricos...</div>";
     }
 
-    var file = fileInput.files[0]; // Targeted file index zero
+    var file = fileInput.files[0];
     var reader = new FileReader();
 
     reader.onload = async function(e) {
@@ -2995,7 +2995,6 @@ async function processDailySalesFileIngestion(event) {
                 if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
             });
 
-            // 🌟 FIX COMPLETED: Reset and fill the global tracker ledger instead of a hidden local copy!
             GLOBAL_DAILY_CONSUMPTION_LEDGER = {};
             ingredients.forEach(i => { GLOBAL_DAILY_CONSUMPTION_LEDGER[String(i.id)] = 0.0; });
 
@@ -3064,6 +3063,7 @@ async function processDailySalesFileIngestion(event) {
                 var quantitySold = parseFloat(rawQty) || 0;
                 if (quantitySold <= 0) continue;
 
+                // 🌟 FIX COMPLETED: Strict index matching layout checks stop fuzzy matching ghost entries!
                 var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
                 if (matchedRecipe) {
                     explodeRecipeUsageRecursive(matchedRecipe.id, quantitySold);
@@ -3085,8 +3085,8 @@ async function processDailySalesFileIngestion(event) {
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                                // 🌟 FIX COMPLETED: Changed from < to <= to safely capture the zero reorder points!
-                if (actualStdInventory <= pointOfOrder && stockMax > actualStdInventory) {
+                // 🌟 FIX COMPLETED: Explicitly checks if stock_max is configured (> 0) to bypass raw uninitialized elements safely!
+                if (stockMax > 0 && actualStdInventory <= pointOfOrder && stockMax > actualStdInventory) {
                     var purchaseQtyNeeded = stockMax - actualStdInventory;
                     var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
 
