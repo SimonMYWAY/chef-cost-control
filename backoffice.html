@@ -3093,6 +3093,11 @@ async function processDailySalesFileIngestion(event) {
                 
                 // 🌟 STEP 2 FORMULA: actual std_inventory = last std_inventory minus consumption of the day
                 var actualStdInventory = currentStock - usageToday;
+                                // 🛡️ ZERO-FLOOR CONSTRAINT: Physical negative stock cannot exist in the kitchen warehouse!
+                if (actualStdInventory < 0) {
+                    actualStdInventory = 0.00;
+                }
+
                 var pointOfOrder = parseFloat(ing.point_of_order || 0);
                 var stockMax = parseFloat(ing.stock_max || 0);
 
