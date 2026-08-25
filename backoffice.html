@@ -2776,6 +2776,7 @@ document.addEventListener("click", function(event) {
 // =======================================================================
 
 let MASTER_INVENTORY_ITEMS = [];
+let GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; // 🌟 CRUCIAL FIX: Stays alive in memory across both functions!
 
 async function fetchInventoryMatrixData() {
     var rowsTarget = document.getElementById("inventory-matrix-table-rows");
@@ -2959,14 +2960,13 @@ async function processDailySalesFileIngestion(event) {
         feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión profunda de consumos teóricos...</div>";
     }
 
-    var file = fileInput.files[0];
+    var file = fileInput.files[0]; // Targeted file index zero
     var reader = new FileReader();
 
     reader.onload = async function(e) {
         try {
             var text = e.target.result;
 
-            // Fetch master system configuration data records from Supabase in parallel
             var results = await Promise.all([
                 fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
@@ -2982,13 +2982,12 @@ async function processDailySalesFileIngestion(event) {
                 return;
             }
 
-            // Build lookup maps matching your Desviación de Costes logic tracking precisely
             var recMapById = {};
             var recMapByRevo = {};
             var recMapByName = {};
             recipes.forEach(r => {
                 var multiplier = r.locked_multiplier !== null && r.locked_multiplier !== undefined ? parseFloat(r.locked_multiplier) : 1.0;
-                if (multiplier === 0.0 || multiplier === -9.0) return; // Skip deactivated recipes
+                if (multiplier === 0.0 || multiplier === -9.0) return; 
                 
                 var cleanId = String(r.id).toLowerCase().trim();
                 recMapById[cleanId] = r;
@@ -2996,18 +2995,16 @@ async function processDailySalesFileIngestion(event) {
                 if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
             });
 
-            // Map out a running usage ledger tracking object dictionary
-            var ingredientUsageLedger = {};
-            ingredients.forEach(i => { ingredientUsageLedger[String(i.id)] = 0.0; });
+            // 🌟 FIX COMPLETED: Reset and fill the global tracker ledger instead of a hidden local copy!
+            GLOBAL_DAILY_CONSUMPTION_LEDGER = {};
+            ingredients.forEach(i => { GLOBAL_DAILY_CONSUMPTION_LEDGER[String(i.id)] = 0.0; });
 
-            // Split file rows into lines array
             var lines = text.split(/\r?\n/);
             if (lines.length <= 1) {
                 if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ El archivo CSV seleccionado está vacío o corrupto.</div>";
                 return;
             }
 
-            // Extract headers matching your variance engine tokens word-for-word
             var headers = lines[0].split(",");
             var idxQty = -1, idxProd = -1, idxId = -1;
 
@@ -3023,7 +3020,6 @@ async function processDailySalesFileIngestion(event) {
                 return;
             }
 
-            // 🌟 DEEP INFINITE RECURSION ENGINE: Cascades down until it hits basic components
             function explodeRecipeUsageRecursive(recipeId, salesQty) {
                 var parentRecipeId = String(recipeId).toLowerCase().trim();
                 
@@ -3033,36 +3029,29 @@ async function processDailySalesFileIngestion(event) {
                         var weightPerPortion = parseFloat(mapRow.quantity) || 0;
                         var scrapPct = parseFloat(mapRow.scrap_percentage || mapRow.scrap || 0);
                         
-                        // formula: consumption = weight * portions * (1 + scrap/100)
                         var baseConsumption = weightPerPortion * salesQty * (1 + (scrapPct / 100));
                         
-                        // Check if this component acts as a sub-recipe row in the recipes schema
                         var subRecipeFound = recipes.find(function(r) { 
                             return String(r.id).toLowerCase().trim() === ingId; 
                         });
                         
-                        // Check if it has child items mapping to it, proving it's an unexploded sub-recipe block
                         var hasChildLines = mappings.some(function(m) { 
                             return String(m.recipe_id).toLowerCase().trim() === ingId; 
                         });
 
                         if (subRecipeFound && hasChildLines) {
-                            console.log(`🌀 Sub-Recipe explosion layer matched for "${subRecipeFound.name}". Re-entering loop recursively...`);
-                            // 🚀 CASCADES INDEFINITELY DOWN UNTIL BASIC CORE RAW MATERIALS ARE REACHED
                             explodeRecipeUsageRecursive(subRecipeFound.id, baseConsumption);
                         } else {
-                            // If it's a structural component leaf, log the absolute consumption to the ledger track
-                            if (ingredientUsageLedger[ingId] !== undefined) {
-                                ingredientUsageLedger[ingId] += baseConsumption;
+                            if (GLOBAL_DAILY_CONSUMPTION_LEDGER[ingId] !== undefined) {
+                                GLOBAL_DAILY_CONSUMPTION_LEDGER[ingId] += baseConsumption;
                             } else {
-                                ingredientUsageLedger[ingId] = baseConsumption;
+                                GLOBAL_DAILY_CONSUMPTION_LEDGER[ingId] = baseConsumption;
                             }
                         }
                     }
                 });
             }
 
-            // Parse through every line row in your live Revo sales sheet file
             for (var l = 1; l < lines.length; l++) {
                 if (!lines[l].trim()) continue;
                 var columns = lines[l].split(",");
@@ -3075,35 +3064,27 @@ async function processDailySalesFileIngestion(event) {
                 var quantitySold = parseFloat(rawQty) || 0;
                 if (quantitySold <= 0) continue;
 
-                // Match with active recipes via Revo ID or text string name match keys
                 var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
                 if (matchedRecipe) {
                     explodeRecipeUsageRecursive(matchedRecipe.id, quantitySold);
                 }
             }
-            // =======================================================================
-            // 🧠 STEP 2 & 3: EVALUATE INVENTORY PARAMETERS & PURCHASE ORDER SUGGESTIONS
-            // =======================================================================
+
             TEMPORARY_STAGED_PURCHASE_LINES = [];
             let totalInsumosDeducidos = 0;
 
             ingredients.forEach(ing => {
-                var usageToday = ingredientUsageLedger[String(ing.id)] || 0.0;
+                var usageToday = GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0.0;
                 var currentStock = parseFloat(ing.std_inventory || 0);
                 
-                // 🌟 STEP 2 FORMULA: actual std_inventory = last std_inventory minus consumption of the day
                 var actualStdInventory = currentStock - usageToday;
-                                // 🛡️ ZERO-FLOOR CONSTRAINT: Physical negative stock cannot exist in the kitchen warehouse!
-                if (actualStdInventory < 0) {
-                    actualStdInventory = 0.00;
-                }
-
+                if (actualStdInventory < 0) actualStdInventory = 0.00; // Enforce zero floor
+                
                 var pointOfOrder = parseFloat(ing.point_of_order || 0);
                 var stockMax = parseFloat(ing.stock_max || 0);
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                // 🌟 STEP 3 FORMULA: if actual std_inventory < point of order -> suggestion = stock_max - actual_inventory
                 if (actualStdInventory < pointOfOrder && stockMax > actualStdInventory) {
                     var purchaseQtyNeeded = stockMax - actualStdInventory;
                     var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
@@ -3114,7 +3095,7 @@ async function processDailySalesFileIngestion(event) {
                         uom: ing.uom || "gr",
                         last_std_inventory: currentStock,
                         consumption: usageToday,
-                        actual_std_inventory: actualStdInventory, // Records negative tracks cleanly
+                        actual_std_inventory: actualStdInventory,
                         point_of_order: pointOfOrder,
                         stock_max: stockMax,
                         suggested_quantity: purchaseQtyNeeded,
@@ -3125,18 +3106,15 @@ async function processDailySalesFileIngestion(event) {
                 }
             });
 
-            // Sync global data parameters natively in memory
             MASTER_INVENTORY_ITEMS = ingredients;
 
-                        if (feedback) {
-                // 🌟 FIX COMPLETED: Aligned spelling variables to stop the ReferenceError completely!
-                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos recursivamente en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
+            if (feedback) {
+                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
             }
             
             var commitBtn = document.getElementById("btn-commit-all-orders");
             if (commitBtn) commitBtn.style.display = "inline-flex";
 
-            // Trigger visual multi-supplier accordion grid arrays instantly
             renderGroupedSupplierProcurementAccordion();
 
         } catch (err) {
@@ -3261,11 +3239,9 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
 }
 
 // 🌟 STEP 5: DECOUPLED MASTER INVENTORY ACTUALIZATION & DATA EXPORT STREAM
-// Guarantees that ALL consumption deductions save to Supabase, even if no orders are triggered!
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
     
-    // Fallback block mapping to ensure the database pushes updates even if zero lines are ordered
     if (typeof MASTER_INVENTORY_ITEMS === "undefined" || MASTER_INVENTORY_ITEMS.length === 0) {
         alert("⚠️ No hay datos de inventario activos cargados para confirmar.");
         return;
@@ -3275,40 +3251,32 @@ async function executeFinalInventoryProcurementCommit() {
 
     try {
         const updatePromises = [];
-        
-        // Initialize a clean CSV data text array with standard scannable headers
-        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters perfectly!
+        let csvContent = "\uFEFF"; 
         csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado,Unidad (UOM),Punto de Pedido,Stock Maximo,Cantidad Sugerida,Cantidad Comprada\r\n";
 
-        // 🌟 PILLAR 1: GLOBAL DESTRUCTION LOOP
-        // We look directly at ALL ingredients in memory, forcing every item with sales activity to update its stock!
         MASTER_INVENTORY_ITEMS.forEach(ing => {
-            // Find out if this specific item was tracked inside our staged alerts array
             const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ing.id));
             
             let definitiveNewInventoryLevel = 0;
             let usageAmount = 0;
 
             if (matchedAlertLine) {
-                // If an order was triggered, calculate: zero-capped stock + your newly approved purchase quantity
                 const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
                 const baseApprovedPurchase = matchedAlertLine.is_approved ? parseFloat(matchedAlertLine.approved_quantity || 0) : 0;
                 definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
                 usageAmount = parseFloat(matchedAlertLine.consumption || 0);
             } else {
-                // 🚀 THE CRUCIAL FIX: If NO purchase was triggered, we must still deduct today's consumption!
-                // Read the usage ledger that was calculated during Step 1 of your ingestion loop
-                const usageLedgerAmount = typeof ingredientUsageLedger !== "undefined" ? parseFloat(ingredientUsageLedger[String(ing.id)] || 0) : 0;
+                // 🚀 FIXED: Reads the shared memory variable safely to ensure zero updates are captured!
+                const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
                 
                 let processedStock = baseCurrentStock - usageLedgerAmount;
-                if (processedStock < 0) processedStock = 0.00; // Enforce your strict zero-floor constraint
+                if (processedStock < 0) processedStock = 0.00; // Enforce zero floor
                 
                 definitiveNewInventoryLevel = processedStock;
                 usageAmount = usageLedgerAmount;
             }
 
-            // Only send network packages if the item actually had sales activity/consumption today
             if (usageAmount > 0) {
                 const targetIngId = String(ing.id).trim();
                 const targetUrl = `${API_URL}ingredients?id=eq.${targetIngId}`;
@@ -3326,11 +3294,15 @@ async function executeFinalInventoryProcurementCommit() {
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     })
+                    .then(r => r.json())
+                    .then(data => {
+                        console.log(`📡 REAL-TIME ROW WRITE VERIFIED FOR ID [${targetIngId}]:`, data);
+                        return data;
+                    })
                 );
             }
         });
 
-        // 🌟 PILLAR 2: BUILD FILE ONLY FOR ACTIVE APPROVED ORDERS
         const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
         
         approvedLines.forEach(line => {
@@ -3344,20 +3316,18 @@ async function executeFinalInventoryProcurementCommit() {
             csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${parseFloat(line.approved_quantity || 0).toFixed(2)}\r\n`;
         });
 
-        // Fire your database update handshakes in parallel to save time
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
-            console.log(`🚀 Successfully synchronized ${updatePromises.length} consumption logs to Supabase.`);
+            console.log(`🚀 Successfully written true data values to Supabase across ${updatePromises.length} cells.`);
         }
 
-        // Only trigger a physical browser download file if actual orders were approved
         if (approvedLines.length > 0) {
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')}.csv`);
             link.style.visibility = "hidden";
             
             document.body.appendChild(link);
@@ -3377,7 +3347,6 @@ async function executeFinalInventoryProcurementCommit() {
         if (workspace) workspace.style.display = "none";
         if (commitBtn) commitBtn.style.display = "none";
 
-        // Refresh your active stock spreadsheet adjustments grid instantly to view changes hands-free!
         if (typeof fetchInventoryMatrixData === "function") fetchInventoryMatrixData();
 
     } catch (err) {
