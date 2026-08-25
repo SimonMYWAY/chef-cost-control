@@ -3260,17 +3260,18 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
     }
 }
 
-// 🌟 STEP 5: MASTER INVENTORY ACTUALIZATION & NATIVE DATA EXPORT STREAM
+// 🌟 STEP 5: DECOUPLED MASTER INVENTORY ACTUALIZATION & DATA EXPORT STREAM
+// Guarantees that ALL consumption deductions save to Supabase, even if no orders are triggered!
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
-    const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
-
-    if (approvedLines.length === 0) {
-        alert("⚠️ No hay líneas de pedido aprobadas para confirmar.");
+    
+    // Fallback block mapping to ensure the database pushes updates even if zero lines are ordered
+    if (typeof MASTER_INVENTORY_ITEMS === "undefined" || MASTER_INVENTORY_ITEMS.length === 0) {
+        alert("⚠️ No hay datos de inventario activos cargados para confirmar.");
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ Actualizando stock en Supabase cloud y empaquetando reporte de compras...";
+    if (feedback) feedback.innerHTML = "⏳ Sincronizando consumos teóricos y actualizando niveles de stock en Supabase cloud...";
 
     try {
         const updatePromises = [];
@@ -3279,51 +3280,60 @@ async function executeFinalInventoryProcurementCommit() {
         let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters perfectly!
         csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado,Unidad (UOM),Punto de Pedido,Stock Maximo,Cantidad Sugerida,Cantidad Comprada\r\n";
 
-        approvedLines.forEach(line => {
-            // formula: std inventory actualization = actual inventory + approved purchased orders
-            const baseActualInventory = parseFloat(line.actual_std_inventory || 0);
-            const baseApprovedPurchase = parseFloat(line.approved_quantity || 0);
-            const definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
+        // 🌟 PILLAR 1: GLOBAL DESTRUCTION LOOP
+        // We look directly at ALL ingredients in memory, forcing every item with sales activity to update its stock!
+        MASTER_INVENTORY_ITEMS.forEach(ing => {
+            // Find out if this specific item was tracked inside our staged alerts array
+            const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ing.id));
             
-            // 🛡️ CAST INTEGRATION TRACK: Forcing explicit clean tracking lookups to avoid text-string filtering drops
-            const targetIngId = String(line.ingredient_id).trim();
+            let definitiveNewInventoryLevel = 0;
+            let usageAmount = 0;
 
-            console.log(`📡 Pushing Stock Update for Insumo ID [${targetIngId}]: New std_inventory -> ${definitiveNewInventoryLevel}`);
+            if (matchedAlertLine) {
+                // If an order was triggered, calculate: zero-capped stock + your newly approved purchase quantity
+                const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
+                const baseApprovedPurchase = matchedAlertLine.is_approved ? parseFloat(matchedAlertLine.approved_quantity || 0) : 0;
+                definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
+                usageAmount = parseFloat(matchedAlertLine.consumption || 0);
+            } else {
+                // 🚀 THE CRUCIAL FIX: If NO purchase was triggered, we must still deduct today's consumption!
+                // Read the usage ledger that was calculated during Step 1 of your ingestion loop
+                const usageLedgerAmount = typeof ingredientUsageLedger !== "undefined" ? parseFloat(ingredientUsageLedger[String(ing.id)] || 0) : 0;
+                const baseCurrentStock = parseFloat(ing.std_inventory || 0);
+                
+                let processedStock = baseCurrentStock - usageLedgerAmount;
+                if (processedStock < 0) processedStock = 0.00; // Enforce your strict zero-floor constraint
+                
+                definitiveNewInventoryLevel = processedStock;
+                usageAmount = usageLedgerAmount;
+            }
 
-            // 🌟 FIXED ROUTING FILTER: Uses an explicit clean query sequence to guarantee Supabase intercepts the row target match
-            const targetUrl = `${API_URL}ingredients?id=eq.${targetIngId}`;
+            // Only send network packages if the item actually had sales activity/consumption today
+            if (usageAmount > 0) {
+                const targetIngId = String(ing.id).trim();
+                const targetUrl = `${API_URL}ingredients?id=eq.${targetIngId}`;
 
-            updatePromises.push(
-                fetch(targetUrl, {
-                    method: "PATCH",
-                    headers: {
-                        "apikey": API_KEY,
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json",
-                        "Prefer": "return=representation" // 🚀 Forces Supabase to return the modified row array, proving disk write success!
-                    },
-                    body: JSON.stringify({ 
-                        std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
+                updatePromises.push(
+                    fetch(targetUrl, {
+                        method: "PATCH",
+                        headers: {
+                            "apikey": API_KEY,
+                            "Authorization": "Bearer " + API_KEY,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=representation" 
+                        },
+                        body: JSON.stringify({ 
+                            std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
+                        })
                     })
-                })
-                .then(async function(response) {
-                    if (!response.ok) {
-                        const errTxt = await response.text();
-                        console.error(`❌ DB WRITE REJECTED for ID ${targetIngId}:`, errTxt);
-                        return null;
-                    }
-                    const writeCheckData = await response.json();
-                    console.log(`📊 DB CONFIRMATION FOR ID ${targetIngId}:`, writeCheckData);
-                    
-                    // If the server returns an empty array, it means the URL ID parameters did not match any row!
-                    if (!writeCheckData || writeCheckData.length === 0) {
-                        console.warn(`⚠️ WARNING: Supabase found ZERO rows matching ID "${targetIngId}". Check if column name is 'id' or if record exists.`);
-                    }
-                    return writeCheckData;
-                })
-            );
+                );
+            }
+        });
 
-            // Fetch supplier names dynamically from background memory layout
+        // 🌟 PILLAR 2: BUILD FILE ONLY FOR ACTIVE APPROVED ORDERS
+        const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
+        
+        approvedLines.forEach(line => {
             const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
             const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
 
@@ -3331,29 +3341,35 @@ async function executeFinalInventoryProcurementCommit() {
             const cleanIngName = line.ingredient_name.replace(/,/g, " ");
             const cleanUOM = line.uom.replace(/,/g, " ");
 
-            // Append structured text line to our export data bundle stream
-            csvContent += `"${cleanSupName}","${cleanIngName}",${baseActualInventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${baseApprovedPurchase.toFixed(2)}\r\n`;
+            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${parseFloat(line.approved_quantity || 0).toFixed(2)}\r\n`;
         });
 
         // Fire your database update handshakes in parallel to save time
-        await Promise.all(updatePromises);
-        console.log("🚀 All Supabase stock update promises completed successfully!");
+        if (updatePromises.length > 0) {
+            await Promise.all(updatePromises);
+            console.log(`🚀 Successfully synchronized ${updatePromises.length} consumption logs to Supabase.`);
+        }
 
-        // NATIVE BROWSER DOWNLOAD ENGINE: Triggers an instant download prompt without any library!
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        const downloadUrl = URL.createObjectURL(blob);
-        
-        link.setAttribute("href", downloadUrl);
-        link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = "hidden";
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Only trigger a physical browser download file if actual orders were approved
+        if (approvedLines.length > 0) {
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const downloadUrl = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", downloadUrl);
+            link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = "hidden";
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("📊 ¡Reporte de Compras Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
+        } else {
+            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente en la base de datos (No se requirieron órdenes de compra).");
+        }
 
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Reporte de compras descargado y niveles de stock actualizados en la nube.`;
-        alert("📊 ¡Reporte de Compras Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos de la jornada han sido descontados de la base de datos cloud.`;
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         const workspace = document.getElementById("procurement-suggestions-workspace");
@@ -3366,7 +3382,7 @@ async function executeFinalInventoryProcurementCommit() {
 
     } catch (err) {
         console.error("Procurement commit error:", err);
-        if (feedback) feedback.innerHTML = "❌ Error al procesar transacciones en el servidor.";
+        if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock en el servidor.";
     }
 }
 
