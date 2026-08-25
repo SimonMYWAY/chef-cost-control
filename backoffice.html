@@ -3085,7 +3085,8 @@ async function processDailySalesFileIngestion(event) {
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                if (actualStdInventory < pointOfOrder && stockMax > actualStdInventory) {
+                                // 🌟 FIX COMPLETED: Changed from < to <= to safely capture the zero reorder points!
+                if (actualStdInventory <= pointOfOrder && stockMax > actualStdInventory) {
                     var purchaseQtyNeeded = stockMax - actualStdInventory;
                     var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
 
