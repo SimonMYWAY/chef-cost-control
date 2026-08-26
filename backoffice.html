@@ -3220,18 +3220,21 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
     return qty; // Keeps direct raw balance weights active
 }
 
+// =======================================================================
+// 📦 SUPPLIER ACCORDION INTERFACE WITH PACKAGING CONVERSION UNITS (STEP 4)
+// =======================================================================
+
 function renderGroupedSupplierProcurementAccordion() {
     const container = document.getElementById("supplier-orders-accordion-container");
     const workspace = document.getElementById("procurement-suggestions-workspace");
     if (!container || !workspace) return;
 
-    if (TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
+    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         container.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:30px; font-style:italic;">✅ Todos los insumos primarios se encuentran por encima de los niveles de seguridad mínimos. No se requieren órdenes de compra.</div>`;
         workspace.style.display = "block";
         return;
     }
 
-    // Group purchase suggestion rows cleanly by their default supplier keys
     const groupedBySupplier = {};
     TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
         if (!groupedBySupplier[line.supplier_id]) groupedBySupplier[line.supplier_id] = [];
@@ -3246,53 +3249,81 @@ function renderGroupedSupplierProcurementAccordion() {
 
         html += `<div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:18px; margin-bottom:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
             <div style="background:#f8fafc; margin:-18px -18px 15px -18px; padding:12px 18px; border-top-left-radius:12px; border-top-right-radius:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">🏭 Distribuidor: ${supplierName}</span>
-                <span style="background:#e0f2fe; color:#0369a1; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:700;">${lines.length} Sugerencias</span>
+                <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">🏭 Distribuidor Compra: ${supplierName}</span>
+                <span style="background:#e0f2fe; color:#0369a1; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:700;">${lines.length} Líneas</span>
             </div>
             
-            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.83rem;">
                 <thead>
-                    <tr style="color:var(--text-muted); border-bottom:1px solid var(--border-color); font-weight:600;">
-                        <th style="padding:6px; text-align:left;">Insumo / Ingrediente</th>
-                        <th style="padding:6px; text-align:right;">Stock Proyectado</th>
-                        <th style="padding:6px; text-align:right; color:#d97706;">Punto Pedido</th>
-                        <th style="padding:6px; text-align:right; background:rgba(0,122,251,0.02); color:#007afb; font-weight:700; padding-right:15px;">Cant. Sugerida</th>
-                        <th style="padding:6px; text-align:center; width:130px;">Cant. Autorizada</th>
-                        <th style="padding:6px; text-align:center; width:160px;">Proveedor Alternativo</th>
-                        <th style="padding:6px; text-align:center; width:60px;">Aprobar</th>
+                    <tr style="color:var(--text-muted); border-bottom:1px solid var(--border-color); font-weight:600; background:#fcfcfc;">
+                        <th style="padding:8px 6px; text-align:left;">Insumo / Ingrediente</th>
+                        <th style="padding:8px 6px; text-align:right;">Faltante Base</th>
+                        <th style="padding:8px 6px; text-align:center; width:165px;">Asignar Proveedor Autorizado</th>
+                        <th style="padding:8px 6px; text-align:center; width:90px; color:#007afb;">Formato</th>
+                        <th style="padding:8px 6px; text-align:right; color:#007afb; width:95px; background:rgba(0,122,251,0.02);">Pedido Sugerido</th>
+                        <th style="padding:8px 6px; text-align:center; width:110px; background:rgba(16,185,129,0.02); color:#10b981; font-weight:700;">Cant. Formatos Aprobados</th>
+                        <th style="padding:8px 6px; text-align:right; width:110px;">Equivalencia Receta</th>
+                        <th style="padding:8px 6px; text-align:center; width:45px;">Ok</th>
                     </tr>
                 </thead>
                 <tbody>`;
 
         lines.forEach(line => {
             const rowIdx = TEMPORARY_STAGED_PURCHASE_LINES.indexOf(line);
-            const actualStockStr = parseFloat(line.actual_std_inventory).toFixed(1);
-            const ptOrderStr = parseFloat(line.point_of_order).toFixed(1);
-            const suggestedQtyStr = parseFloat(line.suggested_quantity).toFixed(1);
+            
+            const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
+                String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()
+            );
 
-            // 🌟 STEP 4: Human interaction dropdown generation to switch alternatives dynamically
-            let alternativeOptionsHTML = `<option value="${supplierId}">-- Mantener Principal --</option>`;
-            Object.keys(CACHED_SUPPLIER_MAP).forEach(provId => {
-                if (String(provId) !== String(supplierId)) {
-                    alternativeOptionsHTML += `<option value="${provId}">${CACHED_SUPPLIER_MAP[provId].name || CACHED_SUPPLIER_MAP[provId].name_es}</option>`;
-                }
-            });
+            let supplierOptionsHTML = "";
+            if (authorizedFormats.length === 0) {
+                supplierOptionsHTML = `<option value="unassigned">⚠️ Sin formatos de compra</option>`;
+            } else {
+                authorizedFormats.forEach(f => {
+                    const provName = CACHED_SUPPLIER_MAP[f.provider_id] ? (CACHED_SUPPLIER_MAP[f.provider_id].name || CACHED_SUPPLIER_MAP[f.provider_id].name_es) : "Distribuidor #" + f.provider_id;
+                    const selectedMarker = String(f.provider_id) === String(line.supplier_id) ? "selected" : "";
+                    supplierOptionsHTML += `<option value="${f.provider_id}" ${selectedMarker}>${provName}</option>`;
+                });
+            }
+
+            const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
+            
+            let purchaseUomName = line.uom; 
+            let conversionFactor = 1.0;
+            
+            if (activeFormatRule) {
+                purchaseUomName = activeFormatRule.purchase_uom || "Unid";
+                // 🌟 ALIGNMENT CORRECTION: Now reads directly from your true column units_per_purchase!
+                conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0;
+            }
+
+            const suggestedFormatsCount = Math.ceil(parseFloat(line.suggested_quantity) / conversionFactor);
+            
+            if (line.last_calculated_supplier_id !== line.supplier_id) {
+                line.approved_formats_quantity = suggestedFormatsCount;
+                line.last_calculated_supplier_id = line.supplier_id;
+            }
+
+            const realBaseWeightEquivalent = parseFloat(line.approved_formats_quantity || 0) * conversionFactor;
 
             html += `<tr style="border-bottom:1px solid #f1f5f9; opacity: ${line.is_approved ? '1' : '0.4'}">
-                <td style="padding:10px 6px; font-weight:600; text-align:left;">${line.ingredient_name}</td>
-                <td style="padding:10px 6px; text-align:right; font-family:monospace;">${actualStockStr} ${line.uom}</td>
-                <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#d97706;">${ptOrderStr}</td>
-                <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#007afb; font-weight:700; padding-right:15px; background:rgba(0,122,251,0.01);">${suggestedQtyStr} ${line.uom}</td>
+                <td style="padding:10px 6px; font-weight:600; text-align:left; color:#1e293b;">${line.ingredient_name}</td>
+                <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#64748b;">${parseFloat(line.suggested_quantity).toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
-                    <input type="number" value="${parseFloat(line.approved_quantity).toFixed(1)}" oninput="updateTemporaryProcurementLineQuantity(${rowIdx}, this.value)" style="width:80px; padding:4px; text-align:right; font-family:monospace; font-weight:700; border:1px solid #cbd5e1; border-radius:4px;" />
-                </td>
-                
-                <td style="padding:6px; text-align:center;">
-                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" style="width:100%; padding:4px; font-size:0.78rem; border:1px solid #cbd5e1; border-radius:4px; background:#fff;">
-                        ${alternativeOptionsHTML}
+                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" style="width:100%; padding:5px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:500;">
+                        ${supplierOptionsHTML}
                     </select>
                 </td>
+                
+                <td style="padding:10px 6px; text-align:center; color:#007afb; font-weight:600; font-family:monospace;">${purchaseUomName}</td>
+                <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#007afb; font-weight:700; background:rgba(0,122,251,0.01);">${suggestedFormatsCount}</td>
+                
+                <td style="padding:6px; text-align:center; background:rgba(16,185,129,0.01);">
+                    <input type="number" min="0" step="1" value="${line.approved_formats_quantity}" oninput="updateTemporaryProcurementLineFormatsQuantity(${rowIdx}, this.value)" style="width:75px; padding:6px; text-align:center; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:6px;" />
+                </td>
+                
+                <td style="padding:10px 6px; text-align:right; font-family:monospace; font-weight:600; color:#475569;">${realBaseWeightEquivalent.toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
                     <input type="checkbox" ${line.is_approved ? 'checked' : ''} onchange="toggleTemporaryProcurementLineApproval(${rowIdx}, this.checked)" style="transform:scale(1.2); cursor:pointer;" />
@@ -3306,6 +3337,34 @@ function renderGroupedSupplierProcurementAccordion() {
     container.innerHTML = html;
     workspace.style.display = "block";
 }
+
+function updateTemporaryProcurementLineFormatsQuantity(index, val) {
+    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
+        TEMPORARY_STAGED_PURCHASE_LINES[index].approved_formats_quantity = parseInt(val, 10) || 0;
+        const line = TEMPORARY_STAGED_PURCHASE_LINES[index];
+        const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
+        const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
+        // 🌟 ALIGNMENT CORRECTION: Used true column here as well!
+        const factor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
+        
+        TEMPORARY_STAGED_PURCHASE_LINES[index].approved_quantity = (parseInt(val, 10) || 0) * factor;
+    }
+}
+
+function updateTemporaryProcurementLineFormatsQuantity(index, val) {
+    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
+        TEMPORARY_STAGED_PURCHASE_LINES[index].approved_formats_quantity = parseInt(val, 10) || 0;
+        // Fast recalculate display totals without full accordion rebuilds to preserve text cursor input focus!
+        const line = TEMPORARY_STAGED_PURCHASE_LINES[index];
+        const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
+        const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
+        const factor = activeFormatRule ? parseFloat(activeFormatRule.factor) : 1.0;
+        
+        // Update raw internal weights based on user choice format counts
+        TEMPORARY_STAGED_PURCHASE_LINES[index].approved_quantity = (parseInt(val, 10) || 0) * factor;
+    }
+}
+
 
 function updateTemporaryProcurementLineQuantity(index, val) {
     if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
@@ -3327,7 +3386,7 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
     }
 }
 
-// 🌟 STEP 5: DECOUPLED MASTER INVENTORY ACTUALIZATION & DATA EXPORT STREAM
+// 🌟 STEP 5: DECOUPLED INVENTORY ACTUALIZATION & PACKAGING-AWARE DATA EXPORT STREAM
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
     
@@ -3336,12 +3395,12 @@ async function executeFinalInventoryProcurementCommit() {
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ Sincronizando consumos teóricos y actualizando niveles de stock en Supabase cloud...";
+    if (feedback) feedback.innerHTML = "⏳ Sincronizando conversiones de formatos y actualizando niveles de stock en Supabase cloud...";
 
     try {
         const updatePromises = [];
         let csvContent = "\uFEFF"; 
-        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado,Unidad (UOM),Punto de Pedido,Stock Maximo,Cantidad Sugerida,Cantidad Comprada\r\n";
+        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado Base,Unidad Base (UOM),Formato Compra,Cant Formatos Pedidos,Equivalencia Receta Total\r\n";
 
         MASTER_INVENTORY_ITEMS.forEach(ing => {
             const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ing.id));
@@ -3350,17 +3409,24 @@ async function executeFinalInventoryProcurementCommit() {
             let usageAmount = 0;
 
             if (matchedAlertLine) {
+                const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
+                    String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim()
+                );
+                const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(matchedAlertLine.supplier_id));
+                // 🌟 ALIGNMENT CORRECTION: Aligned with your true database units_per_purchase column!
+                const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
+
                 const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
-                const baseApprovedPurchase = matchedAlertLine.is_approved ? parseFloat(matchedAlertLine.approved_quantity || 0) : 0;
-                definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchase;
+                const baseApprovedPurchaseWeights = matchedAlertLine.is_approved ? (parseInt(matchedAlertLine.approved_formats_quantity || 0, 10) * conversionFactor) : 0;
+                
+                definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchaseWeights;
                 usageAmount = parseFloat(matchedAlertLine.consumption || 0);
             } else {
-                // 🚀 FIXED: Reads the shared memory variable safely to ensure zero updates are captured!
                 const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
                 
                 let processedStock = baseCurrentStock - usageLedgerAmount;
-                if (processedStock < 0) processedStock = 0.00; // Enforce zero floor
+                if (processedStock < 0) processedStock = 0.00; 
                 
                 definitiveNewInventoryLevel = processedStock;
                 usageAmount = usageLedgerAmount;
@@ -3383,76 +3449,67 @@ async function executeFinalInventoryProcurementCommit() {
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     })
-                    .then(r => r.json())
-                    .then(data => {
-                        console.log(`📡 REAL-TIME ROW WRITE VERIFIED FOR ID [${targetIngId}]:`, data);
-                        return data;
-                    })
                 );
             }
         });
 
-        const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_quantity > 0);
+        const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_formats_quantity > 0);
         
         approvedLines.forEach(line => {
             const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
             const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
 
+            const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
+            const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
+            
+            const purchaseUomName = activeFormatRule ? (activeFormatRule.purchase_uom || "Unid") : line.uom;
+            // 🌟 ALIGNMENT CORRECTION: Aligned with your true database units_per_purchase column!
+            const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
+            const realBaseWeightEquivalent = parseInt(line.approved_formats_quantity, 10) * conversionFactor;
+
             const cleanSupName = supplierName.replace(/,/g, " ");
             const cleanIngName = line.ingredient_name.replace(/,/g, " ");
-            const cleanUOM = line.uom.replace(/,/g, " ");
+            const cleanUOMName = purchaseUomName.replace(/,/g, " ");
 
-            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${parseFloat(line.approved_quantity || 0).toFixed(2)}\r\n`;
+            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${line.uom}","${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${realBaseWeightEquivalent.toFixed(2)}\r\n`;
         });
 
-               // 🌟 PILLAR 1.5: CAPTURE AND INJECT CALENDAR DATE UPDATE TO CHROMIUM TIMELINE
         const inputCurrentSalesDateEl = document.getElementById("input-current-sales-date");
         const definitiveDeclaredSalesDateStr = inputCurrentSalesDateEl ? inputCurrentSalesDateEl.value : "";
 
         if (definitiveDeclaredSalesDateStr) {
-            console.log(`📅 Timeline pipeline update triggered. Saving "${definitiveDeclaredSalesDateStr}" as new historical milestone...`);
             updatePromises.push(
                 fetch(`${API_URL}system_settings?key=eq.last_sales_date_processed`, {
                     method: "PATCH",
-                    headers: {
-                        "apikey": API_KEY,
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        value_text: definitiveDeclaredSalesDateStr,
-                        updated_at: new Date().toISOString()
-                    })
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ value_text: definitiveDeclaredSalesDateStr, updated_at: new Date().toISOString() })
                 })
             );
         }
 
-        // Fire your database update handshakes in parallel including your timeline milestone advance!
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
             console.log(`🚀 Successfully written true data values and timeline checkpoints to Supabase.`);
         }
 
-        // Only trigger a physical browser download file if actual orders were approved
         if (approvedLines.length > 0) {
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')}.csv`);
             link.style.visibility = "hidden";
             
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             
-            alert("📊 ¡Reporte de Compras Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
+            alert("📊 ¡Reporte de Formatos Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
         } else {
             alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente en la base de datos (No se requirieron órdenes de compra).");
         }
 
-        // 🔄 ADVANCE LOCAL BACKGROUND MEMORY CACHE TO PREVENT MULTIPLE CLIP IMPORTS
         if (definitiveDeclaredSalesDateStr) {
             CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         }
@@ -3465,10 +3522,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (workspace) workspace.style.display = "none";
         if (commitBtn) commitBtn.style.display = "none";
 
-        // Refresh your active stock spreadsheet adjustments grid instantly to view changes hands-free!
         if (typeof fetchInventoryMatrixData === "function") fetchInventoryMatrixData();
-        
-        // Dynamic re-sync UI timeline components cleanly
         syncChronologicalDateDOMFields();
 
     } catch (err) {
@@ -3476,6 +3530,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock en el servidor.";
     }
 }
+
 
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
