@@ -3013,15 +3013,18 @@ function validateTargetSalesProcessingDate() {
     
     // 🛡️ CONTINUITY LOCK GUARD: Block any dates prior to or equal to your milestone seed track
     if (numTarget <= numLastProcessed) {
-        alert(currentLang === 'en'
-            ? `⚠️ Historical Violation: You cannot process a date prior to or equal to your last processed date (${CACHED_LAST_PROCESSED_DATE_STR})!`
-            : `⚠️ Violación de Continuidad: No puede declarar una fecha anterior o igual al último día procesado registrado (${CACHED_LAST_PROCESSED_DATE_STR})!`
+        // 🌟 FIX COMPLETED: Standardized bilingual notification bypasses the missing currentLang crash!
+        alert(
+            `⚠️ Violación de Continuidad / Chronological Continuity Alert:\n\n` +
+            `ES: No puede declarar una fecha anterior o igual al último día procesado registrado (${CACHED_LAST_PROCESSED_DATE_STR}).\n` +
+            `EN: You cannot process a date prior to or equal to your last processed date (${CACHED_LAST_PROCESSED_DATE_STR}).`
         );
         syncChronologicalDateDOMFields(); // Revert back to correct advanced day automatically
         return false;
     }
     return true;
 }
+
 
 function triggerSalesFileSelectionGuard() {
     // Run the date guard check before letting the file selection overlay box unroll on screen
