@@ -418,17 +418,28 @@
         <!-- ======================================================================= -->
         <div id="view-orders-daily" class="view-pane" style="max-width: 1400px; margin: 0 auto; font-family: system-ui, sans-serif;">
             
-            <!-- STAGE 1: SALES UPLOAD BOARD & CONTROLS BANNER -->
+                        <!-- STAGE 1: CHRONOLOGICAL LOCKS, CALENDAR DECLARATIONS & CONTROLS BANNER -->
             <div class="card" style="background:#ffffff; border:1px solid var(--border-color); padding:20px; border-radius:12px; margin-bottom:25px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
                     <div>
                         <h3 style="margin:0; color:var(--text-main);">📋 Generador de Pedidos Inteligentes (Predicción de Consumo)</h3>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Suba el reporte de ventas del día para calcular deducciones teóricas y proyectar reordenamientos automáticos.</p>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px; margin-bottom:12px;">Suba el reporte de ventas diarias para calcular deducciones teóricas y proyectar reordenamientos automáticos.</p>
+                        
+                        <!-- 📅 Chronological Timeline Status Indicators Row -->
+                        <div style="display:inline-flex; align-items:center; gap:15px; background:#f1f5f9; padding:8px 14px; border-radius:8px; border:1px solid var(--border-color); font-size:0.85rem; font-weight:600;">
+                            <span style="color:#64748b;">📅 Último Día Procesado: <span id="lbl-last-processed-date" style="color:#0f172a; font-weight:700;">Cargando...</span></span>
+                            <span style="color:#cbd5e1;">|</span>
+                            <label style="color:#007afb; display:inline-flex; align-items:center; gap:6px; margin:0;">
+                                Día a Procesar Actual:
+                                <input type="date" id="input-current-sales-date" onchange="validateTargetSalesProcessingDate()" style="padding:4px 8px; font-weight:700; border:1px solid #cbd5e1; border-radius:4px; font-family:monospace; color:#007afb; background:#ffffff;" />
+                            </label>
+                        </div>
                     </div>
+
                     <!-- Unified Process Control Actions Row -->
                     <div style="display:flex; gap:10px; align-items:center;">
                         <input type="file" id="sales-excel-upload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="processDailySalesFileIngestion(event)" />
-                        <button onclick="document.getElementById('sales-excel-upload').click()" class="btn btn-blue" style="background:#007afb; font-weight:bold; display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">📂 Cargar Ventas del Día</button>
+                        <button onclick="triggerSalesFileSelectionGuard()" id="btn-upload-sales-action" class="btn btn-blue" style="background:#007afb; font-weight:bold; display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">📂 Cargar Ventas del Día</button>
                         <button onclick="executeFinalInventoryProcurementCommit()" id="btn-commit-all-orders" class="btn btn-green" style="background:#10b981; font-weight:bold; display:none; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">💾 Confirmar y Exportar Excel</button>
                     </div>
                 </div>
@@ -2929,22 +2940,96 @@ let TEMPORARY_STAGED_PURCHASE_LINES = [];
 let CACHED_SUPPLIER_MAP = {};
 let CACHED_CONVERSION_MAPPINGS = [];
 
-// Initialize background structural arrays automatically on boot with your true schema table keys
+// =======================================================================
+// 📅 CHRONOLOGICAL REGISTRY TIMELINE MANAGER & TIMESTAMPS
+// =======================================================================
+
+let CACHED_LAST_PROCESSED_DATE_STR = "";
+
+// Pulls historical milestones straight from your Supabase settings table on boot
 async function initializePurchasingSystemDependencies() {
     try {
-        // 🌟 REALIGNED FIX: Directly maps to your true database table names 'suppliers' and 'supplier_formats'
-        const [resProv, resMaps] = await Promise.all([
+        const [resProv, resMaps, resSettings] = await Promise.all([
             fetch(API_URL + "suppliers", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json())
+            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "system_settings?key=eq.last_sales_date_processed", { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
         
         if (Array.isArray(resProv)) {
             resProv.forEach(p => { CACHED_SUPPLIER_MAP[String(p.id)] = p; });
         }
         CACHED_CONVERSION_MAPPINGS = Array.isArray(resMaps) ? resMaps : [];
-        console.log("✅ Purchasing dependencies successfully mapped in background memory.");
+        
+        // 🌟 CHRONOLOGICAL SEED LOCK: Parse your last processed date milestone safely
+        if (Array.isArray(resSettings) && resSettings.length > 0) {
+            CACHED_LAST_PROCESSED_DATE_STR = String(resSettings[0].value_text || "2026-08-25").trim();
+        } else {
+            CACHED_LAST_PROCESSED_DATE_STR = "2026-08-25"; // Fallback safety seed row default
+        }
+        
+        console.log("✅ Purchasing dependencies and timeline locks mapped: " + CACHED_LAST_PROCESSED_DATE_STR);
+        syncChronologicalDateDOMFields();
+
     } catch (e) { console.error("Failed loading procurement dependencies:", e); }
 }
+
+function syncChronologicalDateDOMFields() {
+    const lblLast = document.getElementById("lbl-last-processed-date");
+    const inputCurrent = document.getElementById("input-current-sales-date");
+    
+    if (!lblLast || !inputCurrent) return;
+    
+    // Render the text string label cleanly on screen monitor canvas
+    lblLast.innerText = CACHED_LAST_PROCESSED_DATE_STR;
+    
+    // 🧠 AUTOMATIC CALENDAR LEAP: Advance the date entry field by exactly +1 day from your last save record
+    try {
+        const parts = CACHED_LAST_PROCESSED_DATE_STR.split("-");
+        const lastDateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        
+        // Increment timestamp precisely by +1 day layer
+        lastDateObj.setDate(lastDateObj.getDate() + 1);
+        
+        const nextYear = lastDateObj.getFullYear();
+        const nextMonth = String(lastDateObj.getMonth() + 1).padStart(2, '0');
+        const nextDay = String(lastDateObj.getDate()).padStart(2, '0');
+        
+        const autoAdvancedDateString = `${nextYear}-${nextMonth}-${nextDay}`;
+        inputCurrent.value = autoAdvancedDateString;
+        
+        console.log("📅 Timeline advanced cleanly to target date frame: " + autoAdvancedDateString);
+    } catch (err) { console.error("Calendar date leap calculation anomaly:", err); }
+}
+
+function validateTargetSalesProcessingDate() {
+    const inputCurrent = document.getElementById("input-current-sales-date");
+    if (!inputCurrent || !CACHED_LAST_PROCESSED_DATE_STR) return true;
+    
+    const targetVal = inputCurrent.value;
+    
+    // Convert text string rows into comparable numeric primitives (YYYYMMDD values)
+    const numTarget = parseInt(targetVal.replace(/-/g, ""), 10) || 0;
+    const numLastProcessed = parseInt(CACHED_LAST_PROCESSED_DATE_STR.replace(/-/g, ""), 10) || 0;
+    
+    // 🛡️ CONTINUITY LOCK GUARD: Block any dates prior to or equal to your milestone seed track
+    if (numTarget <= numLastProcessed) {
+        alert(currentLang === 'en'
+            ? `⚠️ Historical Violation: You cannot process a date prior to or equal to your last processed date (${CACHED_LAST_PROCESSED_DATE_STR})!`
+            : `⚠️ Violación de Continuidad: No puede declarar una fecha anterior o igual al último día procesado registrado (${CACHED_LAST_PROCESSED_DATE_STR})!`
+        );
+        syncChronologicalDateDOMFields(); // Revert back to correct advanced day automatically
+        return false;
+    }
+    return true;
+}
+
+function triggerSalesFileSelectionGuard() {
+    // Run the date guard check before letting the file selection overlay box unroll on screen
+    if (validateTargetSalesProcessingDate()) {
+        document.getElementById('sales-excel-upload').click();
+    }
+}
+
 
 // =======================================================================
 // 📋 REAL-TIME REVO CSV SALES PIPELINE & IRONCLAD QUANTITY RESOLUTION
@@ -3317,18 +3402,42 @@ async function executeFinalInventoryProcurementCommit() {
             csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${cleanUOM}",${parseFloat(line.point_of_order || 0).toFixed(2)},${parseFloat(line.stock_max || 0).toFixed(2)},${parseFloat(line.suggested_quantity || 0).toFixed(2)},${parseFloat(line.approved_quantity || 0).toFixed(2)}\r\n`;
         });
 
-        if (updatePromises.length > 0) {
-            await Promise.all(updatePromises);
-            console.log(`🚀 Successfully written true data values to Supabase across ${updatePromises.length} cells.`);
+               // 🌟 PILLAR 1.5: CAPTURE AND INJECT CALENDAR DATE UPDATE TO CHROMIUM TIMELINE
+        const inputCurrentSalesDateEl = document.getElementById("input-current-sales-date");
+        const definitiveDeclaredSalesDateStr = inputCurrentSalesDateEl ? inputCurrentSalesDateEl.value : "";
+
+        if (definitiveDeclaredSalesDateStr) {
+            console.log(`📅 Timeline pipeline update triggered. Saving "${definitiveDeclaredSalesDateStr}" as new historical milestone...`);
+            updatePromises.push(
+                fetch(`${API_URL}system_settings?key=eq.last_sales_date_processed`, {
+                    method: "PATCH",
+                    headers: {
+                        "apikey": API_KEY,
+                        "Authorization": "Bearer " + API_KEY,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        value_text: definitiveDeclaredSalesDateStr,
+                        updated_at: new Date().toISOString()
+                    })
+                })
+            );
         }
 
+        // Fire your database update handshakes in parallel including your timeline milestone advance!
+        if (updatePromises.length > 0) {
+            await Promise.all(updatePromises);
+            console.log(`🚀 Successfully written true data values and timeline checkpoints to Supabase.`);
+        }
+
+        // Only trigger a physical browser download file if actual orders were approved
         if (approvedLines.length > 0) {
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${new Date().toISOString().split('T')}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')[0]}.csv`);
             link.style.visibility = "hidden";
             
             document.body.appendChild(link);
@@ -3340,7 +3449,12 @@ async function executeFinalInventoryProcurementCommit() {
             alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente en la base de datos (No se requirieron órdenes de compra).");
         }
 
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos de la jornada han sido descontados de la base de datos cloud.`;
+        // 🔄 ADVANCE LOCAL BACKGROUND MEMORY CACHE TO PREVENT MULTIPLE CLIP IMPORTS
+        if (definitiveDeclaredSalesDateStr) {
+            CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
+        }
+
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos de la jornada han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         const workspace = document.getElementById("procurement-suggestions-workspace");
@@ -3348,7 +3462,11 @@ async function executeFinalInventoryProcurementCommit() {
         if (workspace) workspace.style.display = "none";
         if (commitBtn) commitBtn.style.display = "none";
 
+        // Refresh your active stock spreadsheet adjustments grid instantly to view changes hands-free!
         if (typeof fetchInventoryMatrixData === "function") fetchInventoryMatrixData();
+        
+        // Dynamic re-sync UI timeline components cleanly
+        syncChronologicalDateDOMFields();
 
     } catch (err) {
         console.error("Procurement commit error:", err);
@@ -3356,9 +3474,15 @@ async function executeFinalInventoryProcurementCommit() {
     }
 }
 
-// Automatically load supplier directories on dashboard boot sequences safely
-document.addEventListener("DOMContentLoaded", function() {
-    setTimeout(initializePurchasingSystemDependencies, 1200);
+// 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
+document.addEventListener("click", function(event) {
+    var item = event.target.closest(".nav-item");
+    if (!item) return;
+    
+    var onclickAttr = item.getAttribute("onclick") || "";
+    if (onclickAttr.includes("view-orders-daily") || onclickAttr.includes("view-inventory-manual")) {
+        setTimeout(initializePurchasingSystemDependencies, 100);
+    }
 });
 
 </script>
