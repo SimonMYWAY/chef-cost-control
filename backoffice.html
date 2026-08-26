@@ -3268,32 +3268,37 @@ function renderGroupedSupplierProcurementAccordion() {
                 </thead>
                 <tbody>`;
 
-        lines.forEach(line => {
+                lines.forEach(line => {
             const rowIdx = TEMPORARY_STAGED_PURCHASE_LINES.indexOf(line);
             
+            // Filter your master conversion mapping array rows matching this specific ingredient
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
                 String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()
             );
 
+            // Build dynamic options selector using your true database column provider_name!
             let supplierOptionsHTML = "";
             if (authorizedFormats.length === 0) {
                 supplierOptionsHTML = `<option value="unassigned">⚠️ Sin formatos de compra</option>`;
             } else {
                 authorizedFormats.forEach(f => {
-                    const provName = CACHED_SUPPLIER_MAP[f.provider_id] ? (CACHED_SUPPLIER_MAP[f.provider_id].name || CACHED_SUPPLIER_MAP[f.provider_id].name_es) : "Distribuidor #" + f.provider_id;
-                    const selectedMarker = String(f.provider_id) === String(line.supplier_id) ? "selected" : "";
-                    supplierOptionsHTML += `<option value="${f.provider_id}" ${selectedMarker}>${provName}</option>`;
+                    // 🌟 FIX COMPLETED: Reads your exact database text column provider_name natively!
+                    const provDisplayTxt = f.provider_name ? String(f.provider_name).trim() : "Distribuidor #" + (f.provider_id || "Local");
+                    
+                    // Maintain matching states by comparing strings directly
+                    const selectedMarker = String(f.provider_name || f.provider_id) === String(line.supplier_id) ? "selected" : "";
+                    supplierOptionsHTML += `<option value="${f.provider_name || f.provider_id}" ${selectedMarker}>${provDisplayTxt}</option>`;
                 });
             }
 
-            const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
+            // Find active mathematical packaging conversion rules row matching selected supplier name
+            const activeFormatRule = authorizedFormats.find(f => String(f.provider_name || f.provider_id) === String(line.supplier_id));
             
             let purchaseUomName = line.uom; 
             let conversionFactor = 1.0;
             
             if (activeFormatRule) {
                 purchaseUomName = activeFormatRule.purchase_uom || "Unid";
-                // 🌟 ALIGNMENT CORRECTION: Now reads directly from your true column units_per_purchase!
                 conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0;
             }
 
@@ -3310,6 +3315,7 @@ function renderGroupedSupplierProcurementAccordion() {
                 <td style="padding:10px 6px; font-weight:600; text-align:left; color:#1e293b;">${line.ingredient_name}</td>
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#64748b;">${parseFloat(line.suggested_quantity).toFixed(1)} ${line.uom}</td>
                 
+                <!-- Dynamic Dropdown Filter Selector showing clean provider_name paths -->
                 <td style="padding:6px; text-align:center;">
                     <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" style="width:100%; padding:5px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:500;">
                         ${supplierOptionsHTML}
