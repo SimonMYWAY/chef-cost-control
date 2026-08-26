@@ -3276,29 +3276,38 @@ function renderGroupedSupplierProcurementAccordion() {
                 String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()
             );
 
-            // Build dynamic options selector using your true database column provider_name!
+                        // Build dynamic options selector using your true database column provider_name!
             let supplierOptionsHTML = "";
             if (authorizedFormats.length === 0) {
                 supplierOptionsHTML = `<option value="unassigned">⚠️ Sin formatos de compra</option>`;
             } else {
                 authorizedFormats.forEach(f => {
-                    // 🌟 FIX COMPLETED: Reads your exact database text column provider_name natively!
                     const provDisplayTxt = f.provider_name ? String(f.provider_name).trim() : "Distribuidor #" + (f.provider_id || "Local");
                     
                     // Maintain matching states by comparing strings directly
-                    const selectedMarker = String(f.provider_name || f.provider_id) === String(line.supplier_id) ? "selected" : "";
+                    const selectedMarker = (String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() || String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()) ? "selected" : "";
                     supplierOptionsHTML += `<option value="${f.provider_name || f.provider_id}" ${selectedMarker}>${provDisplayTxt}</option>`;
                 });
             }
 
-            // Find active mathematical packaging conversion rules row matching selected supplier name
-            const activeFormatRule = authorizedFormats.find(f => String(f.provider_name || f.provider_id) === String(line.supplier_id));
+            // 🌟 FIX COMPLETED: Multi-token lookups check both name and ID columns to unlock purchase_uom!
+            let activeFormatRule = authorizedFormats.find(f => 
+                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() ||
+                String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+            );
+            
+            // If still no rule matches but we HAVE authorized formats available, default to the FIRST valid format rule on the list
+            if (!activeFormatRule && authorizedFormats.length > 0) {
+                activeFormatRule = authorizedFormats[0];
+                line.supplier_id = activeFormatRule.provider_name || activeFormatRule.provider_id; // Auto-align tracking string!
+            }
             
             let purchaseUomName = line.uom; 
             let conversionFactor = 1.0;
             
             if (activeFormatRule) {
-                purchaseUomName = activeFormatRule.purchase_uom || "Unid";
+                // 🌟 READS DIRECTLY FROM YOUR TRUE COLUMN NAME: purchase_uom
+                purchaseUomName = activeFormatRule.purchase_uom ? String(activeFormatRule.purchase_uom).trim() : "Formato";
                 conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0;
             }
 
