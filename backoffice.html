@@ -3035,7 +3035,7 @@ function triggerSalesFileSelectionGuard() {
 
 
 // =======================================================================
-// 📋 REAL-TIME REVO CSV SALES PIPELINE & IRONCLAD QUANTITY RESOLUTION
+// 📋 REAL-TIME REVO CSV SALES PIPELINE & REAL deficit RECURSIVE EXPLOSION
 // =======================================================================
 
 async function processDailySalesFileIngestion(event) {
@@ -3045,7 +3045,7 @@ async function processDailySalesFileIngestion(event) {
     var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
         feedback.style.display = "block";
-        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando explosión profunda de consumos teóricos...</div>";
+        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y calculando faltantes reales...</div>";
     }
 
     var file = fileInput.files[0];
@@ -3070,15 +3070,11 @@ async function processDailySalesFileIngestion(event) {
                 return;
             }
 
-            var recMapById = {};
             var recMapByRevo = {};
             var recMapByName = {};
             recipes.forEach(r => {
                 var multiplier = r.locked_multiplier !== null && r.locked_multiplier !== undefined ? parseFloat(r.locked_multiplier) : 1.0;
                 if (multiplier === 0.0 || multiplier === -9.0) return; 
-                
-                var cleanId = String(r.id).toLowerCase().trim();
-                recMapById[cleanId] = r;
                 if (r.revo_id) recMapByRevo[String(r.revo_id).toLowerCase().trim()] = r;
                 if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
             });
@@ -3118,13 +3114,8 @@ async function processDailySalesFileIngestion(event) {
                         
                         var baseConsumption = weightPerPortion * salesQty * (1 + (scrapPct / 100));
                         
-                        var subRecipeFound = recipes.find(function(r) { 
-                            return String(r.id).toLowerCase().trim() === ingId; 
-                        });
-                        
-                        var hasChildLines = mappings.some(function(m) { 
-                            return String(m.recipe_id).toLowerCase().trim() === ingId; 
-                        });
+                        var subRecipeFound = recipes.find(r => String(r.id).toLowerCase().trim() === ingId);
+                        var hasChildLines = mappings.some(m => String(m.recipe_id).toLowerCase().trim() === ingId);
 
                         if (subRecipeFound && hasChildLines) {
                             explodeRecipeUsageRecursive(subRecipeFound.id, baseConsumption);
@@ -3151,7 +3142,6 @@ async function processDailySalesFileIngestion(event) {
                 var quantitySold = parseFloat(rawQty) || 0;
                 if (quantitySold <= 0) continue;
 
-                // 🌟 FIX COMPLETED: Strict index matching layout checks stop fuzzy matching ghost entries!
                 var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
                 if (matchedRecipe) {
                     explodeRecipeUsageRecursive(matchedRecipe.id, quantitySold);
@@ -3165,40 +3155,41 @@ async function processDailySalesFileIngestion(event) {
                 var usageToday = GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0.0;
                 var currentStock = parseFloat(ing.std_inventory || 0);
                 
-                var actualStdInventory = currentStock - usageToday;
-                if (actualStdInventory < 0) actualStdInventory = 0.00; // Enforce zero floor
-                
                 var pointOfOrder = parseFloat(ing.point_of_order || 0);
                 var stockMax = parseFloat(ing.stock_max || 0);
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                // 🌟 FIX COMPLETED: Explicitly checks if stock_max is configured (> 0) to bypass raw uninitialized elements safely!
-                if (stockMax > 0 && actualStdInventory <= pointOfOrder && stockMax > actualStdInventory) {
-                    var purchaseQtyNeeded = stockMax - actualStdInventory;
-                    var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
+                // 🌟 NET DEFICIT MODEL REALIGNMENT:
+                // Suggested Purchase = (Stock Max + Consumption) - Current Stock Balance
+                if (stockMax > 0 && currentStock <= pointOfOrder) {
+                    var purchaseQtyNeeded = (stockMax + usageToday) - currentStock;
+                    
+                    if (purchaseQtyNeeded > 0) {
+                        var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
 
-                    TEMPORARY_STAGED_PURCHASE_LINES.push({
-                        ingredient_id: ing.id,
-                        ingredient_name: ing.name_es || ing.name,
-                        uom: ing.uom || "gr",
-                        last_std_inventory: currentStock,
-                        consumption: usageToday,
-                        actual_std_inventory: actualStdInventory,
-                        point_of_order: pointOfOrder,
-                        stock_max: stockMax,
-                        suggested_quantity: purchaseQtyNeeded,
-                        approved_quantity: purchaseQtyNeeded, 
-                        supplier_id: defaultSupplierId,
-                        is_approved: true
-                    });
+                        TEMPORARY_STAGED_PURCHASE_LINES.push({
+                            ingredient_id: ing.id,
+                            ingredient_name: ing.name_es || ing.name,
+                            uom: ing.uom || "gr",
+                            last_std_inventory: currentStock,
+                            consumption: usageToday,
+                            actual_std_inventory: currentStock - usageToday, // Raw tracking mapping
+                            point_of_order: pointOfOrder,
+                            stock_max: stockMax,
+                            suggested_quantity: purchaseQtyNeeded,
+                            approved_quantity: purchaseQtyNeeded, 
+                            supplier_id: defaultSupplierId,
+                            is_approved: true
+                        });
+                    }
                 }
             });
 
             MASTER_INVENTORY_ITEMS = ingredients;
 
             if (feedback) {
-                feedback.innerHTML = `🎉 <b>Cálculo de Explosión Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
+                feedback.innerHTML = `🎉 <b>Cálculo Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} líneas críticas</b>.`;
             }
             
             var commitBtn = document.getElementById("btn-commit-all-orders");
@@ -3207,8 +3198,8 @@ async function processDailySalesFileIngestion(event) {
             renderGroupedSupplierProcurementAccordion();
 
         } catch (err) {
-            console.error("Deep purchasing explosion pipeline layout crash:", err);
-            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al ejecutar la de-composición recursiva del archivo CSV.</div>";
+            console.error(err);
+            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error al procesar el archivo CSV.</div>";
         }
     };
 
@@ -3401,8 +3392,7 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
     }
 }
 
-// 🌟 STEP 5: DECOUPLED INVENTORY ACTUALIZATION & PACKAGING-AWARE DATA EXPORT STREAM
-// Fully realigned to use your native 'provider_name' and 'units_per_purchase' schema values!
+// 🌟 STEP 5: DECOUPLED INVENTORY ACTUALIZATION & ADDITIVE SAVING STREAM
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
     
@@ -3411,18 +3401,15 @@ async function executeFinalInventoryProcurementCommit() {
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ Sincronizando conversiones de formatos y actualizando niveles de stock en Supabase cloud...";
+    if (feedback) feedback.innerHTML = "⏳ Sincronizando conversiones y actualizando niveles de stock en Supabase cloud...";
 
     try {
         const updatePromises = [];
-        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters (ñ, Ó, á) flawlessly!
-        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado Base,Unidad Base (UOM),Formato Compra,Cant Formatos Pedidos,Equivalencia Receta Total\r\n";
+        let csvContent = "\uFEFF"; 
+        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Inicial,Consumo,Formato Compra,Cant Formatos Pedidos,Nuevo Stock Teórico\r\n";
 
-                // 🌟 PILLAR 1: CONVERSION STOCK SAVE LOOP (WITH IRONCLAD ROW ID FILTERING)
         MASTER_INVENTORY_ITEMS.forEach(ing => {
-            // Force strict clean matching strings to eliminate lowercase/uppercase query mismatches
             const targetIngIdClean = String(ing.id).toLowerCase().trim();
-            
             const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => 
                 String(l.ingredient_id).toLowerCase().trim() === targetIngIdClean
             );
@@ -3434,22 +3421,22 @@ async function executeFinalInventoryProcurementCommit() {
                 const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
                     String(m.ingredient_id).toLowerCase().trim() === targetIngIdClean
                 );
-                
                 const activeFormatRule = authorizedFormats.find(f => 
                     String(f.provider_name).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim() ||
                     String(f.provider_id).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim()
                 );
                 
                 const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
-                const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
-                const approvedFormatsCount = parseInt(matchedAlertLine.approved_formats_quantity || 0, 10);
+                const baseInitialInventory = parseFloat(matchedAlertLine.last_std_inventory || 0);
+                const baseConsumption = parseFloat(matchedAlertLine.consumption || 0);
+                const approvedFormatsCount = matchedAlertLine.is_approved ? parseInt(matchedAlertLine.approved_formats_quantity || 0, 10) : 0;
                 
-                const baseApprovedPurchaseWeights = matchedAlertLine.is_approved ? (approvedFormatsCount * conversionFactor) : 0;
+                // 🌟 IRONCLAD ADDITIVE MATH MODEL:
+                // New Stock Level = Initial Stock - Today's Consumption + Newly Purchased Weights
+                definitiveNewInventoryLevel = baseInitialInventory - baseConsumption + (approvedFormatsCount * conversionFactor);
+                if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00; // Physical limit floor
                 
-                definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchaseWeights;
-                usageAmount = parseFloat(matchedAlertLine.consumption || 0);
-                
-                console.log(`📡 MATCHED INSUMO [${ing.name_es || ing.name}]: ${baseActualInventory} + (${approvedFormatsCount} x ${conversionFactor}) -> Target Stock: ${definitiveNewInventoryLevel}`);
+                usageAmount = baseConsumption;
             } else {
                 const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[targetIngIdClean] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
@@ -3461,9 +3448,7 @@ async function executeFinalInventoryProcurementCommit() {
                 usageAmount = usageLedgerAmount;
             }
 
-            // Only send network data if this specific item row had sales activity today
-            if (usageAmount > 0) {
-                // 🌟 FIX COMPLETED: Build complete matching headers and a clean lowercased target URL parameter filter
+            if (usageAmount > 0 || matchedAlertLine) {
                 const targetUrl = `${API_URL}ingredients?id=eq.${targetIngIdClean}`;
 
                 updatePromises.push(
@@ -3478,30 +3463,16 @@ async function executeFinalInventoryProcurementCommit() {
                         body: JSON.stringify({ 
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        console.log(`✅ DATABASE WRITE CONFIRMED FOR ID [${targetIngIdClean}]:`, data);
-                        return data;
-                    })
+                    }).then(r => r.json())
                 );
             }
         });
 
-        // 🌟 PILLAR 2: BUILD DOWNLOAD FILE CONVERTED ACCURATELY BY STRING NAMES
+        // Build Excel data sheet contents
         const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && parseInt(l.approved_formats_quantity, 10) > 0);
-        
         approvedLines.forEach(line => {
-            // 🔍 DYNAMIC STRING NAME LOOKUP: Reads the plain text identifier directly out of memory
             let supplierName = String(line.supplier_id).trim();
-            
-            // Fallback lookup dictionary check if supplier_id happened to store an older numeric reference key
-            if (CACHED_SUPPLIER_MAP[line.supplier_id]) {
-                supplierName = CACHED_SUPPLIER_MAP[line.supplier_id].name || CACHED_SUPPLIER_MAP[line.supplier_id].name_es || supplierName;
-            }
-
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
-            
             const activeFormatRule = authorizedFormats.find(f => 
                 String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() ||
                 String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
@@ -3509,16 +3480,15 @@ async function executeFinalInventoryProcurementCommit() {
             
             const purchaseUomName = activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : line.uom;
             const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
-            const realBaseWeightEquivalent = parseInt(line.approved_formats_quantity, 10) * conversionFactor;
+            const finalCalculatedStock = parseFloat(line.last_std_inventory) - parseFloat(line.consumption) + (parseInt(line.approved_formats_quantity, 10) * conversionFactor);
 
             const cleanSupName = supplierName.replace(/,/g, " ");
             const cleanIngName = line.ingredient_name.replace(/,/g, " ");
             const cleanUOMName = purchaseUomName.replace(/,/g, " ");
 
-            csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${line.uom}","${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${realBaseWeightEquivalent.toFixed(2)}\r\n`;
+            csvContent += `"${cleanSupName}","${cleanIngName}",${line.last_std_inventory.toFixed(2)},${line.consumption.toFixed(2)},"${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${finalCalculatedStock.toFixed(2)}\r\n`;
         });
 
-        // Fire your database update handshakes in parallel including your timeline milestone advance!
         const inputCurrentSalesDateEl = document.getElementById("input-current-sales-date");
         const definitiveDeclaredSalesDateStr = inputCurrentSalesDateEl ? inputCurrentSalesDateEl.value : "";
 
@@ -3533,8 +3503,7 @@ async function executeFinalInventoryProcurementCommit() {
         }
 
         if (updatePromises.length > 0) {
-            const serverConfirmations = await Promise.all(updatePromises);
-            console.log("🚀 All Supabase stock conversion increments written safely to server disks:", serverConfirmations);
+            await Promise.all(updatePromises);
         }
 
         if (approvedLines.length > 0) {
@@ -3545,44 +3514,31 @@ async function executeFinalInventoryProcurementCommit() {
             link.setAttribute("href", downloadUrl);
             link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')}.csv`);
             link.style.visibility = "hidden";
-            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             
-            alert("📊 ¡Reporte de Formatos Procesado! Se han guardado tus nuevos niveles de stock en Supabase y descargado tu archivo CSV.");
+            alert("📊 ¡Reporte de Formatos Procesado y Guardado con Éxito!");
         } else {
-            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente en la base de datos (No se requirieron órdenes de compra).");
+            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente.");
         }
 
-        if (definitiveDeclaredSalesDateStr) {
-            CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
-        }
-
-                if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
+        if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Fecha histórica actualizada a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
-        // 🌟 FIX COMPLETED: CLEAR ALL STALE BACKGROUND MEMORY OBJECTS TO PREVENT RESET LOOPS!
         TEMPORARY_STAGED_PURCHASE_LINES = [];
-        MASTER_INVENTORY_ITEMS = []; // 🧼 Wipe out old stock records completely!
-        GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; // 🧼 Wipe out usage values!
+        MASTER_INVENTORY_ITEMS = []; 
+        GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
         
-        const workspace = document.getElementById("procurement-suggestions-workspace");
-        const commitBtn = document.getElementById("btn-commit-all-orders");
-        if (workspace) workspace.style.display = "none";
-        if (commitBtn) commitBtn.style.display = "none";
+        document.getElementById("procurement-suggestions-workspace").style.display = "none";
+        document.getElementById("btn-commit-all-orders").style.display = "none";
 
-        // 🚀 FORCE A DEEP SERVER RE-FETCH: Pulls a completely brand-new, clean snapshot from Supabase disk!
-        console.log("🧼 Cache flushed. Downloading fresh database rows from cloud server...");
-        if (typeof fetchInventoryMatrixData === "function") {
-            await fetchInventoryMatrixData(); 
-        }
-        
+        if (typeof fetchInventoryMatrixData === "function") await fetchInventoryMatrixData();
         syncChronologicalDateDOMFields();
 
     } catch (err) {
-
-        console.error("Procurement commit error:", err);
-        if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock en el servidor.";
+        console.error(err);
+        if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock.";
     }
 }
 
