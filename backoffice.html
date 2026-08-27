@@ -3035,7 +3035,7 @@ function triggerSalesFileSelectionGuard() {
 
 
 // =======================================================================
-// 📋 REAL-TIME REVO CSV SALES PIPELINE & REAL deficit RECURSIVE EXPLOSION
+// 📋 REAL-TIME REVO CSV SALES PIPELINE & UNIFIED REPLENISHMENT ENGINE
 // =======================================================================
 
 async function processDailySalesFileIngestion(event) {
@@ -3045,10 +3045,10 @@ async function processDailySalesFileIngestion(event) {
     var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
         feedback.style.display = "block";
-        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y calculando faltantes reales...</div>";
+        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando de-composición recursiva...</div>";
     }
 
-    var file = fileInput.files[0];
+    var file = fileInput.files;
     var reader = new FileReader();
 
     reader.onload = async function(e) {
@@ -3160,10 +3160,15 @@ async function processDailySalesFileIngestion(event) {
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                // 🌟 NET DEFICIT MODEL REALIGNMENT:
-                // Suggested Purchase = (Stock Max + Consumption) - Current Stock Balance
-                if (stockMax > 0 && currentStock <= pointOfOrder) {
-                    var purchaseQtyNeeded = (stockMax + usageToday) - currentStock;
+                // Proyected Stock after today's shift (Before new purchases arrive)
+                var projectedStockAfterSales = currentStock - usageToday;
+                if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00; // Enforce physical zero-floor limit
+
+                // 🌟 PURE REPLENISHMENT MODEL MATH:
+                // Trigger order if projected stock hits or drops below the reorder point
+                if (stockMax > 0 && projectedStockAfterSales <= pointOfOrder) {
+                    // Suggested purchase gap is exactly what's needed to refill back up to stock_max
+                    var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
                     
                     if (purchaseQtyNeeded > 0) {
                         var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
@@ -3174,7 +3179,7 @@ async function processDailySalesFileIngestion(event) {
                             uom: ing.uom || "gr",
                             last_std_inventory: currentStock,
                             consumption: usageToday,
-                            actual_std_inventory: currentStock - usageToday, // Raw tracking mapping
+                            actual_std_inventory: projectedStockAfterSales, // Clean zero-capped stock track
                             point_of_order: pointOfOrder,
                             stock_max: stockMax,
                             suggested_quantity: purchaseQtyNeeded,
@@ -3189,7 +3194,7 @@ async function processDailySalesFileIngestion(event) {
             MASTER_INVENTORY_ITEMS = ingredients;
 
             if (feedback) {
-                feedback.innerHTML = `🎉 <b>Cálculo Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} líneas críticas</b>.`;
+                feedback.innerHTML = `🎉 <b>Cálculo Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
             }
             
             var commitBtn = document.getElementById("btn-commit-all-orders");
@@ -3199,7 +3204,7 @@ async function processDailySalesFileIngestion(event) {
 
         } catch (err) {
             console.error(err);
-            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error al procesar el archivo CSV.</div>";
+            if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al procesar el cálculo recursivo del archivo CSV.</div>";
         }
     };
 
@@ -3401,12 +3406,12 @@ async function executeFinalInventoryProcurementCommit() {
         return;
     }
 
-    if (feedback) feedback.innerHTML = "⏳ Sincronizando conversiones y actualizando niveles de stock en Supabase cloud...";
+    if (feedback) feedback.innerHTML = "⏳ Sincronizando conversiones de formatos y actualizando niveles de stock en Supabase cloud...";
 
     try {
         const updatePromises = [];
         let csvContent = "\uFEFF"; 
-        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Inicial,Consumo,Formato Compra,Cant Formatos Pedidos,Nuevo Stock Teórico\r\n";
+        csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Inicial,Consumo,Formato Compra,Cant Formatos Pedidos,Nuevo Stock Teórico Final\r\n";
 
         MASTER_INVENTORY_ITEMS.forEach(ing => {
             const targetIngIdClean = String(ing.id).toLowerCase().trim();
@@ -3427,16 +3432,18 @@ async function executeFinalInventoryProcurementCommit() {
                 );
                 
                 const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
+                
                 const baseInitialInventory = parseFloat(matchedAlertLine.last_std_inventory || 0);
                 const baseConsumption = parseFloat(matchedAlertLine.consumption || 0);
                 const approvedFormatsCount = matchedAlertLine.is_approved ? parseInt(matchedAlertLine.approved_formats_quantity || 0, 10) : 0;
                 
-                // 🌟 IRONCLAD ADDITIVE MATH MODEL:
-                // New Stock Level = Initial Stock - Today's Consumption + Newly Purchased Weights
+                // 🌟 THE BULLETPROOF ADDITIVE INVENTORY FORMULA:
+                // Final Stock = Starting Stock - Today's Sales + Converted Purchased Weights
                 definitiveNewInventoryLevel = baseInitialInventory - baseConsumption + (approvedFormatsCount * conversionFactor);
-                if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00; // Physical limit floor
+                if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00; 
                 
                 usageAmount = baseConsumption;
+                console.log(`📊 DB COMMIT - [${ing.name_es || ing.name}]: ${baseInitialInventory} - ${baseConsumption} + (${approvedFormatsCount} x ${conversionFactor}) -> Final Stock: ${definitiveNewInventoryLevel}`);
             } else {
                 const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[targetIngIdClean] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
@@ -3468,8 +3475,8 @@ async function executeFinalInventoryProcurementCommit() {
             }
         });
 
-        // Build Excel data sheet contents
         const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && parseInt(l.approved_formats_quantity, 10) > 0);
+        
         approvedLines.forEach(line => {
             let supplierName = String(line.supplier_id).trim();
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
@@ -3504,6 +3511,7 @@ async function executeFinalInventoryProcurementCommit() {
 
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
+            console.log("🚀 All Supabase stock conversion increments written safely to server disks.");
         }
 
         if (approvedLines.length > 0) {
@@ -3538,9 +3546,10 @@ async function executeFinalInventoryProcurementCommit() {
 
     } catch (err) {
         console.error(err);
-        if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock.";
+        if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
+
 
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
