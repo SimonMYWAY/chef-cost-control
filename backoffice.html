@@ -3434,17 +3434,29 @@ async function executeFinalInventoryProcurementCommit() {
                 
                 const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
                 
-                const baseInitialInventory = parseFloat(matchedAlertLine.last_std_inventory || 0);
+                            const baseInitialInventory = parseFloat(matchedAlertLine.last_std_inventory || 0);
                 const baseConsumption = parseFloat(matchedAlertLine.consumption || 0);
                 const approvedFormatsCount = matchedAlertLine.is_approved ? parseInt(matchedAlertLine.approved_formats_quantity || 0, 10) : 0;
                 
-                // 🌟 THE BULLETPROOF ADDITIVE INVENTORY FORMULA:
-                // Final Stock = Starting Stock - Today's Sales + Converted Purchased Weights
-                definitiveNewInventoryLevel = baseInitialInventory - baseConsumption + (approvedFormatsCount * conversionFactor);
+                // Calculate the true physical base weight of the delivery package you approved
+                const baseApprovedPurchaseWeights = approvedFormatsCount * conversionFactor;
+
+                // 🌟 GHOST STOCK INTEGRATION GUARD: If consumption exceeds initial recorded stock layers
+                if (baseConsumption > baseInitialInventory) {
+                    console.log(`⚠️ Ghost Stock Guard: Consumption (${baseConsumption}) exceeded initial stock (${baseInitialInventory}) for ${ing.name_es}. Locking stock to Purchase Order Weight.`);
+                    
+                    // Your rule implemented: Final stock level becomes exactly the value of the last purchase
+                    definitiveNewInventoryLevel = baseApprovedPurchaseWeights;
+                } else {
+                    // Traditional additive formula applied if inventory layers are normal
+                    definitiveNewInventoryLevel = baseInitialInventory - baseConsumption + baseApprovedPurchaseWeights;
+                }
+                
                 if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00; 
                 
                 usageAmount = baseConsumption;
-                console.log(`📊 DB COMMIT - [${ing.name_es || ing.name}]: ${baseInitialInventory} - ${baseConsumption} + (${approvedFormatsCount} x ${conversionFactor}) -> Final Stock: ${definitiveNewInventoryLevel}`);
+                console.log(`📊 DB COMMIT - [${ing.name_es || ing.name}]: Final Stock Level set to ${definitiveNewInventoryLevel}`);
+
             } else {
                 const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[targetIngIdClean] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
