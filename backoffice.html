@@ -3402,6 +3402,7 @@ function toggleTemporaryProcurementLineApproval(index, checked) {
 }
 
 // 🌟 STEP 5: DECOUPLED INVENTORY ACTUALIZATION & PACKAGING-AWARE DATA EXPORT STREAM
+// Fully realigned to use your native 'provider_name' and 'units_per_purchase' schema values!
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
     
@@ -3414,9 +3415,10 @@ async function executeFinalInventoryProcurementCommit() {
 
     try {
         const updatePromises = [];
-        let csvContent = "\uFEFF"; 
+        let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters (ñ, Ó, á) flawlessly!
         csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado Base,Unidad Base (UOM),Formato Compra,Cant Formatos Pedidos,Equivalencia Receta Total\r\n";
 
+        // 🌟 PILLAR 1: CONVERSION STOCK SAVE LOOP
         MASTER_INVENTORY_ITEMS.forEach(ing => {
             const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ing.id));
             
@@ -3424,24 +3426,36 @@ async function executeFinalInventoryProcurementCommit() {
             let usageAmount = 0;
 
             if (matchedAlertLine) {
+                // Filter mapping records matching this specific item
                 const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
                     String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim()
                 );
-                const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(matchedAlertLine.supplier_id));
-                // 🌟 ALIGNMENT CORRECTION: Aligned with your true database units_per_purchase column!
+                
+                // 🔍 PROACTIVE LOOKUP MATCHING: Check by text provider_name or fallback provider_id strings
+                const activeFormatRule = authorizedFormats.find(f => 
+                    String(f.provider_name).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim() ||
+                    String(f.provider_id).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim()
+                );
+                
+                // Read from your true column name: units_per_purchase
                 const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
 
                 const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
-                const baseApprovedPurchaseWeights = matchedAlertLine.is_approved ? (parseInt(matchedAlertLine.approved_formats_quantity || 0, 10) * conversionFactor) : 0;
+                const approvedFormatsCount = parseInt(matchedAlertLine.approved_formats_quantity || 0, 10);
+                
+                // definitive weights = user format count * true packaging conversion multiplier
+                const baseApprovedPurchaseWeights = matchedAlertLine.is_approved ? (approvedFormatsCount * conversionFactor) : 0;
                 
                 definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchaseWeights;
                 usageAmount = parseFloat(matchedAlertLine.consumption || 0);
+                
+                console.log(`📡 Receta Core - Insumo [${ing.name_es}]: ${baseActualInventory} + (${approvedFormatsCount} x ${conversionFactor}) -> New std_inventory: ${definitiveNewInventoryLevel}`);
             } else {
                 const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
                 
                 let processedStock = baseCurrentStock - usageLedgerAmount;
-                if (processedStock < 0) processedStock = 0.00; 
+                if (processedStock < 0) processedStock = 0.00; // Ironclad zero-floor constraint
                 
                 definitiveNewInventoryLevel = processedStock;
                 usageAmount = usageLedgerAmount;
@@ -3464,21 +3478,31 @@ async function executeFinalInventoryProcurementCommit() {
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     })
+                    .then(r => r.json())
                 );
             }
         });
 
-        const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && l.approved_formats_quantity > 0);
+        // 🌟 PILLAR 2: BUILD DOWNLOAD FILE CONVERTED ACCURATELY BY STRING NAMES
+        const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && parseInt(l.approved_formats_quantity, 10) > 0);
         
         approvedLines.forEach(line => {
-            const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
-            const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "Proveedor Local";
+            // 🔍 DYNAMIC STRING NAME LOOKUP: Reads the plain text identifier directly out of memory
+            let supplierName = String(line.supplier_id).trim();
+            
+            // Fallback lookup dictionary check if supplier_id happened to store an older numeric reference key
+            if (CACHED_SUPPLIER_MAP[line.supplier_id]) {
+                supplierName = CACHED_SUPPLIER_MAP[line.supplier_id].name || CACHED_SUPPLIER_MAP[line.supplier_id].name_es || supplierName;
+            }
 
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
-            const activeFormatRule = authorizedFormats.find(f => String(f.provider_id) === String(line.supplier_id));
             
-            const purchaseUomName = activeFormatRule ? (activeFormatRule.purchase_uom || "Unid") : line.uom;
-            // 🌟 ALIGNMENT CORRECTION: Aligned with your true database units_per_purchase column!
+            const activeFormatRule = authorizedFormats.find(f => 
+                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() ||
+                String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+            );
+            
+            const purchaseUomName = activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : line.uom;
             const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
             const realBaseWeightEquivalent = parseInt(line.approved_formats_quantity, 10) * conversionFactor;
 
@@ -3489,6 +3513,7 @@ async function executeFinalInventoryProcurementCommit() {
             csvContent += `"${cleanSupName}","${cleanIngName}",${line.actual_std_inventory.toFixed(2)},"${line.uom}","${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${realBaseWeightEquivalent.toFixed(2)}\r\n`;
         });
 
+        // Fire your database update handshakes in parallel including your timeline milestone advance!
         const inputCurrentSalesDateEl = document.getElementById("input-current-sales-date");
         const definitiveDeclaredSalesDateStr = inputCurrentSalesDateEl ? inputCurrentSalesDateEl.value : "";
 
@@ -3503,8 +3528,8 @@ async function executeFinalInventoryProcurementCommit() {
         }
 
         if (updatePromises.length > 0) {
-            await Promise.all(updatePromises);
-            console.log(`🚀 Successfully written true data values and timeline checkpoints to Supabase.`);
+            const serverConfirmations = await Promise.all(updatePromises);
+            console.log("🚀 All Supabase stock conversion increments written safely to server disks:", serverConfirmations);
         }
 
         if (approvedLines.length > 0) {
@@ -3529,7 +3554,7 @@ async function executeFinalInventoryProcurementCommit() {
             CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         }
 
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos de la jornada han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
+        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         const workspace = document.getElementById("procurement-suggestions-workspace");
@@ -3545,7 +3570,6 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock en el servidor.";
     }
 }
-
 
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
