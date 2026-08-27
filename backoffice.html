@@ -3559,18 +3559,28 @@ async function executeFinalInventoryProcurementCommit() {
             CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         }
 
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
+                if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Todos los consumos han sido descontados y la fecha histórica se actualizó a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
+        // 🌟 FIX COMPLETED: CLEAR ALL STALE BACKGROUND MEMORY OBJECTS TO PREVENT RESET LOOPS!
         TEMPORARY_STAGED_PURCHASE_LINES = [];
+        MASTER_INVENTORY_ITEMS = []; // 🧼 Wipe out old stock records completely!
+        GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; // 🧼 Wipe out usage values!
+        
         const workspace = document.getElementById("procurement-suggestions-workspace");
         const commitBtn = document.getElementById("btn-commit-all-orders");
         if (workspace) workspace.style.display = "none";
         if (commitBtn) commitBtn.style.display = "none";
 
-        if (typeof fetchInventoryMatrixData === "function") fetchInventoryMatrixData();
+        // 🚀 FORCE A DEEP SERVER RE-FETCH: Pulls a completely brand-new, clean snapshot from Supabase disk!
+        console.log("🧼 Cache flushed. Downloading fresh database rows from cloud server...");
+        if (typeof fetchInventoryMatrixData === "function") {
+            await fetchInventoryMatrixData(); 
+        }
+        
         syncChronologicalDateDOMFields();
 
     } catch (err) {
+
         console.error("Procurement commit error:", err);
         if (feedback) feedback.innerHTML = "❌ Error al procesar las deducciones de stock en el servidor.";
     }
