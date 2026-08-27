@@ -3040,7 +3040,7 @@ function triggerSalesFileSelectionGuard() {
 
 async function processDailySalesFileIngestion(event) {
     var fileInput = event.target;
-    if (!fileInput || fileInput.files.length === 0) return;
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
     
     var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
@@ -3048,7 +3048,8 @@ async function processDailySalesFileIngestion(event) {
         feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando de-composición recursiva...</div>";
     }
 
-    var file = fileInput.files;
+    // 🌟 FIX COMPLETED: Added index [0] to target the physical single file pointer securely!
+    var file = fileInput.files[0]; 
     var reader = new FileReader();
 
     reader.onload = async function(e) {
