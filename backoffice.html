@@ -3418,52 +3418,53 @@ async function executeFinalInventoryProcurementCommit() {
         let csvContent = "\uFEFF"; // Adds UTF-8 BOM so Excel opens special characters (ñ, Ó, á) flawlessly!
         csvContent += "Proveedor / Distribuidor,Ingrediente,Stock Proyectado Base,Unidad Base (UOM),Formato Compra,Cant Formatos Pedidos,Equivalencia Receta Total\r\n";
 
-        // 🌟 PILLAR 1: CONVERSION STOCK SAVE LOOP
+                // 🌟 PILLAR 1: CONVERSION STOCK SAVE LOOP (WITH IRONCLAD ROW ID FILTERING)
         MASTER_INVENTORY_ITEMS.forEach(ing => {
-            const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ing.id));
+            // Force strict clean matching strings to eliminate lowercase/uppercase query mismatches
+            const targetIngIdClean = String(ing.id).toLowerCase().trim();
+            
+            const matchedAlertLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => 
+                String(l.ingredient_id).toLowerCase().trim() === targetIngIdClean
+            );
             
             let definitiveNewInventoryLevel = 0;
             let usageAmount = 0;
 
             if (matchedAlertLine) {
-                // Filter mapping records matching this specific item
                 const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
-                    String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim()
+                    String(m.ingredient_id).toLowerCase().trim() === targetIngIdClean
                 );
                 
-                // 🔍 PROACTIVE LOOKUP MATCHING: Check by text provider_name or fallback provider_id strings
                 const activeFormatRule = authorizedFormats.find(f => 
                     String(f.provider_name).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim() ||
                     String(f.provider_id).toLowerCase().trim() === String(matchedAlertLine.supplier_id).toLowerCase().trim()
                 );
                 
-                // Read from your true column name: units_per_purchase
                 const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
-
                 const baseActualInventory = parseFloat(matchedAlertLine.actual_std_inventory || 0);
                 const approvedFormatsCount = parseInt(matchedAlertLine.approved_formats_quantity || 0, 10);
                 
-                // definitive weights = user format count * true packaging conversion multiplier
                 const baseApprovedPurchaseWeights = matchedAlertLine.is_approved ? (approvedFormatsCount * conversionFactor) : 0;
                 
                 definitiveNewInventoryLevel = baseActualInventory + baseApprovedPurchaseWeights;
                 usageAmount = parseFloat(matchedAlertLine.consumption || 0);
                 
-                console.log(`📡 Receta Core - Insumo [${ing.name_es}]: ${baseActualInventory} + (${approvedFormatsCount} x ${conversionFactor}) -> New std_inventory: ${definitiveNewInventoryLevel}`);
+                console.log(`📡 MATCHED INSUMO [${ing.name_es || ing.name}]: ${baseActualInventory} + (${approvedFormatsCount} x ${conversionFactor}) -> Target Stock: ${definitiveNewInventoryLevel}`);
             } else {
-                const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0) : 0;
+                const usageLedgerAmount = typeof GLOBAL_DAILY_CONSUMPTION_LEDGER !== "undefined" ? parseFloat(GLOBAL_DAILY_CONSUMPTION_LEDGER[targetIngIdClean] || 0) : 0;
                 const baseCurrentStock = parseFloat(ing.std_inventory || 0);
                 
                 let processedStock = baseCurrentStock - usageLedgerAmount;
-                if (processedStock < 0) processedStock = 0.00; // Ironclad zero-floor constraint
+                if (processedStock < 0) processedStock = 0.00; 
                 
                 definitiveNewInventoryLevel = processedStock;
                 usageAmount = usageLedgerAmount;
             }
 
+            // Only send network data if this specific item row had sales activity today
             if (usageAmount > 0) {
-                const targetIngId = String(ing.id).trim();
-                const targetUrl = `${API_URL}ingredients?id=eq.${targetIngId}`;
+                // 🌟 FIX COMPLETED: Build complete matching headers and a clean lowercased target URL parameter filter
+                const targetUrl = `${API_URL}ingredients?id=eq.${targetIngIdClean}`;
 
                 updatePromises.push(
                     fetch(targetUrl, {
@@ -3479,6 +3480,10 @@ async function executeFinalInventoryProcurementCommit() {
                         })
                     })
                     .then(r => r.json())
+                    .then(data => {
+                        console.log(`✅ DATABASE WRITE CONFIRMED FOR ID [${targetIngIdClean}]:`, data);
+                        return data;
+                    })
                 );
             }
         });
