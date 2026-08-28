@@ -861,11 +861,16 @@ function loadQueue() {
 
 
                 // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
-        function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            var activeUnitLabel = (uom && uom !== "" && uom !== "undefined") ? uom : "porciones";
+                function viewRecipeDetails(recipeId, name, category, servings, uom) {
+            // 🌟 FIX COMPLETED: Stop forcing "porciones" if a Tier 2 sub-recipe carries a valid database unit!
+            var cleanUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "";
+            
+            // If the category is a Tier 2 sub-recipe and no text string was passed, default it to standard grams (gr)
+            var activeUnitLabel = cleanUOM !== "" ? cleanUOM : (String(category).toLowerCase().trim() === "tier2" ? "gr" : "porciones");
             
             document.getElementById("modal-recipe-name").innerText = name;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
+
             
             var rowsTarget = document.getElementById("modal-table-rows");
             rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
