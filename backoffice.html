@@ -860,13 +860,27 @@ function loadQueue() {
         }
 
 
-                    // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
+                // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
         function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            // Setup pristine variables to manage your custom text strings safely
+            // 🌟 PARSE NAME STRINGS FOR HIDDEN TIMELINE TOKENS (||)
+            var rawRecipeNameString = name || "Sin Nombre";
+            var resolvedRecipeTitle = rawRecipeNameString.includes("||") ? rawRecipeNameString.split("||")[0].trim() : rawRecipeNameString.trim();
+            
+            // Extract the temporary unit from the second half of the name string split
+            var extractedUnitToken = "";
+            if (rawRecipeNameString.includes("||")) {
+                extractedUnitToken = rawRecipeNameString.split("||")[1].trim();
+            }
+            
             var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
+            if (inputUOM === "porciones" && extractedUnitToken !== "") {
+                inputUOM = extractedUnitToken; // 🚀 Locks onto your queue choice ("ml", "gr", "oz")!
+            }
+            
             var cleanCategoryToken = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
             
-            document.getElementById("modal-recipe-name").innerText = name;
+            // Inject clean values without the pipeline tokens into your screen container cards
+            document.getElementById("modal-recipe-name").innerText = resolvedRecipeTitle;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + inputUOM;
             
             var rowsTarget = document.getElementById("modal-table-rows");
@@ -875,17 +889,12 @@ function loadQueue() {
             
             // Fetch components and live master ingredients in parallel to run financial margin checks
             Promise.all([
-
                 fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
+
             .then(function(results) {
-                            var lines = results[0];
-                var masterIngredients = results[1];
-                
-                rowsTarget.innerHTML = "";
-                
-                                // 🌟 FIX COMPLETED: Run your shadow cross-reference lookup loop natively inside the success callback!
+                                // 🌟 FIX COMPLETED: Repetitions completely removed while holding brackets intact!
                 var lines = results[0];
                 var masterIngredients = results[1];
                 
