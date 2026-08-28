@@ -570,7 +570,62 @@
                 .catch(function(err) { console.error(err); });
         }
                
-
+// 🔷 PENDING APPROVAL REVIEWS QUEUE ENGINE (REPAIRED & BALANCED)
+function loadQueue() {
+    var container = document.getElementById("queue-container");
+    if (!container) return;
+    
+    Promise.all([
+        fetch(API_URL + "recipes?status=eq.waiting", { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); }),
+        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); })
+    ])
+    .then(function(results) {
+        var pendingRecipes = results[0];
+        var masterIngredients = results[1];
+        
+        container.innerHTML = "";
+        if (!pendingRecipes || pendingRecipes.length === 0 || pendingRecipes.message) {
+            container.innerHTML = "<div class='no-data' style='text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>☕ No hay fórmulas pendientes de revisión en este momento.</div>";
+            return;
+        }
+        
+        pendingRecipes.forEach(function(recipe) {
+            var row = document.createElement("div");
+            row.id = "recipe-row-" + recipe.id;
+            
+            var rawName = recipe.name || "Fórmula Sin Nombre";
+            var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+            
+            var queueUOM = recipe.uom ? String(recipe.uom).trim() : "porciones";
+            if ((!recipe.uom || queueUOM === "porciones") && Array.isArray(masterIngredients)) {
+                var shadowMatch = masterIngredients.find(function(i) { 
+                    return String(i.id).toLowerCase().trim() === String(recipe.id).toLowerCase().trim(); 
+                });
+                if (shadowMatch && shadowMatch.uom) {
+                    queueUOM = String(shadowMatch.uom).trim();
+                }
+            }
+            
+            row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:15px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:8px; background-color:var(--bg-surface); width:100%; box-sizing:border-box;");
+            
+            row.innerHTML = "<div style='flex:1; text-align:left;'>" +
+                                "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;' CONTAINER;'>" + nameClean + "</div>" +
+                                "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Rendimiento Base: " + (recipe.servings || 4) + " (" + queueUOM + ")</div>" +
+                            "</div>" +
+                            "<div style='display:flex; align-items:center; gap:12px; margin-left:15px;'>" +
+                                "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ", '" + queueUOM + "')\">Ver Detalles</button>" +
+                                "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Liberar</button>" +
+                                "<button class='btn btn-red' style='background-color:#ef4444; color:white; padding:6px 12px; font-size:0.85rem;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Eliminar</button>" +
+                            "</div>";
+                                    
+            container.appendChild(row);
+        });
+    })
+    .catch(function(err) { 
+        console.error("Queue display compiler crash:", err); 
+        container.innerHTML = "<div style='color:#ef4444; padding:10px;'>❌ Error fatal al cargar la cola de revisión de fórmulas.</div>";
+    });
+}
 
 
                 // 🛡️ RESTRUCTURING BLACKLIST SYSTEM
