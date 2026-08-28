@@ -3188,19 +3188,24 @@ async function processDailySalesFileIngestion(event) {
                 if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00; // Enforce physical zero-floor limit
 
                                 // 🌟 FIX COMPLETED: Pulls the first authorized supplier name from your format tables to prevent 'unassigned' lockouts!
+                                // 🌟 FIX COMPLETED: Restored the flat array selector to clear the filter crash!
                 if (stockMax > 0 && projectedStockAfterSales <= pointOfOrder) {
                     var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
                     
                     if (purchaseQtyNeeded > 0) {
-                        // Scan your conversion mappings array to find authorized formats for this specific ingredient
-                        var localizedFormatsMapList = mappings[0].filter(function(m) {
-                            return String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim();
-                        });
+                        // Scan your conversion mappings array cleanly to find authorized formats
+                        var localizedFormatsMapList = [];
+                        if (Array.isArray(mappings)) {
+                            localizedFormatsMapList = mappings.filter(function(m) {
+                                return String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim();
+                            });
+                        }
 
                         // Default to the first authorized supplier text name found, fallback to unassigned
                         var defaultSupplierNameKey = "unassigned";
                         if (localizedFormatsMapList.length > 0) {
-                            defaultSupplierNameKey = localizedFormatsMapList[0].provider_name || localizedFormatsMapList[0].provider_id || "unassigned";
+                            const firstFormatRow = localizedFormatsMapList[0];
+                            defaultSupplierNameKey = firstFormatRow.provider_name || firstFormatRow.provider_id || "unassigned";
                         } else if (ing.default_provider_id || ing.provider_id) {
                             defaultSupplierNameKey = ing.default_provider_id || ing.provider_id;
                         }
@@ -3216,11 +3221,12 @@ async function processDailySalesFileIngestion(event) {
                             stock_max: stockMax,
                             suggested_quantity: purchaseQtyNeeded,
                             approved_quantity: purchaseQtyNeeded, 
-                            supplier_id: defaultSupplierNameKey, // 🚀 Locks onto your true suggested provider name!
+                            supplier_id: defaultSupplierNameKey, 
                             is_approved: true
                         });
                     }
                 }
+
 
             });
 
