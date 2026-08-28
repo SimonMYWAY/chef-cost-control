@@ -862,24 +862,30 @@ function loadQueue() {
 
                 // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
         function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            // 🌟 PARSE NAME STRINGS FOR HIDDEN TIMELINE TOKENS (||)
+            // 🌟 STEP 1: SAFE SELECTION FILTERING FOR MULTI-TOKEN METADATA TRACKS
             var rawRecipeNameString = name || "Sin Nombre";
+            
+            // Extract the clean name out of index zero safely
             var resolvedRecipeTitle = rawRecipeNameString.includes("||") ? rawRecipeNameString.split("||")[0].trim() : rawRecipeNameString.trim();
             
-            // Extract the temporary unit from the second half of the name string split
+            // 🚀 STEP 2: ARRAY INDEX BRACKETS FIXED (Pulls array element 1 to capture the true unit string)
             var extractedUnitToken = "";
             if (rawRecipeNameString.includes("||")) {
-                extractedUnitToken = rawRecipeNameString.split("||")[1].trim();
+                var nameArraySplitCollection = rawRecipeNameString.split("||");
+                if (nameArraySplitCollection.length > 1) {
+                    extractedUnitToken = String(nameArraySplitCollection[1]).trim();
+                }
             }
             
+            // Clean up incoming uom parameters and fall back to metadata splits if needed
             var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
-            if (inputUOM === "porciones" && extractedUnitToken !== "") {
-                inputUOM = extractedUnitToken; // 🚀 Locks onto your queue choice ("ml", "gr", "oz")!
+            if ((inputUOM === "porciones" || inputUOM === "") && extractedUnitToken !== "") {
+                inputUOM = extractedUnitToken; 
             }
             
             var cleanCategoryToken = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
             
-            // Inject clean values without the pipeline tokens into your screen container cards
+            // Inject the clean text name without the split characters into your header elements
             document.getElementById("modal-recipe-name").innerText = resolvedRecipeTitle;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + inputUOM;
             
@@ -889,6 +895,7 @@ function loadQueue() {
             
             // Fetch components and live master ingredients in parallel to run financial margin checks
             Promise.all([
+
                 fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
