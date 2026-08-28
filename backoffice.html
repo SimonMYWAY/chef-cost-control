@@ -3321,8 +3321,27 @@ function renderGroupedSupplierProcurementAccordion() {
                         <th style="padding:8px 6px; text-align:center; width:45px;">Ok</th>
                     </tr>
                 </thead>
-                <tbody>`;
+                        <tbody>`;
+
+        // 🌟 FIX COMPLETED: Sorts all ingredient lines alphabetically by Supplier Name (A to Z) inside the table grid layout!
+        lines.sort((a, b) => {
+            let nameA = "📦 Proveedor No Asignado / Compras Locales";
+            if (a.supplier_id && a.supplier_id !== "unassigned" && a.supplier_id !== "UNASSIGNED_LOCAL_POOL_SLOT") {
+                const objA = CACHED_SUPPLIER_MAP[a.supplier_id];
+                nameA = objA ? (objA.name || objA.name_es || String(a.supplier_id)) : String(a.supplier_id);
+            }
+            
+            let nameB = "📦 Proveedor No Asignado / Compras Locales";
+            if (b.supplier_id && b.supplier_id !== "unassigned" && b.supplier_id !== "UNASSIGNED_LOCAL_POOL_SLOT") {
+                const objB = CACHED_SUPPLIER_MAP[b.supplier_id];
+                nameB = objB ? (objB.name || objB.name_es || String(b.supplier_id)) : String(b.supplier_id);
+            }
+
+            return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
+        });
+
         lines.forEach(line => {
+
             const rowIdx = TEMPORARY_STAGED_PURCHASE_LINES.indexOf(line);
             
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
