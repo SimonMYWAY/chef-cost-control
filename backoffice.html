@@ -3240,7 +3240,7 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
 }
 
 // =======================================================================
-// 📦 SUPPLIER ACCORDION INTERFACE WITH PACKAGING CONVERSION UNITS (STEP 4)
+// 📦 SUPPLIER ACCORDION INTERFACE WITH ALPHABETICAL SORT & UNIFIED LOCAL CARD
 // =======================================================================
 
 function renderGroupedSupplierProcurementAccordion() {
@@ -3254,21 +3254,48 @@ function renderGroupedSupplierProcurementAccordion() {
         return;
     }
 
+    // Group rows cleanly by their Provider Names or route them to a unified "Unassigned" slot
     const groupedBySupplier = {};
     TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
-        if (!groupedBySupplier[line.supplier_id]) groupedBySupplier[line.supplier_id] = [];
-        groupedBySupplier[line.supplier_id].push(line);
+        let keySlot = String(line.supplier_id).trim();
+        
+        // Fetch provider real name out of background memory mapping profiles
+        const supplierObj = CACHED_SUPPLIER_MAP[line.supplier_id];
+        let providerCleanName = supplierObj ? (supplierObj.name || supplierObj.name_es || "") : "";
+        providerCleanName = providerCleanName.trim();
+
+        // 🌟 FIX COMPLETED: If the line is unapproved OR has no valid provider, route it to a unified single container key slot!
+        if (!line.is_approved || keySlot === "unassigned" || keySlot === "" || providerCleanName === "") {
+            keySlot = "UNASSIGNED_LOCAL_POOL_SLOT";
+        }
+
+        if (!groupedBySupplier[keySlot]) groupedBySupplier[keySlot] = [];
+        groupedBySupplier[keySlot].push(line);
+    });
+
+    // 🔤 STEP-BY-STEP ALPHABETICAL SORTING KEY EXTRACTION
+    const sortedSupplierKeys = Object.keys(groupedBySupplier).sort((a, b) => {
+        if (a === "UNASSIGNED_LOCAL_POOL_SLOT") return 1;  // Keep the unassigned local card always at the very bottom
+        if (b === "UNASSIGNED_LOCAL_POOL_SLOT") return -1;
+        
+        const nameA = CACHED_SUPPLIER_MAP[a] ? (CACHED_SUPPLIER_MAP[a].name || CACHED_SUPPLIER_MAP[a].name_es || "").toLowerCase() : a.toLowerCase();
+        const nameB = CACHED_SUPPLIER_MAP[b] ? (CACHED_SUPPLIER_MAP[b].name || CACHED_SUPPLIER_MAP[b].name_es || "").toLowerCase() : b.toLowerCase();
+        return nameA.localeCompare(nameB);
     });
 
     let html = "";
-    Object.keys(groupedBySupplier).forEach(supplierId => {
+    sortedSupplierKeys.forEach(supplierId => {
         const lines = groupedBySupplier[supplierId];
-        const supplierObj = CACHED_SUPPLIER_MAP[supplierId];
-        const supplierName = supplierObj ? (supplierObj.name || supplierObj.name_es) : "📦 Proveedor No Asignado / Compras Locales";
+        
+        let supplierName = "📦 Proveedor No Asignado / Compras Locales / No Aprobados";
+        if (supplierId !== "UNASSIGNED_LOCAL_POOL_SLOT") {
+            const supplierObj = CACHED_SUPPLIER_MAP[supplierId];
+            supplierName = supplierObj ? `🏭 Distribuidor Compra: ${supplierObj.name || supplierObj.name_es}` : `🏭 Distribuidor #${supplierId}`;
+        }
 
         html += `<div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:18px; margin-bottom:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
             <div style="background:#f8fafc; margin:-18px -18px 15px -18px; padding:12px 18px; border-top-left-radius:12px; border-top-right-radius:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">🏭 Distribuidor Compra: ${supplierName}</span>
+                <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">${supplierName}</span>
                 <span style="background:#e0f2fe; color:#0369a1; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:700;">${lines.length} Líneas</span>
             </div>
             
@@ -3286,46 +3313,37 @@ function renderGroupedSupplierProcurementAccordion() {
                     </tr>
                 </thead>
                 <tbody>`;
-
-                lines.forEach(line => {
+        lines.forEach(line => {
             const rowIdx = TEMPORARY_STAGED_PURCHASE_LINES.indexOf(line);
             
-            // Filter your master conversion mapping array rows matching this specific ingredient
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
                 String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()
             );
 
-                        // Build dynamic options selector using your true database column provider_name!
             let supplierOptionsHTML = "";
             if (authorizedFormats.length === 0) {
                 supplierOptionsHTML = `<option value="unassigned">⚠️ Sin formatos de compra</option>`;
             } else {
                 authorizedFormats.forEach(f => {
                     const provDisplayTxt = f.provider_name ? String(f.provider_name).trim() : "Distribuidor #" + (f.provider_id || "Local");
-                    
-                    // Maintain matching states by comparing strings directly
                     const selectedMarker = (String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() || String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()) ? "selected" : "";
                     supplierOptionsHTML += `<option value="${f.provider_name || f.provider_id}" ${selectedMarker}>${provDisplayTxt}</option>`;
                 });
             }
 
-            // 🌟 FIX COMPLETED: Multi-token lookups check both name and ID columns to unlock purchase_uom!
             let activeFormatRule = authorizedFormats.find(f => 
                 String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() ||
                 String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
             );
             
-            // If still no rule matches but we HAVE authorized formats available, default to the FIRST valid format rule on the list
             if (!activeFormatRule && authorizedFormats.length > 0) {
                 activeFormatRule = authorizedFormats[0];
-                line.supplier_id = activeFormatRule.provider_name || activeFormatRule.provider_id; // Auto-align tracking string!
             }
             
             let purchaseUomName = line.uom; 
             let conversionFactor = 1.0;
             
             if (activeFormatRule) {
-                // 🌟 READS DIRECTLY FROM YOUR TRUE COLUMN NAME: purchase_uom
                 purchaseUomName = activeFormatRule.purchase_uom ? String(activeFormatRule.purchase_uom).trim() : "Formato";
                 conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0;
             }
@@ -3339,13 +3357,12 @@ function renderGroupedSupplierProcurementAccordion() {
 
             const realBaseWeightEquivalent = parseFloat(line.approved_formats_quantity || 0) * conversionFactor;
 
-            html += `<tr style="border-bottom:1px solid #f1f5f9; opacity: ${line.is_approved ? '1' : '0.4'}">
-                <td style="padding:10px 6px; font-weight:600; text-align:left; color:#1e293b;">${line.ingredient_name}</td>
+            html += `<tr style="border-bottom:1px solid #f1f5f9; opacity: ${line.is_approved ? '1' : '0.45'}; background: ${line.is_approved ? '#ffffff' : '#f8fafc'};">
+                <td style="padding:10px 6px; font-weight:600; text-align:left; color:#1e293b; ${line.is_approved ? '' : 'text-decoration: line-through; color: #94a3b8;'}">${line.ingredient_name}</td>
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#64748b;">${parseFloat(line.suggested_quantity).toFixed(1)} ${line.uom}</td>
                 
-                <!-- Dynamic Dropdown Filter Selector showing clean provider_name paths -->
                 <td style="padding:6px; text-align:center;">
-                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" style="width:100%; padding:5px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:500;">
+                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" ${line.is_approved ? '' : 'disabled'} style="width:100%; padding:5px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:500;">
                         ${supplierOptionsHTML}
                     </select>
                 </td>
@@ -3354,13 +3371,13 @@ function renderGroupedSupplierProcurementAccordion() {
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#007afb; font-weight:700; background:rgba(0,122,251,0.01);">${suggestedFormatsCount}</td>
                 
                 <td style="padding:6px; text-align:center; background:rgba(16,185,129,0.01);">
-                    <input type="number" min="0" step="1" value="${line.approved_formats_quantity}" oninput="updateTemporaryProcurementLineFormatsQuantity(${rowIdx}, this.value)" style="width:75px; padding:6px; text-align:center; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:6px;" />
+                    <input type="number" min="0" step="1" ${line.is_approved ? '' : 'disabled'} value="${line.approved_formats_quantity}" oninput="updateTemporaryProcurementLineFormatsQuantity(${rowIdx}, this.value)" style="width:75px; padding:6px; text-align:center; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:6px; background: ${line.is_approved ? '#fff' : '#e2e8f0'};" />
                 </td>
                 
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; font-weight:600; color:#475569;">${realBaseWeightEquivalent.toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
-                    <input type="checkbox" ${line.is_approved ? 'checked' : ''} onchange="toggleTemporaryProcurementLineApproval(${rowIdx}, this.checked)" style="transform:scale(1.2); cursor:pointer;" />
+                    <input type="checkbox" ${line.is_approved ? 'checked' : ''} onchange="toggleTemporaryProcurementLineApproval(${rowIdx}, this.checked); renderGroupedSupplierProcurementAccordion();" style="transform:scale(1.2); cursor:pointer;" />
                 </td>
             </tr>`;
         });
@@ -3370,6 +3387,16 @@ function renderGroupedSupplierProcurementAccordion() {
 
     container.innerHTML = html;
     workspace.style.display = "block";
+}
+
+function toggleTemporaryProcurementLineApproval(index, isChecked) {
+    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
+        TEMPORARY_STAGED_PURCHASE_LINES[index].is_approved = isChecked;
+        if (!isChecked) {
+            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_formats_quantity = 0;
+            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_quantity = 0;
+        }
+    }
 }
 
 function updateTemporaryProcurementLineFormatsQuantity(index, val) {
