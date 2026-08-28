@@ -885,14 +885,19 @@ function loadQueue() {
                 
                 rowsTarget.innerHTML = "";
                 
-                // 🌟 FIX COMPLETED: Run your shadow cross-reference lookup loop natively inside the success callback!
+                                // 🌟 FIX COMPLETED: Run your shadow cross-reference lookup loop natively inside the success callback!
+                var lines = results[0];
+                var masterIngredients = results[1];
+                
+                rowsTarget.innerHTML = "";
+                
                 var activeUnitLabel = inputUOM;
                 if ((inputUOM === "porciones" || inputUOM === "") && cleanCategoryToken === "tier2" && Array.isArray(masterIngredients)) {
                     var shadowMatch = masterIngredients.find(function(i) { 
                         return String(i.id).toLowerCase().trim() === String(recipeId).toLowerCase().trim(); 
                     });
                     if (shadowMatch && shadowMatch.uom) {
-                        activeUnitLabel = String(shadowMatch.uom).trim(); // Extracts your custom choice like "ml" or "cucharada"!
+                        activeUnitLabel = String(shadowMatch.uom).trim(); // Extracts your custom choice like "gr", "ml" or "cucharada"!
                     }
                 }
                 
@@ -910,6 +915,7 @@ function loadQueue() {
                 }
                 
                 var localIngMap = {};
+
                 if (Array.isArray(masterIngredients)) {
                     masterIngredients.forEach(function(ing) {
                         localIngMap[String(ing.id).toLowerCase().trim()] = ing;
