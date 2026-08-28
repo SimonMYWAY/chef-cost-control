@@ -865,8 +865,15 @@ function loadQueue() {
             // 🌟 FIX COMPLETED: Stop forcing "porciones" if a Tier 2 sub-recipe carries a valid database unit!
             var cleanUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "";
             
-            // If the category is a Tier 2 sub-recipe and no text string was passed, default it to standard grams (gr)
-            var activeUnitLabel = cleanUOM !== "" ? cleanUOM : (String(category).toLowerCase().trim() === "tier2" ? "gr" : "porciones");
+                       // 🌟 REALIGNED BOUNDARY FIX: Strips out hidden spaces and handles variations like 'Tier 2' or 'tier2' smoothly!
+            var cleanCategoryToken = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
+            
+            var activeUnitLabel = "porciones";
+            if (cleanUOM !== "" && cleanUOM !== "porciones") {
+                activeUnitLabel = cleanUOM;
+            } else if (cleanCategoryToken === "tier2" || cleanCategoryToken === "tier 2") {
+                activeUnitLabel = "gr"; // Default fallback weight metric for sub-recipes if column was empty
+            }
             
             document.getElementById("modal-recipe-name").innerText = name;
             document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
