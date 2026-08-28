@@ -3187,14 +3187,23 @@ async function processDailySalesFileIngestion(event) {
                 var projectedStockAfterSales = currentStock - usageToday;
                 if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00; // Enforce physical zero-floor limit
 
-                // 🌟 PURE REPLENISHMENT MODEL MATH:
-                // Trigger order if projected stock hits or drops below the reorder point
+                                // 🌟 FIX COMPLETED: Pulls the first authorized supplier name from your format tables to prevent 'unassigned' lockouts!
                 if (stockMax > 0 && projectedStockAfterSales <= pointOfOrder) {
-                    // Suggested purchase gap is exactly what's needed to refill back up to stock_max
                     var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
                     
                     if (purchaseQtyNeeded > 0) {
-                        var defaultSupplierId = ing.default_provider_id || ing.provider_id || "unassigned";
+                        // Scan your conversion mappings array to find authorized formats for this specific ingredient
+                        var localizedFormatsMapList = mappings[0].filter(function(m) {
+                            return String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim();
+                        });
+
+                        // Default to the first authorized supplier text name found, fallback to unassigned
+                        var defaultSupplierNameKey = "unassigned";
+                        if (localizedFormatsMapList.length > 0) {
+                            defaultSupplierNameKey = localizedFormatsMapList[0].provider_name || localizedFormatsMapList[0].provider_id || "unassigned";
+                        } else if (ing.default_provider_id || ing.provider_id) {
+                            defaultSupplierNameKey = ing.default_provider_id || ing.provider_id;
+                        }
 
                         TEMPORARY_STAGED_PURCHASE_LINES.push({
                             ingredient_id: ing.id,
@@ -3202,16 +3211,17 @@ async function processDailySalesFileIngestion(event) {
                             uom: ing.uom || "gr",
                             last_std_inventory: currentStock,
                             consumption: usageToday,
-                            actual_std_inventory: projectedStockAfterSales, // Clean zero-capped stock track
+                            actual_std_inventory: projectedStockAfterSales, 
                             point_of_order: pointOfOrder,
                             stock_max: stockMax,
                             suggested_quantity: purchaseQtyNeeded,
                             approved_quantity: purchaseQtyNeeded, 
-                            supplier_id: defaultSupplierId,
+                            supplier_id: defaultSupplierNameKey, // 🚀 Locks onto your true suggested provider name!
                             is_approved: true
                         });
                     }
                 }
+
             });
 
             MASTER_INVENTORY_ITEMS = ingredients;
@@ -3243,6 +3253,45 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
 // 📊 UNIFIED MASTER INTERFACE: ONE SINGLE LIST SORTED BY SUPPLIER (A TO Z)
 // =======================================================================
 
+// =======================================================================
+// 📊 UNIFIED MASTER INTERFACE: MANUAL RE-SORT VIEW ENGINE (A TO Z BY SUPPLIER)
+// =======================================================================
+
+// 🌟 DEDICATED PREVIEW TRIGGER: Explicit manual sorting switch requested by user
+function triggerManualSupplierListAlphabeticalSort() {
+    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
+        return;
+    }
+
+    // Sort the master array array layout sequentially by your declared supplier name string targets
+    TEMPORARY_STAGED_PURCHASE_LINES.sort((a, b) => {
+        // Enforce continuity constraints: Unapproved elements slide to the bottom row sections
+        if (!a.is_approved && b.is_approved) return 1;
+        if (a.is_approved && !b.is_approved) return -1;
+
+        let nameA = String(a.supplier_id || "unassigned").trim().toLowerCase();
+        let nameB = String(b.supplier_id || "unassigned").trim().toLowerCase();
+
+        // Cross-examine background dictionary mapping profiles if numerical key trackers are found
+        if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
+            nameA = (CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || nameA).toLowerCase();
+        }
+        if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
+            nameB = (CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || nameB).toLowerCase();
+        }
+
+        // Treat unassigned elements as trailing elements in alphabetical progression layers
+        if (nameA === "unassigned") return 1;
+        if (nameB === "unassigned") return -1;
+
+        return nameA.localeCompare(nameB);
+    });
+
+    console.log("🔄 Table list array matrix sorted manually by current supplier parameters!");
+    // Redraw table rows dynamically with updated sorted index alignment parameters
+    renderGroupedSupplierProcurementAccordion();
+}
+
 function renderGroupedSupplierProcurementAccordion() {
     const container = document.getElementById("supplier-orders-accordion-container");
     const workspace = document.getElementById("procurement-suggestions-workspace");
@@ -3254,40 +3303,26 @@ function renderGroupedSupplierProcurementAccordion() {
         return;
     }
 
-    // 🌟 PILLAR 1: SORT THE ENTIRE MASTER ARRAY ALPHABETICALLY BY SUPPLIER NAME (A TO Z)
-    TEMPORARY_STAGED_PURCHASE_LINES.sort((a, b) => {
-        // Enforce a hard rule: Unapproved lines always sink to the absolute bottom of the single master table
-        if (!a.is_approved && b.is_approved) return 1;
-        if (a.is_approved && !b.is_approved) return -1;
-
-        let nameA = "📦 Compras Locales";
-        if (a.supplier_id && a.supplier_id !== "unassigned" && a.supplier_id !== "UNASSIGNED_LOCAL_POOL_SLOT") {
-            const objA = CACHED_SUPPLIER_MAP[a.supplier_id];
-            nameA = objA ? (objA.name || objA.name_es || String(a.supplier_id)) : String(a.supplier_id);
-        }
-        
-        let nameB = "📦 Compras Locales";
-        if (b.supplier_id && b.supplier_id !== "unassigned" && b.supplier_id !== "UNASSIGNED_LOCAL_POOL_SLOT") {
-            const objB = CACHED_SUPPLIER_MAP[b.supplier_id];
-            nameB = objB ? (objB.name || objB.name_es || String(b.supplier_id)) : String(b.supplier_id);
-        }
-
-        return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
-    });
-
-    // Render one single clean master card table structure instead of splitting it up
+    // Build one single clean master list dashboard table view matrix block with an interactive sort preview button header bar
     let html = `<div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:18px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-        <div style="background:#f8fafc; margin:-18px -18px 15px -18px; padding:12px 18px; border-top-left-radius:12px; border-top-right-radius:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">📋 Matriz Unificada de Pedidos Pendientes de Compra</span>
-            <span style="background:#007afb; color:white; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700;">${TEMPORARY_STAGED_PURCHASE_LINES.length} Insumos Totales</span>
+        <div style="background:#f8fafc; margin:-18px -18px 15px -18px; padding:12px 18px; border-top-left-radius:12px; border-top-right-radius:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+                <span style="font-weight:700; color:var(--text-main); font-size:0.95rem;">📋 Matriz Unificada de Pedidos Pendientes de Compra</span>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Ordene la tabla antes de guardar para revisar los totales consolidados por distribuidor.</div>
+            </div>
+            
+            <!-- 🔄 MANUAL INTERACTIVE PREVIEW TRIGGER CONTROLS BUTTON -->
+            <button onclick="triggerManualSupplierListAlphabeticalSort()" class="btn btn-blue" style="background:#007afb; font-weight:700; font-size:0.78rem; padding:6px 12px; border-radius:6px; border:none; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
+                🔄 Ordenar Listado Proveedores A-Z
+            </button>
         </div>
         
-        <table style="width:100%; border-collapse:collapse; font-size:0.83rem;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.83rem; margin-top:10px;">
             <thead>
                 <tr style="color:var(--text-muted); border-bottom:1px solid var(--border-color); font-weight:600; background:#fcfcfc;">
                     <th style="padding:8px 6px; text-align:left;">Insumo / Ingrediente</th>
                     <th style="padding:8px 6px; text-align:right;">Faltante Base</th>
-                    <th style="padding:8px 6px; text-align:center; width:185px; color:#007afb;">Asignar Proveedor Autorizado (Orden A-Z)</th>
+                    <th style="padding:8px 6px; text-align:center; width:185px; color:#007afb; font-weight:700;">Proveedor Destinatario Actual</th>
                     <th style="padding:8px 6px; text-align:center; width:90px;">Formato</th>
                     <th style="padding:8px 6px; text-align:right; width:95px;">Pedido Sugerido</th>
                     <th style="padding:8px 6px; text-align:center; width:110px; background:rgba(16,185,129,0.02); color:#10b981; font-weight:700;">Cant. Formatos Aprobados</th>
@@ -3340,19 +3375,22 @@ function renderGroupedSupplierProcurementAccordion() {
 
             const realBaseWeightEquivalent = parseFloat(line.approved_formats_quantity || 0) * conversionFactor;
 
-            // Resolve real supplier text name for real-time console tracing or visual helpers
+            // Resolve real background text tracking label configurations cleanly
+            let displaySupplierSubText = String(line.supplier_id || "Compras Locales").trim();
             const currentSupObj = CACHED_SUPPLIER_MAP[line.supplier_id];
-            const displaySupplierSubText = currentSupObj ? (currentSupObj.name || currentSupObj.name_es) : line.supplier_id;
+            if (currentSupObj) {
+                displaySupplierSubText = currentSupObj.name || currentSupObj.name_es || displaySupplierSubText;
+            }
 
             html += `<tr style="border-bottom:1px solid #f1f5f9; opacity: ${line.is_approved ? '1' : '0.45'}; background: ${line.is_approved ? '#ffffff' : '#f8fafc'};">
                 <td style="padding:10px 6px; text-align:left; color:#1e293b; ${line.is_approved ? '' : 'text-decoration: line-through; color: #94a3b8;'}">
                     <span style="font-weight:600; display:block;">${line.ingredient_name}</span>
-                    <span style="font-size:0.7rem; color:var(--text-muted); font-family:sans-serif;">🏢 ${displaySupplierSubText || 'Compras Locales'}</span>
+                    <span style="font-size:0.7rem; color:var(--text-muted); font-family:sans-serif; font-weight:600;">🏢 Envíos: ${displaySupplierSubText === "unassigned" ? "Compras Locales" : displaySupplierSubText}</span>
                 </td>
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#64748b; font-weight:500;">${parseFloat(line.suggested_quantity).toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
-                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value); renderGroupedSupplierProcurementAccordion();" ${line.is_approved ? '' : 'disabled'} style="width:100%; padding:6px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:600; color:#1e293b;">
+                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" ${line.is_approved ? '' : 'disabled'} style="width:100%; padding:6px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:600; color:#1e293b;">
                         ${supplierOptionsHTML}
                     </select>
                 </td>
@@ -3375,6 +3413,24 @@ function renderGroupedSupplierProcurementAccordion() {
     html += `</tbody></table></div>`;
     container.innerHTML = html;
     workspace.style.display = "block";
+}
+
+function toggleTemporaryProcurementLineApproval(index, isChecked) {
+    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
+        TEMPORARY_STAGED_PURCHASE_LINES[index].is_approved = isChecked;
+        if (!isChecked) {
+            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_formats_quantity = 0;
+            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_quantity = 0;
+        }
+    }
+}
+
+function updateTemporaryProcurementLineSupplier(index, newSupplierValue) {
+    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
+        TEMPORARY_STAGED_PURCHASE_LINES[index].supplier_id = newSupplierValue;
+        const line = TEMPORARY_STAGED_PURCHASE_LINES[index];
+        line.last_calculated_supplier_id = ""; 
+    }
 }
 
 function toggleTemporaryProcurementLineApproval(index, isChecked) {
