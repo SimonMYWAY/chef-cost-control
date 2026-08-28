@@ -3273,14 +3273,23 @@ function renderGroupedSupplierProcurementAccordion() {
         groupedBySupplier[keySlot].push(line);
     });
 
-    // 🔤 STEP-BY-STEP ALPHABETICAL SORTING KEY EXTRACTION
+        // 🔤 STEP-BY-STEP ALPHABETICAL SORTING KEY EXTRACTION (WITH TRUE NAME RESOLUTION)
     const sortedSupplierKeys = Object.keys(groupedBySupplier).sort((a, b) => {
         if (a === "UNASSIGNED_LOCAL_POOL_SLOT") return 1;  // Keep the unassigned local card always at the very bottom
         if (b === "UNASSIGNED_LOCAL_POOL_SLOT") return -1;
         
-        const nameA = CACHED_SUPPLIER_MAP[a] ? (CACHED_SUPPLIER_MAP[a].name || CACHED_SUPPLIER_MAP[a].name_es || "").toLowerCase() : a.toLowerCase();
-        const nameB = CACHED_SUPPLIER_MAP[b] ? (CACHED_SUPPLIER_MAP[b].name || CACHED_SUPPLIER_MAP[b].name_es || "").toLowerCase() : b.toLowerCase();
-        return nameA.localeCompare(nameB);
+        // 🌟 FIX COMPLETED: Extract the real display name string first to guarantee accurate A-to-Z matching!
+        let displayA = a;
+        if (CACHED_SUPPLIER_MAP[a]) {
+            displayA = CACHED_SUPPLIER_MAP[a].name || CACHED_SUPPLIER_MAP[a].name_es || a;
+        }
+        
+        let displayB = b;
+        if (CACHED_SUPPLIER_MAP[b]) {
+            displayB = CACHED_SUPPLIER_MAP[b].name || CACHED_SUPPLIER_MAP[b].name_es || b;
+        }
+
+        return String(displayA).toLowerCase().localeCompare(String(displayB).toLowerCase());
     });
 
     let html = "";
