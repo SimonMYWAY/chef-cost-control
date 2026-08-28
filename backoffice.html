@@ -860,24 +860,14 @@ function loadQueue() {
         }
 
 
-                // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
-                function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            // 🌟 FIX COMPLETED: Stop forcing "porciones" if a Tier 2 sub-recipe carries a valid database unit!
-            var cleanUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "";
-            
-                       // 🌟 REALIGNED BOUNDARY FIX: Strips out hidden spaces and handles variations like 'Tier 2' or 'tier2' smoothly!
+                    // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
+        function viewRecipeDetails(recipeId, name, category, servings, uom) {
+            // Setup pristine variables to manage your custom text strings safely
+            var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
             var cleanCategoryToken = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
             
-            var activeUnitLabel = "porciones";
-            if (cleanUOM !== "" && cleanUOM !== "porciones") {
-                activeUnitLabel = cleanUOM;
-            } else if (cleanCategoryToken === "tier2" || cleanCategoryToken === "tier 2") {
-                activeUnitLabel = "gr"; // Default fallback weight metric for sub-recipes if column was empty
-            }
-            
             document.getElementById("modal-recipe-name").innerText = name;
-            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
-
+            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + inputUOM;
             
             var rowsTarget = document.getElementById("modal-table-rows");
             rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
@@ -885,20 +875,40 @@ function loadQueue() {
             
             // Fetch components and live master ingredients in parallel to run financial margin checks
             Promise.all([
+
                 fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
             ])
             .then(function(results) {
-                var lines = results[0];
+                            var lines = results[0];
                 var masterIngredients = results[1];
                 
                 rowsTarget.innerHTML = "";
+                
+                // 🌟 FIX COMPLETED: Run your shadow cross-reference lookup loop natively inside the success callback!
+                var activeUnitLabel = inputUOM;
+                if ((inputUOM === "porciones" || inputUOM === "") && cleanCategoryToken === "tier2" && Array.isArray(masterIngredients)) {
+                    var shadowMatch = masterIngredients.find(function(i) { 
+                        return String(i.id).toLowerCase().trim() === String(recipeId).toLowerCase().trim(); 
+                    });
+                    if (shadowMatch && shadowMatch.uom) {
+                        activeUnitLabel = String(shadowMatch.uom).trim(); // Extracts your custom choice like "ml" or "cucharada"!
+                    }
+                }
+                
+                // If it's a Tier 2 sub-recipe and STILL empty, fall back to "gr" as our safe physical weight baseline
+                if (activeUnitLabel === "porciones" && cleanCategoryToken === "tier2") {
+                    activeUnitLabel = "gr";
+                }
+
+                // Dynamically update your monitor screen canvas subtitle text once your network promise completes
+                document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
+                
                 if (!lines || lines.length === 0 || lines.message) { 
                     rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
                     return; 
                 }
                 
-                // Build a lookup map matching your live database rows
                 var localIngMap = {};
                 if (Array.isArray(masterIngredients)) {
                     masterIngredients.forEach(function(ing) {
