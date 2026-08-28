@@ -860,81 +860,66 @@ function loadQueue() {
         }
 
 
-                // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
-        function viewRecipeDetails(recipeId, name, category, servings, uom) {
-            // 🌟 STEP 1: SAFE SELECTION FILTERING FOR MULTI-TOKEN METADATA TRACKS
-            var rawRecipeNameString = name || "Sin Nombre";
+        // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
+function viewRecipeDetails(recipeId, name, category, servings, uom) {
+    // Standardize incoming parameters safely
+    var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
+    var cleanCategory = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
+    
+    // 🌟 THE DUAL DETECTOR GATES: Detect if it is Tier 2 via string name OR via historical boolean tracking checks
+    var isTier2Preparation = (cleanCategory === "tier2" || cleanCategory === "true" || category === true);
+
+    document.getElementById("modal-recipe-name").innerText = name || "Fórmula";
+    document.getElementById("modal-recipe-meta").innerText = "Categoría: " + (category || "N/A") + " | Rendimiento: " + servings + " " + inputUOM;
+    
+    var rowsTarget = document.getElementById("modal-table-rows");
+    rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
+    document.getElementById("recipe-modal").style.display = "flex";
+    
+    // Fetch components and live master ingredients in parallel
+    Promise.all([
+        fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+    ])
+    .then(function(results) {
+        var lines = results[0];
+        var masterIngredients = results[1];
+        
+        rowsTarget.innerHTML = "";
+        
+        // 🚀 SHADOW LOOKUP EXPANSION: Cross-examine your ingredients list to find the true UOM 
+        var activeUnitLabel = inputUOM;
+        if (Array.isArray(masterIngredients)) {
+            var shadowMatch = masterIngredients.find(function(i) { 
+                return String(i.id).toLowerCase().trim() === String(recipeId).toLowerCase().trim(); 
+            });
             
-            // Extract the clean name out of index zero safely
-            var resolvedRecipeTitle = rawRecipeNameString.includes("||") ? rawRecipeNameString.split("||")[0].trim() : rawRecipeNameString.trim();
-            
-            // 🚀 STEP 2: ARRAY INDEX BRACKETS FIXED (Pulls array element 1 to capture the true unit string)
-            var extractedUnitToken = "";
-            if (rawRecipeNameString.includes("||")) {
-                var nameArraySplitCollection = rawRecipeNameString.split("||");
-                if (nameArraySplitCollection.length > 1) {
-                    extractedUnitToken = String(nameArraySplitCollection[1]).trim();
+            if (shadowMatch) {
+                // If a matching ingredient entry exists, it means this IS a Tier 2 sub-recipe component!
+                isTier2Preparation = true; 
+                if (shadowMatch.uom && (activeUnitLabel === "porciones" || activeUnitLabel === "")) {
+                    activeUnitLabel = String(shadowMatch.uom).trim(); // Locks onto your custom choice ("ml", "gr", etc.)
                 }
             }
-            
-            // Clean up incoming uom parameters and fall back to metadata splits if needed
-            var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
-            if ((inputUOM === "porciones" || inputUOM === "") && extractedUnitToken !== "") {
-                inputUOM = extractedUnitToken; 
-            }
-            
-            var cleanCategoryToken = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
-            
-            // Inject the clean text name without the split characters into your header elements
-            document.getElementById("modal-recipe-name").innerText = resolvedRecipeTitle;
-            document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + inputUOM;
-            
-            var rowsTarget = document.getElementById("modal-table-rows");
-            rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
-            document.getElementById("recipe-modal").style.display = "flex";
-            
-            // Fetch components and live master ingredients in parallel to run financial margin checks
-            Promise.all([
+        }
+        
+        // Final fallback rule for sub-recipes if column was completely empty
+        if (activeUnitLabel === "porciones" && isTier2Preparation) {
+            activeUnitLabel = "gr";
+        }
 
-                fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
-            ])
-
-            .then(function(results) {
-                                // 🌟 FIX COMPLETED: Repetitions completely removed while holding brackets intact!
-                var lines = results[0];
-                var masterIngredients = results[1];
-                
-                rowsTarget.innerHTML = "";
-                
-                var activeUnitLabel = inputUOM;
-                if ((inputUOM === "porciones" || inputUOM === "") && cleanCategoryToken === "tier2" && Array.isArray(masterIngredients)) {
-                    var shadowMatch = masterIngredients.find(function(i) { 
-                        return String(i.id).toLowerCase().trim() === String(recipeId).toLowerCase().trim(); 
-                    });
-                    if (shadowMatch && shadowMatch.uom) {
-                        activeUnitLabel = String(shadowMatch.uom).trim(); // Extracts your custom choice like "gr", "ml" or "cucharada"!
-                    }
-                }
-                
-                // If it's a Tier 2 sub-recipe and STILL empty, fall back to "gr" as our safe physical weight baseline
-                if (activeUnitLabel === "porciones" && cleanCategoryToken === "tier2") {
-                    activeUnitLabel = "gr";
-                }
-
-                // Dynamically update your monitor screen canvas subtitle text once your network promise completes
-                document.getElementById("modal-recipe-meta").innerText = "Categoría: " + category + " | Rendimiento: " + servings + " " + activeUnitLabel;
-                
-                if (!lines || lines.length === 0 || lines.message) { 
-                    rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
-                    return; 
-                }
-                
-                var localIngMap = {};
-
-                if (Array.isArray(masterIngredients)) {
-                    masterIngredients.forEach(function(ing) {
-                        localIngMap[String(ing.id).toLowerCase().trim()] = ing;
+        // Dynamically update the header subtitle once data handshakes return clear values
+        document.getElementById("modal-recipe-meta").innerText = "Categoría: " + (category || "N/A") + " | Rendimiento: " + servings + " " + activeUnitLabel;
+        
+        if (!lines || lines.length === 0 || lines.message) { 
+            rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:10px;'>Sin ingredientes asociados.</td></tr>"; 
+            return; 
+        }
+        
+        var localIngMap = {};
+        if (Array.isArray(masterIngredients)) {
+            masterIngredients.forEach(function(ing) {
+                localIngMap[String(ing.id).toLowerCase().trim()] = ing;
                     });
                 }
                 
@@ -947,15 +932,12 @@ function loadQueue() {
                     var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
                     var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
                     
-                    // Pull the real pricing structure metric from your database columns
                     var unitStandardCost = dbItem ? (parseFloat(dbItem.std_cost_per_unit || dbItem.cost) || 0) : 0;
                     
-                    // Standard quantity and waste calculations
                     var lineQty = parseFloat(line.quantity || 0);
                     var scrapPct = parseFloat(line.scrap_percentage || 0);
                     var wasteFactor = 1 + (scrapPct / 100);
                     
-                    // Financial Line Cost = Qty * Unit Cost * Waste Factor
                     var lineCalculatedFinancialCost = lineQty * unitStandardCost * wasteFactor;
                     totalRecipeAccumulatedCost += lineCalculatedFinancialCost;
                     
@@ -970,20 +952,16 @@ function loadQueue() {
                     rowsTarget.appendChild(tr);
                 });
                 
-                // 🌟 FINANCIAL BASEROW SUM FOOTER: Dynamically forks output layout based on Tier 1 vs Tier 2 categories
                 var parsedServingsCount = parseFloat(servings) || 1;
                 var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
                 
                 var leftBlockHTML = "";
-                var cleanCategoryToken = String(category || "").toLowerCase().trim();
                 
-                                if (cleanCategoryToken === "tier2") {
-                    // 🌟 FIX COMPLETED: Swapped the hardcoded 'porciones' string with your true dynamic activeUnitLabel!
+                if (isTier2Preparation) {
+                    // Displays production cost per true weight/volume unit using our dynamic label!
                     leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Por Unidad Real</div>" +
                                     "<div style='font-size:0.9rem; margin-top:2px;'>Costo por " + activeUnitLabel + ": <span style='color:#007afb;'>$" + singleUnitProductionCost.toFixed(2) + "</span></div>";
                 } else {
-
-                    // TIER 1/STANDARD ROUTING: Displays normal retail strategy pricing matrix (3.2x standard markup)
                     var standardPricingTargetMultiplier = 3.2; 
                     var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
                     
@@ -991,7 +969,6 @@ function loadQueue() {
                                     "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>";
                 }
                 
-                // Append the fully customized financial breakdown footer bar to the matrix table bottom
                 var footerSummaryTr = document.createElement("tr");
                 footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
                 
@@ -1006,9 +983,9 @@ function loadQueue() {
             })
             .catch(function(err) {
                 console.error("Inspector popup network calculation breakdown:", err);
-                rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; padding:10px;'>❌ Error al calcular matrices de costos de la ficha.</td></tr>";
+                rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; padding:10px;'>❌ Error al calcular la ficha.</td></tr>";
             });
-        }
+}
 
                 // 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
         function renderMasterIngredientsTable() {
