@@ -570,64 +570,7 @@
                 .catch(function(err) { console.error(err); });
         }
                
-        // 🔷 PENDING APPROVAL REVIEWS QUEUE ENGINE (PART 2)
-function loadQueue() {
-    var container = document.getElementById("queue-container");
-    if (!container) return;
-    
-    // FETCH IN PARALLEL: Pull both pending recipe reviews AND live ingredients to align text labels
-    Promise.all([
-        fetch(API_URL + "recipes?status=eq.waiting", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
-    ])
-    .then(function(results) {
-        var pendingRecipes = results[0];
-        var masterIngredients = results[1];
-        
-        container.innerHTML = "";
-        if (!pendingRecipes || pendingRecipes.length === 0 || pendingRecipes.message) {
-            container.innerHTML = "<div class='no-data' style='text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>☕ No hay fórmulas pendientes de revisión en este momento.</div>";
-            return;
-        }
-        
-        pendingRecipes.forEach(function(recipe) {
-            var row = document.createElement("div");
-            row.id = "recipe-row-" + recipe.id;
-            row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:15px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:8px; background-color:var(--bg-surface); width:100%; box-sizing:border-box;");
-            
-            var rawName = recipe.name || "Fórmula Sin Nombre";
-            var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-            
-            // 🌟 PERFECT COSMETIC SYNCHRONIZATION
-            // Check if this item has a custom recipe uom registered first, fallback to ingredient lookup
-            var queueUOM = recipe.uom ? String(recipe.uom).trim() : "porciones";
-            
-            if ((!recipe.uom || queueUOM === "porciones") && Array.isArray(masterIngredients)) {
-                var shadowMatch = masterIngredients.find(function(i) { 
-                    return String(i.id).toLowerCase().trim() === String(recipe.id).toLowerCase().trim(); 
-                });
-                if (shadowMatch && shadowMatch.uom) {
-                    queueUOM = String(shadowMatch.uom).trim(); // Extracts your custom choice like "gr" or "ml"!
-                }
-            }
-            
-            row.innerHTML = "<div style='flex:1; text-align:left;'>" +
-                                "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + "</div>" +
-                                "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Porciones Base: " + (recipe.servings || 4) + " (" + queueUOM + ")</div>" +
-                            "</div>" +
-                            "<div style='display:flex; align-items:center; margin-left:15px;'>" +
-                                // 🚀 FIXED TRIGGER GATES: Passes your true extracted queueUOM straight into the review overlay parameters loop!
-                                "<button class='btn btn-blue' style='padding:6px 14px; font-size:0.85rem;' onclick=\"openReviewModal('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + (recipe.category || 'N/A') + "', " + (recipe.servings || 4) + ", '" + queueUOM + "')\">Revisar Fórmula</button>" +
-                            "</div>";
-                            
-            container.appendChild(row);
-        });
-    })
-    .catch(function(err) { 
-        console.error("Queue display compiler crash:", err); 
-        container.innerHTML = "<div style='color:#ef4444; padding:10px;'>❌ Error al cargar la cola de revisión de fórmulas.</div>";
-    });
-}
+
 
 
                 // 🛡️ RESTRUCTURING BLACKLIST SYSTEM
