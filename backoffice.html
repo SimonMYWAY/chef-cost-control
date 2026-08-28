@@ -614,8 +614,12 @@ function loadQueue() {
                             "</div>" +
                             "<div style='display:flex; align-items:center; gap:12px; margin-left:15px;'>" +
                                 "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ", '" + queueUOM + "')\">Ver Detalles</button>" +
-                                "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Aprobar</button>" +
-                                "<button class='btn btn-red' style='background-color:#ef4444; color:white; padding:6px 12px; font-size:0.85rem;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Rechazar</button>" +
+                                                                // Button 2: Aprobar (🟢 Green Success Styling - Calls the true Approval function engine!)
+                                "<button class='btn' style='background-color:#10b981; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; font-weight:600; cursor:pointer;' onclick=\"deleteRecipeFromSystem('" + recipe.id + "')\">Aprobar</button>" +
+                                
+                                // Button 3: Rechazar (🟠 Warning Orange Styling - Calls the true Draft/Rejection function engine!)
+                                "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; font-weight:600; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Rechazar</button>" +
+
                             "</div>";
                                     
             container.appendChild(row);
