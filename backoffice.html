@@ -3488,8 +3488,8 @@ async function executeFinalInventoryProcurementCommit() {
             }
         });
 
+                // Build native spreadsheet workbook row streams (With aligned Ghost Stock Guard logic)
         const approvedLines = TEMPORARY_STAGED_PURCHASE_LINES.filter(l => l.is_approved && parseInt(l.approved_formats_quantity, 10) > 0);
-        
         approvedLines.forEach(line => {
             let supplierName = String(line.supplier_id).trim();
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
@@ -3500,14 +3500,28 @@ async function executeFinalInventoryProcurementCommit() {
             
             const purchaseUomName = activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : line.uom;
             const conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0;
-            const finalCalculatedStock = parseFloat(line.last_std_inventory) - parseFloat(line.consumption) + (parseInt(line.approved_formats_quantity, 10) * conversionFactor);
+            
+            // Read base weights to match your database variables word-for-word
+            const baseInitialInventory = parseFloat(line.last_std_inventory || 0);
+            const baseConsumption = parseFloat(line.consumption || 0);
+            const baseApprovedPurchaseWeights = parseInt(line.approved_formats_quantity, 10) * conversionFactor;
+            
+            // 🌟 FIX COMPLETED: Aligned perfectly with your exact Ghost Stock Guard rule!
+            let finalCalculatedStock = 0;
+            if (baseConsumption > baseInitialInventory) {
+                finalCalculatedStock = baseApprovedPurchaseWeights;
+            } else {
+                finalCalculatedStock = baseInitialInventory - baseConsumption + baseApprovedPurchaseWeights;
+            }
+            if (finalCalculatedStock < 0) finalCalculatedStock = 0.00;
 
             const cleanSupName = supplierName.replace(/,/g, " ");
             const cleanIngName = line.ingredient_name.replace(/,/g, " ");
             const cleanUOMName = purchaseUomName.replace(/,/g, " ");
 
-            csvContent += `"${cleanSupName}","${cleanIngName}",${line.last_std_inventory.toFixed(2)},${line.consumption.toFixed(2)},"${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${finalCalculatedStock.toFixed(2)}\r\n`;
+            csvContent += `"${cleanSupName}","${cleanIngName}",${baseInitialInventory.toFixed(2)},${baseConsumption.toFixed(2)},"${cleanUOMName}",${parseInt(line.approved_formats_quantity, 10)},${finalCalculatedStock.toFixed(2)}\r\n`;
         });
+
 
         const inputCurrentSalesDateEl = document.getElementById("input-current-sales-date");
         const definitiveDeclaredSalesDateStr = inputCurrentSalesDateEl ? inputCurrentSalesDateEl.value : "";
