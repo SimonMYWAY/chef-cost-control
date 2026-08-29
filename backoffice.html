@@ -3270,23 +3270,23 @@ let INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = false;
 // 🌟 FIX COMPLETED: Render array collection handles sorting states sequentially on manual trigger click
 let CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST = [];
 
-// 🌟 DEDICATED PREVIEW TRIGGER: Explicit manual sorting switch requested by user (Grouped A-Z by Supplier)
+// 🌟 DEDICATED PREVIEW TRIGGER: Sorts ALL rows case-insensitively from A to Z by Supplier Name (Independent of approval status)
 function triggerManualSupplierListAlphabeticalSort() {
-    if (!CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST || CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST.length === 0) {
+    // 🚀 STEP A: Synchronize and grab the absolute freshest values chosen by the user from the master tracking state array
+    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         return;
     }
+    CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST = [...TEMPORARY_STAGED_PURCHASE_LINES];
 
     // Force alphabetical state tracking flag to true
     INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
     
-    console.log("🔄 Sorting master array matrix case-insensitively by supplier display names...");
+    console.log("🔄 Sorting all matrix list lines globally by assigned supplier display names...");
     
     CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST.sort((a, b) => {
-        // Enforce continuity constraints: Unapproved elements always slide down cleanly to the bottom rows
-        if (!a.is_approved && b.is_approved) return 1;
-        if (a.is_approved && !b.is_approved) return -1;
+        // 🚀 STEP B: Removed the approval filters completely so checked and unchecked lines sort together seamlessly!
 
-        // Extract the exact display text string that the user actually sees inside the table grid
+        // Extract the exact display text string that the user actually sees inside the table grid dropdowns
         let supplierTextA = "📦 Compras Locales";
         let rawSupA = String(a.supplier_id || "unassigned").trim();
         if (rawSupA !== "unassigned" && rawSupA !== "" && rawSupA !== "UNASSIGNED_LOCAL_POOL_SLOT") {
@@ -3301,13 +3301,13 @@ function triggerManualSupplierListAlphabeticalSort() {
             supplierTextB = objB ? (objB.name || objB.name_es || rawSupB) : rawSupB;
         }
 
-        // Standardize local pools to trailing keys in alphabetical progression layers
-        let compA = supplierTextA.toLowerCase();
-        let compB = supplierTextB.toLowerCase();
+        // Standardize local pools or empty data slots to trailing keys in alphabetical progression layers
+        let compA = supplierTextA.toLowerCase().trim();
+        let compB = supplierTextB.toLowerCase().trim();
         if (compA.includes("compras locales") || compA.includes("unassigned")) compA = "zzz_compras_locales";
         if (compB.includes("compras locales") || compB.includes("unassigned")) compB = "zzz_compras_locales";
 
-        // If supplier names match exactly, sub-sort alphabetically by ingredient name as a secondary grid anchor
+        // If supplier names match exactly, sub-sort alphabetically by ingredient title as a steady anchor
         if (compA === compB) {
             const ingA = String(a.ingredient_name || "").toLowerCase().trim();
             const ingB = String(b.ingredient_name || "").toLowerCase().trim();
