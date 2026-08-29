@@ -3270,51 +3270,59 @@ let INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = false;
 // 🌟 FIX COMPLETED: Render array collection handles sorting states sequentially on manual trigger click
 let CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST = [];
 
-// 🌟 DEDICATED PREVIEW TRIGGER: Sorts ALL rows case-insensitively from A to Z by Supplier Name (Independent of approval status)
+// 🌟 DEDICATED PREVIEW TRIGGER: Direct DOM text name extraction sorts all lines perfectly by visible supplier values!
 function triggerManualSupplierListAlphabeticalSort() {
-    // 🚀 STEP A: Synchronize and grab the absolute freshest values chosen by the user from the master tracking state array
     if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         return;
     }
+    
+    // Synchronize your visibility list collections safely
     CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST = [...TEMPORARY_STAGED_PURCHASE_LINES];
-
-    // Force alphabetical state tracking flag to true
     INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
     
-    console.log("🔄 Sorting all matrix list lines globally by assigned supplier display names...");
+    console.log("🔄 Sorting all rows based on active screen dropdown supplier names...");
     
     CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST.sort((a, b) => {
-        // 🚀 STEP B: Removed the approval filters completely so checked and unchecked lines sort together seamlessly!
-
-        // Extract the exact display text string that the user actually sees inside the table grid dropdowns
-        let supplierTextA = "📦 Compras Locales";
-        let rawSupA = String(a.supplier_id || "unassigned").trim();
-        if (rawSupA !== "unassigned" && rawSupA !== "" && rawSupA !== "UNASSIGNED_LOCAL_POOL_SLOT") {
-            const objA = CACHED_SUPPLIER_MAP[a.supplier_id];
-            supplierTextA = objA ? (objA.name || objA.name_es || rawSupA) : rawSupA;
+        const tokenA = String(a.ingredient_id).replace(/'/g, "\\'");
+        const tokenB = String(b.ingredient_id).replace(/'/g, "\\'");
+        
+        // Natively establish baseline tracking text templates
+        let textA = "📦 Compras Locales";
+        let textB = "📦 Compras Locales";
+        
+        // 🚀 FIX COMPLETED: Read the literal TEXT string written inside your visual select dropdown elements!
+        const selectA = document.querySelector(`#proc-row-wrapper-${tokenA} select`);
+        const selectB = document.querySelector(`#proc-row-wrapper-${tokenB} select`);
+        
+        if (selectA && selectA.selectedIndex >= 0) {
+            const chosenOptionA = selectA.options[selectA.selectedIndex];
+            if (chosenOptionA && chosenOptionA.value !== "unassigned") {
+                // Extracts "Frutería Central" or "Distribuidor Carnes" text directly from your monitor view
+                textA = chosenOptionA.text || chosenOptionA.value;
+            }
+        }
+        
+        if (selectB && selectB.selectedIndex >= 0) {
+            const chosenOptionB = selectB.options[selectB.selectedIndex];
+            if (chosenOptionB && chosenOptionB.value !== "unassigned") {
+                textB = chosenOptionB.text || chosenOptionB.value;
+            }
         }
 
-        let supplierTextB = "📦 Compras Locales";
-        let rawSupB = String(b.supplier_id || "unassigned").trim();
-        if (rawSupB !== "unassigned" && rawSupB !== "" && rawSupB !== "UNASSIGNED_LOCAL_POOL_SLOT") {
-            const objB = CACHED_SUPPLIER_MAP[b.supplier_id];
-            supplierTextB = objB ? (objB.name || objB.name_es || rawSupB) : rawSupB;
-        }
+        // Standardize warning text tags and unassigned slots to absolute trailing keys
+        let compA = textA.toLowerCase().trim();
+        let compB = textB.toLowerCase().trim();
+        if (compA.includes("sin formatos") || compA.includes("compras locales") || compA.includes("no asignado")) compA = "zzz_compras_locales";
+        if (compB.includes("sin formatos") || compB.includes("compras locales") || compB.includes("no asignado")) compB = "zzz_compras_locales";
 
-        // Standardize local pools or empty data slots to trailing keys in alphabetical progression layers
-        let compA = supplierTextA.toLowerCase().trim();
-        let compB = supplierTextB.toLowerCase().trim();
-        if (compA.includes("compras locales") || compA.includes("unassigned")) compA = "zzz_compras_locales";
-        if (compB.includes("compras locales") || compB.includes("unassigned")) compB = "zzz_compras_locales";
-
-        // If supplier names match exactly, sub-sort alphabetically by ingredient title as a steady anchor
+        // Secondary sub-sort alphabetically by ingredient title if dropdown texts match exactly
         if (compA === compB) {
             const ingA = String(a.ingredient_name || "").toLowerCase().trim();
             const ingB = String(b.ingredient_name || "").toLowerCase().trim();
             return ingA.localeCompare(ingB);
         }
 
-        // Execute precise alphabetical string comparison by Supplier Name
+        // Execute precise alphabetical string comparison by active visible Supplier Name
         return compA.localeCompare(compB);
     });
 
