@@ -3241,7 +3241,11 @@ async function processDailySalesFileIngestion(event) {
             var commitBtn = document.getElementById("btn-commit-all-orders");
             if (commitBtn) commitBtn.style.display = "inline-flex";
 
+                        // 🌟 FIX COMPLETED: Force a native pre-sort initialization block so the list pops up pre-sorted instantly!
             renderGroupedSupplierProcurementAccordion();
+            if (typeof triggerManualSupplierListAlphabeticalSort === "function") {
+                triggerManualSupplierListAlphabeticalSort();
+            }
 
         } catch (err) {
             console.error(err);
