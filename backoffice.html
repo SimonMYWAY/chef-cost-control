@@ -3263,15 +3263,6 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
 
 let INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = false;
 
-function triggerManualSupplierListAlphabeticalSort() {
-    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
-        return;
-    }
-    INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
-    console.log("🔄 Sorting master array matrix alphabetically by supplier strings...");
-    renderGroupedSupplierProcurementAccordion();
-}
-
 // =======================================================================
 // 📊 UNIFIED MASTER INTERFACE: DRAFT-MODE STATE-LOCKING RE-SORT ENGINE
 // =======================================================================
@@ -3279,42 +3270,55 @@ function triggerManualSupplierListAlphabeticalSort() {
 // 🌟 FIX COMPLETED: Render array collection handles sorting states sequentially on manual trigger click
 let CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST = [];
 
+// 🌟 DEDICATED PREVIEW TRIGGER: Explicit manual sorting switch requested by user (Grouped A-Z by Supplier)
 function triggerManualSupplierListAlphabeticalSort() {
     if (!CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST || CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST.length === 0) {
         return;
     }
 
-    console.log("🔄 Sorting master array matrix case-insensitively by current supplier text strings...");
+    // Force alphabetical state tracking flag to true
+    INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
     
-    // Sort your rendering collection array layout sequentially by current supplier name strings
+    console.log("🔄 Sorting master array matrix case-insensitively by supplier display names...");
+    
     CURRENT_VISIBLE_PROCUREMENT_RENDER_LIST.sort((a, b) => {
         // Enforce continuity constraints: Unapproved elements always slide down cleanly to the bottom rows
         if (!a.is_approved && b.is_approved) return 1;
         if (a.is_approved && !b.is_approved) return -1;
 
-        // Resolve true textual sorting string name for Row A
-        let nameA = String(a.supplier_id || "unassigned").trim();
-        if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
-            nameA = CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || nameA;
-        }
-        if (nameA === "unassigned" || nameA === "" || nameA === "undefined") nameA = "zzz_unassigned";
-
-        // Resolve true textual sorting string name for Row B
-        let nameB = String(b.supplier_id || "unassigned").trim();
-        if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
-            nameB = CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || nameB;
-        }
-        if (nameB === "unassigned" || nameB === "" || nameB === "undefined") nameB = "zzz_unassigned";
-
-        // Secondary sub-sort alphabetically by ingredient name as a steady anchor if vendors match
-        if (nameA.toLowerCase() === nameB.toLowerCase()) {
-            return String(a.ingredient_name || "").toLowerCase().localeCompare(String(b.ingredient_name || "").toLowerCase());
+        // Extract the exact display text string that the user actually sees inside the table grid
+        let supplierTextA = "📦 Compras Locales";
+        let rawSupA = String(a.supplier_id || "unassigned").trim();
+        if (rawSupA !== "unassigned" && rawSupA !== "" && rawSupA !== "UNASSIGNED_LOCAL_POOL_SLOT") {
+            const objA = CACHED_SUPPLIER_MAP[a.supplier_id];
+            supplierTextA = objA ? (objA.name || objA.name_es || rawSupA) : rawSupA;
         }
 
-        return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
+        let supplierTextB = "📦 Compras Locales";
+        let rawSupB = String(b.supplier_id || "unassigned").trim();
+        if (rawSupB !== "unassigned" && rawSupB !== "" && rawSupB !== "UNASSIGNED_LOCAL_POOL_SLOT") {
+            const objB = CACHED_SUPPLIER_MAP[b.supplier_id];
+            supplierTextB = objB ? (objB.name || objB.name_es || rawSupB) : rawSupB;
+        }
+
+        // Standardize local pools to trailing keys in alphabetical progression layers
+        let compA = supplierTextA.toLowerCase();
+        let compB = supplierTextB.toLowerCase();
+        if (compA.includes("compras locales") || compA.includes("unassigned")) compA = "zzz_compras_locales";
+        if (compB.includes("compras locales") || compB.includes("unassigned")) compB = "zzz_compras_locales";
+
+        // If supplier names match exactly, sub-sort alphabetically by ingredient name as a secondary grid anchor
+        if (compA === compB) {
+            const ingA = String(a.ingredient_name || "").toLowerCase().trim();
+            const ingB = String(b.ingredient_name || "").toLowerCase().trim();
+            return ingA.localeCompare(ingB);
+        }
+
+        // Execute precise alphabetical string comparison by Supplier Name
+        return compA.localeCompare(compB);
     });
 
-    // Redraw table rows dynamically with updated sorted indexing rules while preserving variables
+    // Redraw table rows dynamically with updated sorted indexing rules
     drawProcurementMatrixTableHTML(true);
 }
 
