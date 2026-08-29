@@ -3458,13 +3458,10 @@ function drawProcurementMatrixTableHTML(isManualSortPass) {
 function toggleTemporaryProcurementLineApprovalById(ingId, isChecked) {
     const matchedLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ingId));
     if (matchedLine) {
+        // 🌟 RULE RESTORED: Simply track the true/false flag. NEVER modify or wipe out the quantities!
         matchedLine.is_approved = isChecked;
-        if (!isChecked) {
-            matchedLine.approved_formats_quantity = 0;
-            matchedLine.approved_quantity = 0;
-        }
         
-        // 🚀 HOT-REFRESH DOM IN PLACE: Updates styling instantly without changing position ranks!
+        // 🚀 HOT-REFRESH DOM IN PLACE: Switch visual states instantly without altering any data cells
         const rowElement = document.getElementById("proc-row-wrapper-" + ingId);
         if (rowElement) {
             rowElement.style.opacity = isChecked ? "1" : "0.45";
@@ -3480,16 +3477,11 @@ function toggleTemporaryProcurementLineApprovalById(ingId, isChecked) {
             const providerSelect = rowElement.querySelector("select");
             if (formatInput) {
                 formatInput.disabled = !isChecked;
-                formatInput.value = isChecked ? matchedLine.approved_formats_quantity : 0;
                 formatInput.style.background = isChecked ? "#fff" : "#e2e8f0";
+                // The input value remains locked onto its true historical data count!
             }
             if (providerSelect) {
                 providerSelect.disabled = !isChecked;
-            }
-            
-            const cellEquiv = document.getElementById("cell-equivalence-weight-" + ingId);
-            if (cellEquiv) {
-                cellEquiv.innerText = (isChecked ? matchedLine.approved_quantity : 0).toFixed(1) + " " + matchedLine.uom;
             }
         }
     }
