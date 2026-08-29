@@ -3264,15 +3264,43 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
 // 🌟 FIX COMPLETED: Isolated memory array handles sorting states securely!
 let INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = false;
 
+// 🌟 DEDICATED PREVIEW TRIGGER: Explicit case-insensitive manual sorting switch requested by user
 function triggerManualSupplierListAlphabeticalSort() {
     if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         return;
     }
 
-    // Force alphabetical state to true on click
+    // Force alphabetical state tracking flag to true
     INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
     
-    console.log("🔄 Table list array matrix sorting manually by assigned supplier parameters...");
+    console.log("🔄 Sorting master array matrix case-insensitively by supplier strings...");
+    
+    TEMPORARY_STAGED_PURCHASE_LINES.sort((a, b) => {
+        // Enforce continuity constraints: Unapproved elements always slide to the bottom row sections
+        if (!a.is_approved && b.is_approved) return 1;
+        if (a.is_approved && !b.is_approved) return -1;
+
+        // Extract clean lowercase tracking name strings natively
+        let strA = String(a.supplier_id || "unassigned").trim().toLowerCase();
+        let strB = String(b.supplier_id || "unassigned").trim().toLowerCase();
+
+        // Cross-examine background dictionary mapping profiles if numerical key trackers are found
+        if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
+            strA = String(CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || strA).trim().toLowerCase();
+        }
+        if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
+            strB = String(CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || strB).trim().toLowerCase();
+        }
+
+        // Standardize edge-case strings to ensure "unassigned" matches cleanly regardless of format
+        if (strA === "unassigned" || strA === "" || strA === "undefined") strA = "zzz_unassigned";
+        if (strB === "unassigned" || strB === "" || strB === "undefined") strB = "zzz_unassigned";
+
+        // Execute precise case-insensitive alphabetical string comparison
+        return strA.localeCompare(strB);
+    });
+
+    // Redraw table rows dynamically with updated sorted index alignment parameters
     renderGroupedSupplierProcurementAccordion();
 }
 
