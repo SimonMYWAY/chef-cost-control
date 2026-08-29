@@ -3273,34 +3273,7 @@ function triggerManualSupplierListAlphabeticalSort() {
     // Force alphabetical state tracking flag to true
     INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
     
-    console.log("🔄 Sorting master array matrix case-insensitively by supplier strings...");
-    
-    TEMPORARY_STAGED_PURCHASE_LINES.sort((a, b) => {
-        // Enforce continuity constraints: Unapproved elements always slide to the bottom row sections
-        if (!a.is_approved && b.is_approved) return 1;
-        if (a.is_approved && !b.is_approved) return -1;
-
-        // Extract clean lowercase tracking name strings natively
-        let strA = String(a.supplier_id || "unassigned").trim().toLowerCase();
-        let strB = String(b.supplier_id || "unassigned").trim().toLowerCase();
-
-        // Cross-examine background dictionary mapping profiles if numerical key trackers are found
-        if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
-            strA = String(CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || strA).trim().toLowerCase();
-        }
-        if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
-            strB = String(CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || strB).trim().toLowerCase();
-        }
-
-        // Standardize edge-case strings to ensure "unassigned" matches cleanly regardless of format
-        if (strA === "unassigned" || strA === "" || strA === "undefined") strA = "zzz_unassigned";
-        if (strB === "unassigned" || strB === "" || strB === "undefined") strB = "zzz_unassigned";
-
-        // Execute precise case-insensitive alphabetical string comparison
-        return strA.localeCompare(strB);
-    });
-
-    // Redraw table rows dynamically with updated sorted index alignment parameters
+    console.log("🔄 Sorting master array matrix alphabetically by supplier text strings...");
     renderGroupedSupplierProcurementAccordion();
 }
 
@@ -3315,30 +3288,31 @@ function renderGroupedSupplierProcurementAccordion() {
         return;
     }
 
-    // Clone array to run the sort safely without messing up master row idx indicators
+    // 🌟 FIX COMPLETED: Create a clean reference collection and sort it directly inside the active rendering pass!
     let renderLinesCollection = [...TEMPORARY_STAGED_PURCHASE_LINES];
 
-    // 🌟 THE ALPHABETICAL SORT GATES: Executes conditionally only when trigger button is toggled
     if (INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY) {
         renderLinesCollection.sort((a, b) => {
-            // Unapproved elements drop to the absolute trailing bottom row sectors
+            // Unapproved elements always drop to the absolute trailing bottom row sections
             if (!a.is_approved && b.is_approved) return 1;
             if (a.is_approved && !b.is_approved) return -1;
 
-            let nameA = String(a.supplier_id || "unassigned").trim().toLowerCase();
-            let nameB = String(b.supplier_id || "unassigned").trim().toLowerCase();
-
+            // Resolve true textual sorting string name for Row A
+            let nameA = String(a.supplier_id || "unassigned").trim();
             if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
-                nameA = (CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || nameA).toLowerCase();
+                nameA = CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || nameA;
             }
+            if (nameA === "unassigned" || nameA === "" || nameA === "undefined") nameA = "zzz_unassigned";
+
+            // Resolve true textual sorting string name for Row B
+            let nameB = String(b.supplier_id || "unassigned").trim();
             if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
-                nameB = (CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || nameB).toLowerCase();
+                nameB = CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || nameB;
             }
+            if (nameB === "unassigned" || nameB === "" || nameB === "undefined") nameB = "zzz_unassigned";
 
-            if (nameA === "unassigned") return 1;
-            if (nameB === "unassigned") return -1;
-
-            return nameA.localeCompare(nameB);
+            // Execute exact string character matching
+            return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
         });
     }
 
