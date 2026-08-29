@@ -3258,22 +3258,17 @@ function purchasePurchaseQtyConstraintMatch(qty, id) {
 }
 
 // =======================================================================
-// 📊 UNIFIED MASTER INTERFACE: DECOUPLED STATE-LOCKING RE-SORT ENGINE
+// 📊 UNIFIED MASTER INTERFACE: ENHANCED DIRECT ID-BOUND ENGINE
 // =======================================================================
 
-// 🌟 FIX COMPLETED: Isolated memory array handles sorting states securely!
 let INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = false;
 
-// 🌟 DEDICATED PREVIEW TRIGGER: Explicit case-insensitive manual sorting switch requested by user
 function triggerManualSupplierListAlphabeticalSort() {
     if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         return;
     }
-
-    // Force alphabetical state tracking flag to true
     INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY = true;
-    
-    console.log("🔄 Sorting master array matrix alphabetically by supplier text strings...");
+    console.log("🔄 Sorting master array matrix alphabetically by supplier strings...");
     renderGroupedSupplierProcurementAccordion();
 }
 
@@ -3288,30 +3283,27 @@ function renderGroupedSupplierProcurementAccordion() {
         return;
     }
 
-    // 🌟 FIX COMPLETED: Create a clean reference collection and sort it directly inside the active rendering pass!
+    // Clone array to run the sort safely without messing up master index keys
     let renderLinesCollection = [...TEMPORARY_STAGED_PURCHASE_LINES];
 
     if (INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY) {
         renderLinesCollection.sort((a, b) => {
-            // Unapproved elements always drop to the absolute trailing bottom row sections
+            // Enforce constraints: Unapproved elements always drop to the absolute trailing bottom row sections
             if (!a.is_approved && b.is_approved) return 1;
             if (a.is_approved && !b.is_approved) return -1;
 
-            // Resolve true textual sorting string name for Row A
             let nameA = String(a.supplier_id || "unassigned").trim();
             if (CACHED_SUPPLIER_MAP[a.supplier_id]) {
                 nameA = CACHED_SUPPLIER_MAP[a.supplier_id].name || CACHED_SUPPLIER_MAP[a.supplier_id].name_es || nameA;
             }
             if (nameA === "unassigned" || nameA === "" || nameA === "undefined") nameA = "zzz_unassigned";
 
-            // Resolve true textual sorting string name for Row B
             let nameB = String(b.supplier_id || "unassigned").trim();
             if (CACHED_SUPPLIER_MAP[b.supplier_id]) {
                 nameB = CACHED_SUPPLIER_MAP[b.supplier_id].name || CACHED_SUPPLIER_MAP[b.supplier_id].name_es || nameB;
             }
             if (nameB === "unassigned" || nameB === "" || nameB === "undefined") nameB = "zzz_unassigned";
 
-            // Execute exact string character matching
             return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
         });
     }
@@ -3342,11 +3334,9 @@ function renderGroupedSupplierProcurementAccordion() {
                 </tr>
             </thead>
             <tbody>`;
-
-                // 🌟 FIX COMPLETED: Render lines collection dynamically based on active state parameters
         renderLinesCollection.forEach(line => {
-            // Find absolute index pointer from the master reference array
-            const rowIdx = TEMPORARY_STAGED_PURCHASE_LINES.indexOf(line);
+            // 🌟 FIXED GATES: Capture the unique ingredient ID string directly instead of shifting numeric array array index pointers!
+            const cleanIngIdToken = String(line.ingredient_id).replace(/'/g, "\\'");
             
             const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => 
                 String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()
@@ -3377,7 +3367,7 @@ function renderGroupedSupplierProcurementAccordion() {
             
             if (activeFormatRule) {
                 purchaseUomName = activeFormatRule.purchase_uom ? String(activeFormatRule.purchase_uom).trim() : "Formato";
-                conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0; // Aligned natively to units_per_purchase
+                conversionFactor = parseFloat(activeFormatRule.units_per_purchase) || 1.0;
             }
 
             const suggestedFormatsCount = Math.ceil(parseFloat(line.suggested_quantity) / conversionFactor);
@@ -3403,7 +3393,8 @@ function renderGroupedSupplierProcurementAccordion() {
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#64748b; font-weight:500;">${parseFloat(line.suggested_quantity).toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
-                    <select onchange="updateTemporaryProcurementLineSupplier(${rowIdx}, this.value)" ${line.is_approved ? '' : 'disabled'} style="width:100%; padding:6px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:600; color:#1e293b;">
+                    <!-- 🚀 ID MATCHED INTERACTIVE PASSES: Targeted by cleanIngIdToken to bypass shuffling array array index pointer drifts -->
+                    <select onchange="updateTemporaryProcurementLineSupplierById('${cleanIngIdToken}', this.value)" ${line.is_approved ? '' : 'disabled'} style="width:100%; padding:6px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-weight:600; color:#1e293b;">
                         ${supplierOptionsHTML}
                     </select>
                 </td>
@@ -3412,13 +3403,13 @@ function renderGroupedSupplierProcurementAccordion() {
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; color:#007afb; font-weight:700; background:rgba(0,122,251,0.01);">${suggestedFormatsCount}</td>
                 
                 <td style="padding:6px; text-align:center; background:rgba(16,185,129,0.01);">
-                    <input type="number" min="0" step="1" ${line.is_approved ? '' : 'disabled'} value="${line.approved_formats_quantity}" oninput="updateTemporaryProcurementLineFormatsQuantity(${rowIdx}, this.value)" style="width:75px; padding:6px; text-align:center; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:6px; background: ${line.is_approved ? '#fff' : '#e2e8f0'};" />
+                    <input type="number" min="0" step="1" ${line.is_approved ? '' : 'disabled'} value="${line.approved_formats_quantity}" oninput="updateTemporaryProcurementLineFormatsQuantityById('${cleanIngIdToken}', this.value)" style="width:75px; padding:6px; text-align:center; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:6px; background: ${line.is_approved ? '#fff' : '#e2e8f0'};" />
                 </td>
                 
                 <td style="padding:10px 6px; text-align:right; font-family:monospace; font-weight:600; color:#475569;">${realBaseWeightEquivalent.toFixed(1)} ${line.uom}</td>
                 
                 <td style="padding:6px; text-align:center;">
-                    <input type="checkbox" ${line.is_approved ? 'checked' : ''} onchange="toggleTemporaryProcurementLineApproval(${rowIdx}, this.checked)" style="transform:scale(1.2); cursor:pointer;" />
+                    <input type="checkbox" ${line.is_approved ? 'checked' : ''} onchange="toggleTemporaryProcurementLineApprovalById('${cleanIngIdToken}', this.checked)" style="transform:scale(1.2); cursor:pointer;" />
                 </td>
             </tr>`;
         });
@@ -3428,16 +3419,17 @@ function renderGroupedSupplierProcurementAccordion() {
     workspace.style.display = "block";
 }
 
-// 🌟 PILLAR 3: CLEAN SINGLE-DECLARATION INTERACTIVE CALLBACK HANDLERS
-function toggleTemporaryProcurementLineApproval(index, isChecked) {
-    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
-        TEMPORARY_STAGED_PURCHASE_LINES[index].is_approved = isChecked;
+// 🌟 PILLAR 3: BULLETPROOF ID-BOUND INTERACTIVE CALLBACK EVENT DRIVERS
+function toggleTemporaryProcurementLineApprovalById(ingId, isChecked) {
+    const matchedLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ingId));
+    if (matchedLine) {
+        matchedLine.is_approved = isChecked;
         if (!isChecked) {
-            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_formats_quantity = 0;
-            TEMPORARY_STAGED_PURCHASE_LINES[index].approved_quantity = 0;
+            matchedLine.approved_formats_quantity = 0;
+            matchedLine.approved_quantity = 0;
         }
         
-        // Smart redraw: maintains active alphabetical sort state smoothly
+        // Triggers clean sorting shifts live based on user options configurations
         if (INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY) {
             triggerManualSupplierListAlphabeticalSort();
         } else {
@@ -3446,10 +3438,11 @@ function toggleTemporaryProcurementLineApproval(index, isChecked) {
     }
 }
 
-function updateTemporaryProcurementLineSupplier(index, newSupplierValue) {
-    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
-        TEMPORARY_STAGED_PURCHASE_LINES[index].supplier_id = newSupplierValue;
-        TEMPORARY_STAGED_PURCHASE_LINES[index].last_calculated_supplier_id = ""; 
+function updateTemporaryProcurementLineSupplierById(ingId, newSupplierValue) {
+    const matchedLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ingId));
+    if (matchedLine) {
+        matchedLine.supplier_id = newSupplierValue;
+        matchedLine.last_calculated_supplier_id = ""; 
         
         if (INTERNAL_PROCUREMENT_IS_SORTED_ALPHABETICALLY) {
             triggerManualSupplierListAlphabeticalSort();
@@ -3459,16 +3452,16 @@ function updateTemporaryProcurementLineSupplier(index, newSupplierValue) {
     }
 }
 
-function updateTemporaryProcurementLineFormatsQuantity(index, val) {
-    if (TEMPORARY_STAGED_PURCHASE_LINES[index]) {
-        const line = TEMPORARY_STAGED_PURCHASE_LINES[index];
-        line.approved_formats_quantity = parseInt(val, 10) || 0;
+function updateTemporaryProcurementLineFormatsQuantityById(ingId, val) {
+    const matchedLine = TEMPORARY_STAGED_PURCHASE_LINES.find(l => String(l.ingredient_id) === String(ingId));
+    if (matchedLine) {
+        matchedLine.approved_formats_quantity = parseInt(val, 10) || 0;
         
-        const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(line.ingredient_id));
-        const activeFormatRule = authorizedFormats.find(f => String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim() || String(f.provider_id).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim());
-        const factor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0; // 🌟 Safely checks true column name
+        const authorizedFormats = CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id) === String(matchedLine.ingredient_id));
+        const activeFormatRule = authorizedFormats.find(f => String(f.provider_name).toLowerCase().trim() === String(matchedLine.supplier_id).toLowerCase().trim() || String(f.provider_id).toLowerCase().trim() === String(matchedLine.supplier_id).toLowerCase().trim());
+        const factor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0; 
         
-        line.approved_quantity = (parseInt(val, 10) || 0) * factor;
+        matchedLine.approved_quantity = (parseInt(val, 10) || 0) * factor;
     }
 }
 
