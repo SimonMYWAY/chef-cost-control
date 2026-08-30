@@ -395,15 +395,22 @@
                 <div style="overflow-x:auto; border:1px solid var(--border-color); border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; font-size:0.88rem; min-width:850px;">
                         <thead>
-                            <tr style="background:#f8fafc; border-bottom:2px solid var(--border-color); color:var(--text-muted); font-weight:700;">
+                                                       <tr style="background:#f8fafc; border-bottom:2px solid var(--border-color); color:var(--text-muted); font-weight:700;">
                                 <th style="padding:12px; text-align:left;">Ingrediente / Insumo</th>
                                 <th style="padding:12px; text-align:center; width:60px;">UOM</th>
+                                
+                                <!-- 🌟 NEW INVENTORY CONFIGURATION HEADERS INJECTED HERE -->
+                                <th style="padding:12px; text-align:center; width:110px; color:#007afb; background:rgba(0,122,251,0.01);">📍 Ubicación</th>
+                                <th style="padding:12px; text-align:center; width:100px; color:#007afb; background:rgba(0,122,251,0.01);">📦 UOM Conteo</th>
+                                <th style="padding:12px; text-align:center; width:85px; color:#007afb; background:rgba(0,122,251,0.01);">🔢 Factor</th>
+                                
                                 <th style="padding:12px; text-align:center; background:rgba(0,122,251,0.03); color:#007afb; width:120px;">Stock Actual (Teórico)</th>
                                 <th style="padding:12px; text-align:center; background:rgba(217,119,6,0.03); color:#d97706; width:120px;">Punto de Pedido</th>
                                 <th style="padding:12px; text-align:center; background:rgba(16,185,129,0.03); color:#10b981; width:120px;">Stock Máximo</th>
                                 <th style="padding:12px; text-align:center; width:120px;">Stock Seguridad</th>
                                 <th style="padding:12px; text-align:center; width:90px;">Acciones</th>
                             </tr>
+
                         </thead>
                         <tbody id="inventory-matrix-table-rows">
                             <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px; font-style:italic;">⏳ Haga clic en "Sincronizar Stock" para descargar los datos de inventario...</td></tr>
@@ -2891,17 +2898,40 @@ function filterInventorySpreadsheetGrid() {
     renderInventorySpreadsheetGrid(filtered);
 }
 
+// 💾 NETWORKING WRITER: Commits baseline stock parameters and custom inventory mapping configurations to Supabase
 async function saveSingleIngredientInventoryFields(id) {
-    var saveBtn = document.getElementById("btn-save-inv-" + id);
-    if (saveBtn) { saveBtn.innerText = "⏳"; saveBtn.style.opacity = "0.6"; }
-
-    var vStdInv = parseFloat(document.getElementById("input-std-inv-" + id).value) || 0;
-    var vPtOrder = parseFloat(document.getElementById("input-pt-order-" + id).value) || 0;
-    var vMaxStock = parseFloat(document.getElementById("input-max-stock-" + id).value) || 0;
-    var vSecStock = parseFloat(document.getElementById("input-sec-stock-" + id).value) || 0;
+    var btn = document.getElementById("btn-save-inv-" + id);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "⏳ ...";
+    }
 
     try {
-        var res = await fetch(API_URL + "ingredients?id=eq." + id, {
+        // 🚀 STEP A: Extract both your historical metrics AND your 3 brand-new inventory fields from the live DOM inputs
+        var locInput = document.getElementById("input-storage-loc-" + id);
+        var uomInput = document.getElementById("input-inv-uom-" + id);
+        var factorInput = document.getElementById("input-inv-factor-" + id);
+
+        var stdInput = document.getElementById("input-std-inv-" + id);
+        var ptInput = document.getElementById("input-pt-order-" + id);
+        var maxInput = document.getElementById("input-max-stock-" + id);
+        var secInput = document.getElementById("input-sec-stock-" + id);
+
+        var payload = {
+            storage_location: locInput ? locInput.value.trim() : 'Bodega',
+            inventory_uom: uomInput ? uomInput.value.trim() : 'unidad',
+            inventory_conversion_factor: factorInput ? (parseFloat(factorInput.value) || 1.0) : 1.0,
+            
+            std_inventory: stdInput ? (parseFloat(stdInput.value) || 0) : 0,
+            point_of_order: ptInput ? (parseFloat(ptInput.value) || 0) : 0,
+            stock_max: maxInput ? (parseFloat(maxInput.value) || 0) : 0,
+            security_stock: secInput ? (parseFloat(secInput.value) || 0) : 0
+        };
+
+        console.log("📡 Pushing enhanced inventory mapping payload to Supabase for ID:", id, payload);
+
+        // 🚀 STEP B: Fire a direct async PATCH network request to update your ingredients catalog row disk
+        const res = await fetch(API_URL + "ingredients?id=eq." + id, {
             method: "PATCH",
             headers: {
                 "apikey": API_KEY,
@@ -2909,41 +2939,36 @@ async function saveSingleIngredientInventoryFields(id) {
                 "Content-Type": "application/json",
                 "Prefer": "return=minimal"
             },
-            body: JSON.stringify({
-                std_inventory: vStdInv,
-                point_of_order: vPtOrder,
-                stock_max: vMaxStock,
-                security_stock: vSecStock
-            })
+            body: JSON.stringify(payload)
         });
 
-        if (!res.ok) throw new Error("Supabase column commit rejection.");
-
-        if (saveBtn) { 
-            saveBtn.innerText = "✓ OK"; 
-            saveBtn.style.background = "#22c55e"; 
-            saveBtn.style.opacity = "1";
-            
-            var localItem = MASTER_INVENTORY_ITEMS.find(i => String(i.id) === String(id));
-            if (localItem) {
-                localItem.std_inventory = vStdInv;
-                localItem.point_of_order = vPtOrder;
-                localItem.stock_max = vMaxStock;
-                localItem.security_stock = vSecStock;
-            }
-
-            setTimeout(function() { 
-                if (saveBtn) {
-                    saveBtn.innerText = "Guardar"; 
-                    saveBtn.style.background = "#10b981"; 
-                }
-            }, 1500);
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error("Server rejected database patch matrix save: " + errText);
         }
+        
+        // Visual success confirmation flash animation
+        if (btn) {
+            btn.style.background = "#22c55e";
+            btn.innerText = "✅ Guardado";
+        }
+        
+        setTimeout(function() {
+            if (btn) {
+                btn.disabled = false;
+                btn.style.background = "#10b981";
+                btn.innerText = "Guardar";
+            }
+        }, 1200);
 
     } catch (err) {
-        console.error(err);
-        alert("❌ Error al guardar datos en el servidor.");
-        if (saveBtn) { saveBtn.innerText = "Error"; saveBtn.style.background = "#ef4444"; saveBtn.style.opacity = "1"; }
+        console.error("Critical storage tracking mapping commit failure:", err);
+        alert("❌ Error al guardar configuraciones de inventario: " + err.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = "#ef4444";
+            btn.innerText = "Error";
+        }
     }
 }
 
