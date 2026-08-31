@@ -476,7 +476,7 @@
                         <table style="width:100%; border-collapse:collapse; font-size:0.83rem; min-width:950px;">
                             <thead>
                                 <tr style="color:var(--text-muted); border-bottom:1px solid var(--border-color); font-weight:600; background:#fcfcfc;">
-                                    <th style="padding:10px 8px; text-align:left;">📍 Ubicación / Insumo</th>
+                                    <th style="padding:10px 8px; text-align:left;">📦 Category / Insumo</th>
                                     <th style="padding:10px 8px; text-align:center; width:80px;">UOM Base</th>
                                     <th style="padding:10px 8px; text-align:right; width:110px;">Stock Teórico</th>
                                     <th style="padding:10px 8px; text-align:center; width:140px; color:#007afb; font-weight:700;">Conteo Real Entrada</th>
@@ -3043,20 +3043,29 @@ function renderInventorySpreadsheetGrid(list) {
     rowsTarget.appendChild(fragment);
 }
 
-// 2️⃣ BLOCK 2: LIVE SEARCH ENGINE RE-ROUTER
+// 2️⃣ BLOCK 2: HIGH-PERFORMANCE INSTANT SEARCH ENGINE (ZERO RE-RENDERING LAG)
 function filterInventorySpreadsheetGrid() {
     var query = document.getElementById("inventory-matrix-search").value.toLowerCase().trim();
-    if (!query) {
-        renderInventorySpreadsheetGrid(MASTER_INVENTORY_ITEMS);
-        return;
+    var rowsTarget = document.getElementById("inventory-matrix-table-rows");
+    if (!rowsTarget) return;
+
+    // Grab all active rows currently drawn inside your spreadsheet table element container
+    var tableRows = rowsTarget.getElementsByTagName("tr");
+    
+    // 🚀 FIX COMPLETED: Toggles visibility instantly via fast CSS instead of rebuilding HTML cells!
+    for (var i = 0; i < tableRows.length; i++) {
+        var tr = tableRows[i];
+        
+        // Extract ingredient name and UOM text directly from the first cell text node of the row
+        var textContent = tr.textContent || tr.innerText;
+        var cleanContent = textContent.toLowerCase();
+
+        if (!query || cleanContent.includes(query)) {
+            tr.style.display = ""; // Instantly makes the row visible on your screen monitor canvas
+        } else {
+            tr.style.display = "none"; // Hides the un-matched row with zero CPU footprint recalculation
+        }
     }
-    var filtered = MASTER_INVENTORY_ITEMS.filter(function(ing) {
-        var nameEs = String(ing.name_es || "").toLowerCase();
-        var nameEn = String(ing.name_en || "").toLowerCase();
-        var uom = String(ing.uom || "").toLowerCase();
-        return nameEs.includes(query) || nameEn.includes(query) || uom.includes(query);
-    });
-    renderInventorySpreadsheetGrid(filtered);
 }
 
 // 3️⃣ BLOCK 3: ASYNC NETWORKING WRITER WITH FIXED ID IDENTIFICATION GATES
