@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 Conteo de Inventario Físico - Cocina</title>
+    <style>
+        :root {
+            --bg-base: #f8fafc;
+            --bg-surface: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --primary-blue: #007afb;
+            --success-green: #10b981;
+            --alert-amber: #f59e0b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .header-bar {
+            background-color: var(--primary-blue);
+            color: white;
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .app-container {
+            padding: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .zone-header {
+            background-color: #334155;
+            color: white;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            margin: 15px 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ingredient-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .ingredient-row:last-child {
+            border-bottom: none;
+        }
+        .input-box {
+            width: 80px;
+            padding: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            color: var(--primary-blue);
+            font-family: monospace;
+        }
+        .save-row-btn {
+            background-color: var(--success-green);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .lock-screen {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-bar">
+        <div>
+            <div style="font-weight: 800; font-size: 1.05rem;">📋 Conteo de Inventario</div>
+            <div id="session-date-sublabel" style="font-size: 0.75rem; opacity: 0.85; margin-top: 2px;">Verificando periodo...</div>
+        </div>
+        <span id="global-sync-badge" style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700;">📲 Online</span>
+    </div>
+
+    <div class="app-container">
+        <!-- Main dynamic target template sheet element -->
+        <div id="mobile-app-workspace-target">
+            <div class="lock-screen">⏳ Conectando con los servidores del restaurante...</div>
+        </div>
+    </div>
+
+    <script>
+        // 🌟 CONFIGURACIÓN DE ENVORNO: Coloque sus credenciales de Supabase del Back-Office aquí
+        const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/"; 
+        const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
+
+        let ACTIVE_SESSION_ID = null;
+        let ACTIVE_SESSION_DATE = null;
+
+        // Initialize connection loops right upon screen launch pass
+        document.addEventListener("DOMContentLoaded", function() {
+            verifyActiveInventoryWindowSession();
+        });
+
+        async function verifyActiveInventoryWindowSession() {
+            const workspace = document.getElementById("mobile-app-workspace-target");
+            const sublabel = document.getElementById("session-date-sublabel");
+            if (!workspace) return;
+
+            try {
+                const res = await fetch(API_URL + "inventory_sessions?status=eq.open", {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                
+                if (!res.ok) throw new Error("Server rejected credentials connection.");
+                const sessions = await res.json();
+
+                // CASE A: IF THE SYSTEM IS CLOSED OR LOCKED
+                if (!sessions || sessions.length === 0) {
+                    sublabel.innerText = "Operaciones Abiertas";
+                    workspace.innerHTML = `
+                        <div class="card lock-screen">
+                            <div style="font-size: 2.5rem; margin-bottom: 10px;">☕</div>
+                            <h3 style="margin: 0; color: var(--text-main); font-style: normal;">No hay inventario activo</h3>
+                            <p style="margin: 6px 0 0 0; font-size: 0.85rem;">El panel de compras está libre. Espere a que un administrador active el periodo de cierre mensual desde la oficina principal.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // CASE B: SESSION CONTEXT ONLINE & CONGELADO
+                ACTIVE_SESSION_ID = sessions[0].id;
+                ACTIVE_SESSION_DATE = sessions[0].session_date;
+                sublabel.innerText = "Cierre Activo: " + ACTIVE_SESSION_DATE;
+
+                // Fire direct geometric storage layout builder passes
+                fetchAndRenderStorageGeographicGrid();
+
+            } catch (err) {
+                console.error(err);
+                workspace.innerHTML = `<div class='card' style='color:#ef4444; text-align:center;'>❌ Error de red: ${err.message}</div>`;
+            }
+        }
+                async function fetchAndRenderStorageGeographicGrid() {
+            const workspace = document.getElementById("mobile-app-workspace-target");
+            if (!workspace) return;
+
+            try {
+                // Fetch staged records joined with their master ingredient storage and layout metrics
+                const res = await fetch(API_URL + "inventory_counts?session_id=eq." + ACTIVE_SESSION_ID + "&select=*,ingredients(name_es,name_en,uom,inventory_uom,storage_location)", {
+                    headers: { "apikey": API_KEY }
+                });
+                const stagedCounts = await res.json();
+
+                if (!stagedCounts || stagedCounts.length === 0) {
+                    workspace.innerHTML = "<div class='card lock-screen'>⏳ Inicializando listado geográfico... Por favor espere un momento.</div>";
+                    return;
+                }
+
+                // Organize items into room arrays based on their primary storage location tag
+                const zones = { "Nevera": [], "Freezer": [], "Bodega": [], "Cocina": [] };
+                
+                stagedCounts.forEach(function(item) {
+                    const loc = (item.ingredients && item.ingredients.storage_location) ? item.ingredients.storage_location : "Bodega";
+                    if (zones[loc]) zones[loc].push(item);
+                });
+
+                let html = "";
+
+                // Loop room-by-room to map your staff's physical walk paths cleanly
+                ["Nevera", "Freezer", "Bodega", "Cocina"].forEach(function(zoneName) {
+                    const itemsInZone = zones[zoneName];
+                    if (!itemsInZone || itemsInZone.length === 0) return;
+
+                    html += '<div class="zone-header">📍 Área: ' + zoneName + ' (' + itemsInZone.length + ')</div>';
+                    html += '<div class="card" style="padding-top: 5px; padding-bottom: 5px;">';
+
+                    itemsInZone.forEach(function(row) {
+                        const ing = row.ingredients || {};
+                        const name = ing.name_es || ing.name_en || "Insumo";
+                        const countUom = ing.inventory_uom || "unidad";
+
+                        html += `
+                            <div class="ingredient-row" id="mobile-row-${row.id}">
+                                <div style="flex: 1; padding-right: 10px;">
+                                    <span style="font-weight: 600; display: block; font-size: 0.95rem;">${name}</span>
+                                    <span style="font-size: 0.72rem; color: var(--text-muted);">Contar en: <b>${countUom}</b></span>
+                                </div>
+                                
+                                <!-- 🌟 DUAL INPUTS ARCHITECTURE: Separate boxes for Warehouse vs Line stock eliminates math errors! -->
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="text-align: center;">
+                                        <span style="display: block; font-size: 0.6rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Depósito</span>
+                                        <input type="number" step="0.01" placeholder="0" class="input-box mob-bulk-input" style="width: 60px; font-size: 0.9rem; padding: 6px;" />
+                                    </div>
+                                    <div style="text-align: center;">
+                                        <span style="display: block; font-size: 0.6rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Línea</span>
+                                        <input type="number" step="0.01" placeholder="0" class="input-box mob-line-input" style="width: 60px; font-size: 0.9rem; padding: 6px;" />
+                                    </div>
+                                    
+                                    <button onclick="commitMobileStaffRowCount('${row.id}')" id="btn-mob-save-${row.id}" class="save-row-btn" style="margin-top: 12px; height: 32px; padding: 0 10px;">OK</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += `</div>`;
+                });
+
+                workspace.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                workspace.innerHTML = "<div class='card' style='color:#ef4444; text-align:center;'>❌ Error al compilar el listado: " + err.message + "</div>";
+            }
+        }
+
+        // 💾 MOBILE NETWORK COMMIT: Computes conversion factors and registers values safely into staging tables
+        async function commitMobileStaffRowCount(countRecordId) {
+            const btn = document.getElementById("btn-mob-save-" + countRecordId);
+            const rowWrapper = document.getElementById("mobile-row-" + countRecordId);
+            if (!rowWrapper || !btn) return;
+
+            btn.disabled = true;
+            btn.innerText = "⏳";
+
+            try {
+                // Extract values from your dual inventory text fields cleanly
+                const bulkValue = parseFloat(rowWrapper.querySelector(".mob-bulk-input").value) || 0.0;
+                const lineValue = parseFloat(rowWrapper.querySelector(".mob-line-input").value) || 0.0;
+                
+                // Absolute Summation Rule: Combine bulk warehouse and working line items together
+                const combinedRawCount = bulkValue + lineValue;
+
+                // Download conversion rule profiles for this ingredient row record
+                const fetchRecordRes = await fetch(API_URL + "inventory_counts?id=eq." + countRecordId + "&select=*,ingredients(inventory_conversion_factor,std_cost_per_unit)", {
+                    headers: { "apikey": API_KEY }
+                });
+                const recordData = await fetchRecordRes.json();
+                if (!recordData || recordData.length === 0) throw new Error("Staging link missing.");
+                
+                const currentRecord = recordData[0];
+                const factor = parseFloat(currentRecord.ingredients.inventory_conversion_factor) || 1.0;
+                const stdCost = parseFloat(currentRecord.ingredients.std_cost_per_unit) || 0.0;
+                const expectedQty = parseFloat(currentRecord.expected_qty) || 0.0;
+
+                // Run calculations
+                const realBaseQty = combinedRawCount * factor;
+                const varianceQty = realBaseQty - expectedQty;
+                const costVariance = varianceQty * stdCost;
+
+                // Push values straight to your typo-protection staging table
+                const patchRes = await fetch(API_URL + "inventory_counts?id=eq." + countRecordId, {
+                    method: "PATCH",
+                    headers: {
+                        "apikey": API_KEY,
+                        "Authorization": "Bearer " + API_KEY,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal"
+                    },
+                    body: JSON.stringify({
+                        input_count: combinedRawCount,
+                        real_qty_base: realBaseQty,
+                        variance_qty: varianceQty,
+                        cost_variance: costVariance,
+                        is_verified: true
+                    })
+                });
+
+                if (!patchRes.ok) throw new Error("Server rejected count submission.");
+
+                // Green flash success indicator animation
+                btn.style.backgroundColor = "#10b981";
+                btn.innerText = "✓";
+                rowWrapper.style.backgroundColor = "rgba(16,185,129,0.03)";
+                
+                setTimeout(function() {
+                    btn.disabled = false;
+                    btn.innerText = "OK";
+                }, 1500);
+
+            } catch (err) {
+                console.error(err);
+                btn.disabled = false;
+                btn.style.backgroundColor = "#ef4444";
+                btn.innerText = "Err";
+                alert("❌ Error al guardar conteo: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
