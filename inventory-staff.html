@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>📱 Conteo de Inventario Físico - Cocina</title>
+    <title>📱 Conteo de Inventario Geográfico - Staff</title>
     <style>
         :root {
             --bg-base: #f8fafc;
@@ -13,55 +13,63 @@
             --border-color: #e2e8f0;
             --primary-blue: #007afb;
             --success-green: #10b981;
-            --alert-amber: #f59e0b;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-base);
             color: var(--text-main);
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             -webkit-tap-highlight-color: transparent;
         }
         .header-bar {
             background-color: var(--primary-blue);
             color: white;
             padding: 15px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            position: sticky; top: 0; z-index: 100;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
-        .app-container {
-            padding: 12px;
-            max-width: 600px;
-            margin: 0 auto;
-            box-sizing: border-box;
+        .area-selector-tabs {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            margin: 12px;
+        }
+        .tab-btn {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            font-weight: 700;
+            font-size: 0.88rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--bg-surface);
+            color: var(--primary-blue);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .app-container { padding: 0 12px 20px 12px; max-width: 600px; margin: 0 auto; }
+        .category-block { margin-top: 15px; }
+        .category-title {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            padding-left: 4px;
         }
         .card {
             background: var(--bg-surface);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-        }
-        .zone-header {
-            background-color: #334155;
-            color: white;
-            padding: 8px 12px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            border-radius: 6px;
-            margin: 15px 0 8px 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            padding: 4px 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.01);
         }
         .ingredient-row {
             display: flex;
@@ -70,64 +78,65 @@
             padding: 12px 0;
             border-bottom: 1px solid #f1f5f9;
         }
-        .ingredient-row:last-child {
-            border-bottom: none;
-        }
-        .input-box {
-            width: 80px;
+        .ingredient-row:last-child { border-bottom: none; }
+        .input-group { display: flex; align-items: center; gap: 8px; }
+        .count-input {
+            width: 75px;
             padding: 8px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 700;
             text-align: center;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
-            color: var(--primary-blue);
             font-family: monospace;
+            color: var(--text-main);
         }
-        .save-row-btn {
+        .ok-btn {
             background-color: var(--success-green);
             color: white;
             border: none;
-            padding: 8px 12px;
+            height: 35px; padding: 0 12px;
             border-radius: 6px;
             font-weight: 700;
             font-size: 0.8rem;
             cursor: pointer;
         }
-        .lock-screen {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-            font-style: italic;
-        }
+        .lock-screen { text-align: center; padding: 40px 20px; color: var(--text-muted); font-style: italic; }
     </style>
 </head>
 <body>
 
     <div class="header-bar">
-        <div>
-            <div style="font-weight: 800; font-size: 1.05rem;">📋 Conteo de Inventario</div>
-            <div id="session-date-sublabel" style="font-size: 0.75rem; opacity: 0.85; margin-top: 2px;">Verificando periodo...</div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-weight: 800; font-size: 1.05rem;">📋 Conteo Físico Mensual</div>
+                <div id="session-date-sublabel" style="font-size: 0.72rem; opacity: 0.9; margin-top: 2px;">Sincronizando...</div>
+            </div>
+            <span style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700;">📲 Modo Estable</span>
         </div>
-        <span id="global-sync-badge" style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700;">📲 Online</span>
+    </div>
+
+    <!-- GEOGRAPHIC AREA TABS SWITCHER -->
+    <div class="area-selector-tabs" id="area-tabs-bar" style="display: none;">
+        <button class="tab-btn active" onclick="switchGeographicArea('Bodega')">📦 Depósito / Bodega</button>
+        <button class="tab-btn" onclick="switchGeographicArea('Cocina')">🍳 Línea / Cocina</button>
     </div>
 
     <div class="app-container">
-        <!-- Main dynamic target template sheet element -->
         <div id="mobile-app-workspace-target">
             <div class="lock-screen">⏳ Conectando con los servidores del restaurante...</div>
         </div>
     </div>
 
     <script>
-        // 🌟 CONFIGURACIÓN DE ENVORNO: Coloque sus credenciales de Supabase del Back-Office aquí
+        // 🌟 CONFIGURACIÓN DE CREDENCIALES (Coloque sus claves reales de Supabase aquí)
         const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/"; 
         const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
 
         let ACTIVE_SESSION_ID = null;
-        let ACTIVE_SESSION_DATE = null;
+        let CURRENT_SELECTED_AREA = "Bodega"; 
+        let STAGED_SERVER_DATA_CACHE = [];
 
-        // Initialize connection loops right upon screen launch pass
         document.addEventListener("DOMContentLoaded", function() {
             verifyActiveInventoryWindowSession();
         });
@@ -135,153 +144,150 @@
         async function verifyActiveInventoryWindowSession() {
             const workspace = document.getElementById("mobile-app-workspace-target");
             const sublabel = document.getElementById("session-date-sublabel");
-            if (!workspace) return;
+            const tabsBar = document.getElementById("area-tabs-bar");
 
             try {
                 const res = await fetch(API_URL + "inventory_sessions?status=eq.open", {
-                    method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
-                
-                if (!res.ok) throw new Error("Server rejected credentials connection.");
                 const sessions = await res.json();
 
-                // CASE A: IF THE SYSTEM IS CLOSED OR LOCKED
                 if (!sessions || sessions.length === 0) {
-                    sublabel.innerText = "Operaciones Abiertas";
+                    sublabel.innerText = "Operaciones Libres";
+                    tabsBar.style.display = "none";
                     workspace.innerHTML = `
-                        <div class="card lock-screen">
+                        <div class="card lock-screen" style="padding: 30px 15px;">
                             <div style="font-size: 2.5rem; margin-bottom: 10px;">☕</div>
                             <h3 style="margin: 0; color: var(--text-main); font-style: normal;">No hay inventario activo</h3>
-                            <p style="margin: 6px 0 0 0; font-size: 0.85rem;">El panel de compras está libre. Espere a que un administrador active el periodo de cierre mensual desde la oficina principal.</p>
+                            <p style="margin: 6px 0 0 0; font-size: 0.85rem; line-height: 1.4;">El panel de compras está libre. Espere a que Administración active el cierre mensual desde la oficina principal.</p>
                         </div>
                     `;
                     return;
                 }
 
-                // CASE B: SESSION CONTEXT ONLINE & CONGELADO
                 ACTIVE_SESSION_ID = sessions[0].id;
-                ACTIVE_SESSION_DATE = sessions[0].session_date;
-                sublabel.innerText = "Cierre Activo: " + ACTIVE_SESSION_DATE;
+                sublabel.innerText = "Periodo de Cierre: " + sessions[0].session_date;
+                tabsBar.style.display = "flex";
 
-                // Fire direct geometric storage layout builder passes
-                fetchAndRenderStorageGeographicGrid();
+                await downloadFreshInventoryCountsDataset();
 
             } catch (err) {
                 console.error(err);
-                workspace.innerHTML = `<div class='card' style='color:#ef4444; text-align:center;'>❌ Error de red: ${err.message}</div>`;
+                workspace.innerHTML = `<div class='card lock-screen' style='color:#ef4444;'>❌ Error de red: ${err.message}</div>`;
             }
         }
-                async function fetchAndRenderStorageGeographicGrid() {
+        async function downloadFreshInventoryCountsDataset() {
+            const res = await fetch(API_URL + `inventory_counts?session_id=eq.${ACTIVE_SESSION_ID}&select=*,ingredients(name_es,name_en,uom,inventory_uom,ingredient_category)`, {
+                headers: { "apikey": API_KEY }
+            });
+            STAGED_SERVER_DATA_CACHE = await res.json();
+            renderGeographicCategoryMatrix();
+        }
+
+        function switchGeographicArea(areaName) {
+            CURRENT_SELECTED_AREA = areaName;
+            document.querySelectorAll(".tab-btn").forEach(btn => {
+                btn.classList.toggle("active", btn.innerText.includes(areaName));
+            });
+            renderGeographicCategoryMatrix();
+        }
+
+        function renderGeographicCategoryMatrix() {
             const workspace = document.getElementById("mobile-app-workspace-target");
             if (!workspace) return;
 
-            try {
-                // Fetch staged records joined with their master ingredient storage and layout metrics
-                const res = await fetch(API_URL + "inventory_counts?session_id=eq." + ACTIVE_SESSION_ID + "&select=*,ingredients(name_es,name_en,uom,inventory_uom,storage_location)", {
-                    headers: { "apikey": API_KEY }
-                });
-                const stagedCounts = await res.json();
+            // 🚀 GEOGRAPHIC MAP MATRIX: Sequence aligned perfectly to your restaurant categories list layout
+            const categories = ["carne", "pescados", "fruta y verdura", "secos", "enlatados", "aceites y condimentos", "quesos"];
+            
+            let categoryBuckets = {};
+            categories.forEach(cat => categoryBuckets[cat] = []);
 
-                if (!stagedCounts || stagedCounts.length === 0) {
-                    workspace.innerHTML = "<div class='card lock-screen'>⏳ Inicializando listado geográfico... Por favor espere un momento.</div>";
-                    return;
-                }
-
-                // Organize items into room arrays based on their primary storage location tag
-                const zones = { "Nevera": [], "Freezer": [], "Bodega": [], "Cocina": [] };
+            STAGED_SERVER_DATA_CACHE.forEach(item => {
+                const ing = item.ingredients || {};
+                let rawCat = String(ing.ingredient_category || "secos").toLowerCase().trim();
                 
-                stagedCounts.forEach(function(item) {
-                    const loc = (item.ingredients && item.ingredients.storage_location) ? item.ingredients.storage_location : "Bodega";
-                    if (zones[loc]) zones[loc].push(item);
-                });
+                if (!categoryBuckets[rawCat]) rawCat = "secos";
+                categoryBuckets[rawCat].push(item);
+            });
 
-                let html = "";
+            let html = "";
+            let itemsRenderedCount = 0;
 
-                // Loop room-by-room to map your staff's physical walk paths cleanly
-                ["Nevera", "Freezer", "Bodega", "Cocina"].forEach(function(zoneName) {
-                    const itemsInZone = zones[zoneName];
-                    if (!itemsInZone || itemsInZone.length === 0) return;
+            categories.forEach(catName => {
+                const rowsInCat = categoryBuckets[catName];
+                if (rowsInCat.length === 0) return;
 
-                    html += '<div class="zone-header">📍 Área: ' + zoneName + ' (' + itemsInZone.length + ')</div>';
-                    html += '<div class="card" style="padding-top: 5px; padding-bottom: 5px;">';
+                itemsRenderedCount += rowsInCat.length;
+                html += `
+                    <div class="category-block">
+                        <div class="category-title">📦 ${catName}</div>
+                        <div class="card">
+                `;
 
-                    itemsInZone.forEach(function(row) {
-                        const ing = row.ingredients || {};
-                        const name = ing.name_es || ing.name_en || "Insumo";
-                        const countUom = ing.inventory_uom || "unidad";
+                rowsInCat.forEach(row => {
+                    const ing = row.ingredients || {};
+                    const displayName = ing.name_es || ing.name_en || "Insumo";
+                    const countUom = ing.inventory_uom || "unidad";
+                    
+                    // Route values natively based on active Room Tab selection switches
+                    const activeCountDisplay = (CURRENT_SELECTED_AREA === "Bodega") ? (row.bulk_count || 0) : (row.line_count || 0);
 
-                        html += `
-                            <div class="ingredient-row" id="mobile-row-${row.id}">
-                                <div style="flex: 1; padding-right: 10px;">
-                                    <span style="font-weight: 600; display: block; font-size: 0.95rem;">${name}</span>
-                                    <span style="font-size: 0.72rem; color: var(--text-muted);">Contar en: <b>${countUom}</b></span>
-                                </div>
-                                
-                                <!-- 🌟 DUAL INPUTS ARCHITECTURE: Separate boxes for Warehouse vs Line stock eliminates math errors! -->
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <div style="text-align: center;">
-                                        <span style="display: block; font-size: 0.6rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Depósito</span>
-                                        <input type="number" step="0.01" placeholder="0" class="input-box mob-bulk-input" style="width: 60px; font-size: 0.9rem; padding: 6px;" />
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <span style="display: block; font-size: 0.6rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Línea</span>
-                                        <input type="number" step="0.01" placeholder="0" class="input-box mob-line-input" style="width: 60px; font-size: 0.9rem; padding: 6px;" />
-                                    </div>
-                                    
-                                    <button onclick="commitMobileStaffRowCount('${row.id}')" id="btn-mob-save-${row.id}" class="save-row-btn" style="margin-top: 12px; height: 32px; padding: 0 10px;">OK</button>
-                                </div>
+                    html += `
+                        <div class="ingredient-row" id="row-container-${row.id}">
+                            <div style="flex: 1; padding-right: 12px;">
+                                <span style="font-weight: 600; display: block; font-size: 0.92rem; color: var(--text-main);">${displayName}</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">Unidad de Conteo: <b>${countUom}</b></span>
                             </div>
-                        `;
-                    });
-
-                    html += `</div>`;
+                            <div class="input-group">
+                                <input type="number" step="0.01" value="${activeCountDisplay > 0 ? activeCountDisplay : ''}" placeholder="0" class="count-input" id="input-field-${row.id}" />
+                                <button onclick="commitDirectRoomInputValue('${row.id}')" id="btn-submit-${row.id}" class="ok-btn">OK</button>
+                            </div>
+                        </div>
+                    `;
                 });
 
-                workspace.innerHTML = html;
+                html += `</div></div>`;
+            });
 
-            } catch (err) {
-                console.error(err);
-                workspace.innerHTML = "<div class='card' style='color:#ef4444; text-align:center;'>❌ Error al compilar el listado: " + err.message + "</div>";
-            }
+            workspace.innerHTML = itemsRenderedCount > 0 ? html : `<div class="lock-screen">No hay insumos asignados a esta zona.</div>`;
         }
 
-        // 💾 MOBILE NETWORK COMMIT: Computes conversion factors and registers values safely into staging tables
-        async function commitMobileStaffRowCount(countRecordId) {
-            const btn = document.getElementById("btn-mob-save-" + countRecordId);
-            const rowWrapper = document.getElementById("mobile-row-" + countRecordId);
-            if (!rowWrapper || !btn) return;
+        async function commitDirectRoomInputValue(countRecordId) {
+            const btn = document.getElementById("btn-submit-" + countRecordId);
+            const inputField = document.getElementById("input-field-" + countRecordId);
+            if (!btn || !inputField) return;
 
             btn.disabled = true;
             btn.innerText = "⏳";
 
             try {
-                // Extract values from your dual inventory text fields cleanly
-                const bulkValue = parseFloat(rowWrapper.querySelector(".mob-bulk-input").value) || 0.0;
-                const lineValue = parseFloat(rowWrapper.querySelector(".mob-line-input").value) || 0.0;
+                const enteredValue = parseFloat(inputField.value) || 0.0;
                 
-                // Absolute Summation Rule: Combine bulk warehouse and working line items together
-                const combinedRawCount = bulkValue + lineValue;
-
-                // Download conversion rule profiles for this ingredient row record
-                const fetchRecordRes = await fetch(API_URL + "inventory_counts?id=eq." + countRecordId + "&select=*,ingredients(inventory_conversion_factor,std_cost_per_unit)", {
-                    headers: { "apikey": API_KEY }
-                });
-                const recordData = await fetchRecordRes.json();
-                if (!recordData || recordData.length === 0) throw new Error("Staging link missing.");
+                const recordIndex = STAGED_SERVER_DATA_CACHE.findIndex(l => String(l.id) === String(countRecordId));
+                if (recordIndex === -1) throw new Error("Memory item record unmapped.");
                 
-                const currentRecord = recordData[0];
-                const factor = parseFloat(currentRecord.ingredients.inventory_conversion_factor) || 1.0;
-                const stdCost = parseFloat(currentRecord.ingredients.std_cost_per_unit) || 0.0;
-                const expectedQty = parseFloat(currentRecord.expected_qty) || 0.0;
+                const cachedRecord = STAGED_SERVER_DATA_CACHE[recordIndex];
+                
+                // 📍 ABSOLUTE ROOM SEPARATION FILTER: Allocates entry directly to active tab space column
+                if (CURRENT_SELECTED_AREA === "Bodega") {
+                    cachedRecord.bulk_count = enteredValue;
+                } else {
+                    cachedRecord.line_count = enteredValue;
+                }
 
-                // Run calculations
+                // Sum room quantities on the fly to get total physical stock count
+                const combinedRawCount = (parseFloat(cachedRecord.bulk_count) || 0.0) + (parseFloat(cachedRecord.line_count) || 0.0);
+                
+                const factor = parseFloat(cachedRecord.ingredients.inventory_conversion_factor) || 1.0;
+                const stdCost = parseFloat(cachedRecord.ingredients.std_cost_per_unit) || 0.0;
+                const expectedQty = parseFloat(cachedRecord.expected_qty) || 0.0;
+
                 const realBaseQty = combinedRawCount * factor;
                 const varianceQty = realBaseQty - expectedQty;
                 const costVariance = varianceQty * stdCost;
 
-                // Push values straight to your typo-protection staging table
-                const patchRes = await fetch(API_URL + "inventory_counts?id=eq." + countRecordId, {
+                // Sync inputs straight into your cloud typo-protection staging table
+                const response = await fetch(API_URL + `inventory_counts?id=eq.${countRecordId}`, {
                     method: "PATCH",
                     headers: {
                         "apikey": API_KEY,
@@ -290,6 +296,8 @@
                         "Prefer": "return=minimal"
                     },
                     body: JSON.stringify({
+                        bulk_count: cachedRecord.bulk_count,
+                        line_count: cachedRecord.line_count,
                         input_count: combinedRawCount,
                         real_qty_base: realBaseQty,
                         variance_qty: varianceQty,
@@ -298,27 +306,32 @@
                     })
                 });
 
-                if (!patchRes.ok) throw new Error("Server rejected count submission.");
+                if (!response.ok) throw new Error("Cloud rejected row verification update.");
 
-                // Green flash success indicator animation
+                // Commit local array metrics to keep cached memory synchronized
+                cachedRecord.input_count = combinedRawCount;
+                cachedRecord.real_qty_base = realBaseQty;
+                cachedRecord.variance_qty = varianceQty;
+                cachedRecord.cost_variance = costVariance;
+
                 btn.style.backgroundColor = "#10b981";
                 btn.innerText = "✓";
-                rowWrapper.style.backgroundColor = "rgba(16,185,129,0.03)";
+                document.getElementById("row-container-" + countRecordId).style.backgroundColor = "rgba(16,185,129,0.03)";
                 
                 setTimeout(function() {
                     btn.disabled = false;
                     btn.innerText = "OK";
-                }, 1500);
+                    btn.style.backgroundColor = "";
+                }, 1200);
 
             } catch (err) {
                 console.error(err);
                 btn.disabled = false;
                 btn.style.backgroundColor = "#ef4444";
                 btn.innerText = "Err";
-                alert("❌ Error al guardar conteo: " + err.message);
+                alert("❌ Error al guardar datos: " + err.message);
             }
         }
     </script>
 </body>
 </html>
-
