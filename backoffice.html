@@ -4156,6 +4156,182 @@ async function finalizeAndCommitActiveInventorySession(sessionId) {
         alert("❌ Error al consolidar el inventario en la base de datos: " + err.message);
     }
 }
+// =======================================================================
+// 🔍 AUDIT WORKSPACE ENGINE: TWO-TIER VARIANCE REPORT VIEW METRICS (PART 1)
+// =======================================================================
+
+async function renderLiveAdminAuditVarianceGrid(sessionId) {
+    const rowsTarget = document.getElementById("inventory-admin-audit-table-rows");
+    if (!rowsTarget) return;
+
+    try {
+        console.log("📡 Fetching active snapshot count variances from staging table...");
+        
+        // Fetch staged records and join relational data via Supabase Embedding syntax
+        const res = await fetch(API_URL + `inventory_counts?session_id=eq.${sessionId}&select=*,ingredients(name_es,name_en,uom,std_cost_per_unit,storage_location)`, {
+            method: "GET",
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+
+        if (!res.ok) throw new Error("Failed to pull analytical staged variance elements.");
+        const stagedRecordsList = await res.json();
+
+        rowsTarget.innerHTML = "";
+
+        if (!stagedRecordsList || stagedRecordsList.length === 0) {
+            rowsTarget.innerHTML = "<tr><td colspan='8' style='text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>⏳ Inicializando líneas del catálogo... Por favor espere o refresque.</td></tr>";
+            return;
+        }
+
+        // Initialize our financial overview summary metric accumulators
+        let totalRealValueMath = 0;
+        let totalVarianceLossMath = 0;
+        let totalAlertsCountMath = 0;
+
+        var fragment = document.createDocumentFragment();
+
+        stagedRecordsList.forEach(function(record) {
+            const ingData = record.ingredients || {};
+            const cleanName = ingData.name_es || ingData.name_en || "Insumo Catalogado";
+            const cleanUOM = ingData.uom ? ingData.uom.trim() : "gr";
+            const costPerUnit = parseFloat(ingData.std_cost_per_unit) || 0.0;
+            const locationLabel = String(ingData.storage_location || "Bodega").trim();
+
+            const expected = parseFloat(record.expected_qty) || 0.0;
+            const enteredRawInput = parseFloat(record.input_count) || 0.0;
+            const realBaseCalculated = parseFloat(record.real_qty_base) || 0.0;
+            const varianceQty = parseFloat(record.variance_qty) || 0.0;
+            const costVariance = parseFloat(record.cost_variance) || 0.0;
+
+            // Financial Accumulator calculations
+            totalRealValueMath += (realBaseCalculated * costPerUnit);
+            if (costVariance < 0) totalVarianceLossMath += Math.abs(costVariance);
+
+            // 🔍 TYPO PROTECTION GATE ENGINE: Check if variance exceeds 15% OR if financial loss hits > $50
+            let isVarianceAlertActive = false;
+            if (expected > 0) {
+                const percentageDeviation = (Math.abs(varianceQty) / expected) * 100;
+                if (percentageDeviation > 15.0) isVarianceAlertActive = true;
+            } else if (realBaseCalculated > 0 && expected === 0) {
+                // Positive discrepancy on an item expected to be empty represents an open variance alert
+                isVarianceAlertActive = true;
+            }
+            if (Math.abs(costVariance) >= 50.0) isVarianceAlertActive = true;
+
+            // Increment row warning count badge parameters
+            if (isVarianceAlertActive) totalAlertsCountMath++;
+
+            // Create row container node elements virtually
+            var tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid #f1f5f9";
+            tr.style.transition = "background 0.15s ease";
+            
+            // 🔴 TYPO CONTROL VISUAL VALVE: Apply bright soft-red background alerts instantly if variance thresholds trigger
+            if (isVarianceAlertActive && enteredRawInput > 0) {
+                tr.style.background = "#fff5f5";
+            }
+
+            tr.innerHTML = `
+                <td style="padding:10px 8px; text-align:left; color:#1e293b;">
+                    <span style="font-weight:600; display:block;">${cleanName}</span>
+                    <span style="font-size:0.68rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">📍 Zona: ${locationLabel}</span>
+                </td>
+                <td style="padding:10px 8px; text-align:center; color:#64748b; font-family:monospace; font-weight:600;">${cleanUOM}</td>
+                <td style="padding:10px 8px; text-align:right; font-family:monospace; font-weight:500; color:#475569;">${expected.toFixed(2)}</td>
+                
+                <!-- Interactive manual override entry box for typo correction -->
+                <td style="padding:6px; text-align:center;">
+                    <input type="number" step="0.01" value="${enteredRawInput.toFixed(2)}" data-id="${record.id}" class='admin-direct-variance-override-input' style="width:85px; padding:5px; font-size:0.8rem; text-align:center; font-family:monospace; font-weight:700; color:#007afb; background:#fff;" />
+                </td>
+                
+                <td style="padding:10px 8px; text-align:right; font-family:monospace; font-weight:600; color:#1e293b;">${realBaseCalculated.toFixed(2)}</td>
+                <td style="padding:10px 8px; text-align:right; font-family:monospace; font-weight:700; color:${varianceQty >= 0 ? '#16a34a' : '#ef4444'};">
+                    ${varianceQty >= 0 ? '+' : ''}${varianceQty.toFixed(2)}
+                </td>
+                <td style="padding:10px 8px; text-align:right; font-family:monospace; font-weight:700; color:${costVariance >= 0 ? '#16a34a' : '#ef4444'};">
+                    ${costVariance >= 0 ? '$' : '-$'}${Math.abs(costVariance).toFixed(2)}
+                </td>
+                <td style="padding:6px; text-align:center;">
+                    <button data-id="${record.id}" class='admin-row-save-override-trigger-btn' style="background:var(--text-main); color:white; border:none; padding:4px 10px; font-size:0.72rem; font-weight:600; border-radius:4px; cursor:pointer;">OK</button>
+                </td>
+            `;
+            // Bind high-performance immediate save overrides directly to the row button node
+            const overrideInput = tr.querySelector(".admin-direct-variance-override-input");
+            const overrideBtn = tr.querySelector(".admin-row-save-override-trigger-btn");
+
+            if (overrideBtn && overrideInput) {
+                overrideBtn.addEventListener("click", async function() {
+                    this.disabled = true;
+                    this.innerText = "⏳";
+                    const countRowId = this.getAttribute("data-id");
+                    const updatedRawValue = parseFloat(overrideInput.value) || 0.0;
+                    
+                    await executeAdminVarianceInputOverrideAdjustment(countRowId, updatedRawValue, costPerUnit, expected, cleanUOM);
+                    renderLiveAdminAuditVarianceGrid(sessionId); // Hot refresh table views dynamically
+                });
+            }
+
+            fragment.appendChild(tr);
+        });
+
+        // Flush compiled matrix array fragments cleanly straight onto your browser display screen canvas
+        rowsTarget.appendChild(fragment);
+
+        // Update financial overview summary badge values live with clean formatting mappings
+        document.getElementById("summary-inv-real-value").innerText = "$" + totalRealValueMath.toFixed(2);
+        document.getElementById("summary-inv-variance-value").innerText = "$" + totalVarianceLossMath.toFixed(2);
+        document.getElementById("summary-inv-alerts-count").innerText = totalAlertsCountMath + " Líneas";
+
+    } catch (err) {
+        console.error("Critical admin audit loop compile failure:", err);
+        rowsTarget.innerHTML = `<tr><td colspan='8' style='color:#ef4444; padding:15px; font-weight:700;'>❌ Error al cargar matriz de auditoría: ${err.message}</td></tr>`;
+    }
+}
+
+// ⚙️ HOT OVERRIDE VALUE MANAGER: Calculates and saves changes immediately on row 'OK' click
+async function executeAdminVarianceInputOverrideAdjustment(countRowId, newInputValue, stdCost, expectedQty, baseUom) {
+    try {
+        // Query conversion settings matching this specific row record
+        const fetchRecordRes = await fetch(API_URL + `inventory_counts?id=eq.${countRowId}&select=*,ingredients(inventory_conversion_factor)`, {
+            headers: { "apikey": API_KEY }
+        });
+        const recordData = await fetchRecordRes.json();
+        if (!recordData || recordData.length === 0) return;
+        
+        const factor = parseFloat(recordData[0].ingredients.inventory_conversion_factor) || 1.0;
+        
+        // Recompute parameters based on your core business formulas
+        const realBaseQty = newInputValue * factor;
+        const varianceQty = realBaseQty - expectedQty;
+        const costVariance = varianceQty * stdCost;
+
+        await fetch(API_URL + `inventory_counts?id=eq.${countRowId}`, {
+            method: "PATCH",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            },
+            body: JSON.stringify({
+                input_count: newInputValue,
+                real_qty_base: realBaseQty,
+                variance_qty: varianceQty,
+                cost_variance: costVariance,
+                is_verified: true
+            })
+        });
+        console.log("💾 Row item override committed safely to staging database.");
+    } catch (err) {
+        console.error("Failed to commit admin input override adjustments down the wire:", err);
+        alert("❌ Error al guardar corrección: " + err.message);
+    }
+}
+
+// 📜 EXCEL DISPATCH LIFELINE: Placeholders for financial file exportation routines
+function exportInventoryVarianceReportToExcel() {
+    alert("📊 Reporte Analítico Exportado: Su archivo .CSV de mermas se descargará en un segundo pasaje de código.");
+}
 
 </script>
         
