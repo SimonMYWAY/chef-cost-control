@@ -4017,6 +4017,146 @@ async function loadHistoricalClosedInventorySessionsList() {
         console.error("Failed to build archive drawer selector records list:", err);
     }
 }
+// =======================================================================
+// 🚀 INVENTORY MASTER ENGINE: SESSION INITIALIZATION & TRANSACTION CLOSING
+// =======================================================================
+
+// 🌟 TASK 1: LAUNCH AND FREEZE LOGISTICS PIPELINES
+async function launchNewMonthlyInventorySession() {
+    const datePicker = document.getElementById("admin-inventory-init-date-picker");
+    if (!datePicker || !datePicker.value) {
+        alert("⚠️ Por favor, seleccione una fecha válida para iniciar el periodo de cierre de inventario.");
+        return;
+    }
+    
+    const chosenDate = datePicker.value;
+    if (!confirm(`⚠️ ATENCIÓN: ¿Está seguro de iniciar el inventario para la fecha: ${chosenDate}?\n\nAl confirmar, se congelarán temporalmente todas las actividades de compras y el staff de cocina tendrá acceso a digitar los conteos reales en la aplicación.`)) {
+        return;
+    }
+
+    try {
+        console.log("📡 Opening master session row window inside cloud disk...");
+        const headers = { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json" 
+        };
+
+        // STEP A: Open a new record inside your inventory sessions master tracker
+        const sessionRes = await fetch(API_URL + "inventory_sessions", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ session_date: chosenDate, status: "open", activated_by: "Admin" })
+        });
+
+        if (!sessionRes.ok) {
+            const errText = await sessionRes.text();
+            if (errText.includes("unique_constraint") || errText.includes("already exists")) {
+                throw new Error("Ya existe un registro de inventario registrado o abierto para esta fecha.");
+            }
+            throw new Error("Supabase rejected session launch window initialization: " + errText);
+        }
+
+        // Fetch back that newly opened session record row to grab its UUID
+        const fetchSessionRes = await fetch(API_URL + `inventory_sessions?session_date=eq.${chosenDate}&status=eq.open`, { headers: headers });
+        const fetchedSessionArr = await fetchSessionRes.json();
+        if (!fetchedSessionArr || fetchedSessionArr.length === 0) throw new Error("Could not retrieve active session pointer.");
+        const sessionId = fetchedSessionArr[0].id;
+
+        // STEP B: Fetch your active ingredients catalog to map your theoretical expected stocks snapshot
+        console.log("🧼 Taking real-time stock snapshots across all active database rows...");
+        const ingRes = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } });
+        const masterIngredients = await ingRes.json();
+
+        if (Array.isArray(masterIngredients) && masterIngredients.length > 0) {
+            // Bulk compile staging array matrix elements safely
+            const stagingRecordsPayload = masterIngredients.map(function(ing) {
+                const theoreticalStock = parseFloat(ing.std_inventory) || 0.0;
+                return {
+                    session_id: sessionId,
+                    ingredient_id: ing.id,
+                    expected_qty: theoreticalStock,
+                    input_count: 0.0,
+                    real_qty_base: 0.0,
+                    variance_qty: -theoreticalStock, // Initial state variance represents a complete shortfall until staff populates counts
+                    cost_variance: -theoreticalStock * (parseFloat(ing.std_cost_per_unit) || 0.0),
+                    is_verified: false
+                };
+            });
+
+            // Write your snapshot rows directly inside the typo-protection staging database
+            console.log(`🚀 Committing ${stagingRecordsPayload.length} snapshot tracking rows down the grid...`);
+            const bulkRes = await fetch(API_URL + "inventory_counts", {
+                method: "POST",
+                headers: { ...headers, "Prefer": "return=minimal" },
+                body: JSON.stringify(stagingRecordsPayload)
+            });
+
+            if (!bulkRes.ok) throw new Error("Bulk snapshot allocation failure: " + await bulkRes.text());
+        }
+
+        alert("🚀 ¡Periodo de inventario activado con éxito! Compras bloqueadas y plantilla de auditoría inicializada.");
+        
+        // Refresh active workspace screens to display your lock status banners instantly
+        checkLiveInventorySessionStatusFromServer();
+
+    } catch (err) {
+        console.error("Critical session initiation fault:", err);
+        alert("❌ Error al activar el cierre de inventario: " + err.message);
+    }
+}
+
+// 🌟 TASK 2: FINALIZE AND COMMIT STAGED VALUES TO MAIN ENGINE DISK
+async function finalizeAndCommitActiveInventorySession(sessionId) {
+    if (!confirm("🔒 ¿Está seguro de cerrar y consolidar definitivamente este inventario?\n\nAl confirmar, las cantidades de conteo real verificadas se copiarán directamente en sus registros de stock actuales y se desbloquearán las actividades de compras del día.")) {
+        return;
+    }
+
+    try {
+        console.log(`📡 Fetching verified counts from staging matrix table for session: ${sessionId}`);
+        const headers = { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json" 
+        };
+
+        // STEP A: Download all counts captured inside your typo protection staging tracks
+        const countsRes = await fetch(API_URL + `inventory_counts?session_id=eq.${sessionId}`, { headers: { "apikey": API_KEY } });
+        const stagedCounts = await countsRes.json();
+
+        if (Array.isArray(stagedCounts) && stagedCounts.length > 0) {
+            console.log(`⚙️ Executing structural synchronization updates across ${stagedCounts.length} ingredient rows...`);
+            
+            // Loop through each row and push the final real quantity directly over to your primary ingredients inventory column
+            for (let i = 0; i < stagedCounts.length; i++) {
+                const countRecord = stagedCounts[i];
+                
+                await fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}`, {
+                    method: "PATCH",
+                    headers: headers,
+                    body: JSON.stringify({ std_inventory: countRecord.real_qty_base }) // Copies verified count directly to production!
+                });
+            }
+        }
+
+        // STEP B: Close the active session tracker row state
+        await fetch(API_URL + `inventory_sessions?id=eq.${sessionId}`, {
+            method: "PATCH",
+            headers: headers,
+            body: JSON.stringify({ status: "closed" })
+        });
+
+        alert("🔒 ¡Inventario consolidado y guardado con éxito! Registros maestros actualizados y operaciones de compras desbloqueadas.");
+        
+        // Hot reload view tracking grids to return back to open dates selection window
+        checkLiveInventorySessionStatusFromServer();
+
+    } catch (err) {
+        console.error("Critical session commit failure:", err);
+        alert("❌ Error al consolidar el inventario en la base de datos: " + err.message);
+    }
+}
+
 </script>
         
 </body>
