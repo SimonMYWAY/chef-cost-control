@@ -404,7 +404,7 @@
                                 <th style="padding:12px; text-align:center; width:60px;">UOM</th>
                                 
                                 <!-- 🌟 NEW INVENTORY CONFIGURATION HEADERS INJECTED HERE -->
-                                <th style="padding:12px; text-align:center; width:110px; color:#007afb; background:rgba(0,122,251,0.01);">📍 Ubicación</th>
+                                <th style="padding:12px; text-align:center; width:125px; color:#007afb; background:rgba(0,122,251,0.01);">📦 Category</th>
                                 <th style="padding:12px; text-align:center; width:100px; color:#007afb; background:rgba(0,122,251,0.01);">📦 UOM Conteo</th>
                                 <th style="padding:12px; text-align:center; width:85px; color:#007afb; background:rgba(0,122,251,0.01);">🔢 Factor</th>
                                 
@@ -2964,7 +2964,7 @@ async function fetchInventoryMatrixData() {
     }
 }
 
-// ⚡ HIGH-PERFORMANCE DOM NODE ENGINE: Perfectly balanced 10-column layout grid
+// ⚡ HIGH-PERFORMANCE DOM NODE ENGINE: Perfectly balanced 10-column layout grid with zero rendering lag
 function renderInventorySpreadsheetGrid(list) {
     var rowsTarget = document.getElementById("inventory-matrix-table-rows");
     if (!rowsTarget) return;
@@ -2973,7 +2973,7 @@ function renderInventorySpreadsheetGrid(list) {
 
     if (list.length === 0) {
         var emptyTr = document.createElement("tr");
-        emptyTr.innerHTML = "<td colspan='10' style='text-align:center; padding:20px; color:#64748b;'>No se encontraron ingredientes registrados.</td>";
+        emptyTr.innerHTML = "<td colspan='9' style='text-align:center; padding:20px; color:#64748b;'>No se encontraron ingredientes registrados.</td>";
         rowsTarget.appendChild(emptyTr);
         return;
     }
@@ -3009,26 +3009,23 @@ function renderInventorySpreadsheetGrid(list) {
             catOptions += '<option value="' + cat + '" ' + (cat === currentCat ? "selected" : "") + '>' + displayCatLabel + '</option>';
         }
 
-        // 🌟 CORRECTION COMPLETED: Exactly 10 clean column cells maps directly to your exact header titles
+        // 🌟 FIXED TEMPLATE INNER HTML CELL MAP MATRIX WITH INTERACTIVE SYSTEM IDS SYNCHRONIZED
         tr.innerHTML = 
             "<td style='padding:10px; font-weight:600; text-align:left; color:var(--text-main);'>" + cleanName + "</td>" +
             "<td style='padding:10px; text-align:center; color:var(--text-muted); font-family:monospace; font-weight:600;'>" + cleanUOM + "</td>" +
             
-            // Column 3: The 7 Food Categories Dropdown selector (Replaces old duplicate location selector)
-            "<td style='padding:6px; text-align:center;'><select id='input-storage-loc-" + ing.id + "' style='width:120px; padding:5px; font-size:0.78rem; font-weight:600; border:1px solid #cbd5e1; border-radius:4px; background:#fff; color:#007afb;'>" + catOptions + "</select></td>" +
+            // Category Dropdown - Synchronized Element ID to fix visual save button loops
+            "<td style='padding:6px; text-align:center;'><select id='input-ingredient-cat-" + ing.id + "' style='width:125px; padding:5px; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:4px; background:#fff; color:#007afb;'>" + catOptions + "</select></td>" +
             
-            // Columns 4 & 5: Inventory Counting UOM name and its conversion multiplier factor
-            "<td style='padding:6px; text-align:center;'><input type='text' id='input-inv-uom-" + ing.id + "' value='" + invUOM + "' style='width:85px; padding:5px; font-size:0.78rem; text-align:center; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
-            "<td style='padding:6px; text-align:center;'><input type='number' step='0.01' id='input-inv-factor-" + ing.id + "' value='" + invFactor + "' style='width:70px; padding:5px; font-size:0.78rem; text-align:right; font-family:monospace; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:6px; text-align:center;'><input type='text' id='input-inv-uom-" + ing.id + "' value='" + invUOM + "' style='width:75px; padding:5px; font-size:0.75rem; text-align:center; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:6px; text-align:center;'><input type='number' step='0.01' id='input-inv-factor-" + ing.id + "' value='" + invFactor + "' style='width:65px; padding:5px; font-size:0.75rem; text-align:right; font-family:monospace; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
             
-            // Columns 6, 7, 8 & 9: Baseline tracking standard numbers (Perfectly aligned under true headers)
-            "<td style='padding:8px; text-align:center; background:rgba(0,122,251,0.01);'><input type='number' step='0.01' id='input-std-inv-" + ing.id + "' value='" + stdInv + "' style='width:80px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#007afb; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
-            "<td style='padding:8px; text-align:center; background:rgba(217,119,6,0.01);'><input type='number' step='0.01' id='input-pt-order-" + ing.id + "' value='" + ptOrder + "' style='width:80px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#d97706; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
-            "<td style='padding:8px; text-align:center; background:rgba(16,185,129,0.01);'><input type='number' step='0.01' id='input-max-stock-" + ing.id + "' value='" + maxStock + "' style='width:80px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
-            "<td style='padding:8px; text-align:center;'><input type='number' step='0.01' id='input-sec-stock-" + ing.id + "' value='" + secStock + "' style='width:80px; padding:6px; text-align:right; font-family:monospace; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:8px; text-align:center; background:rgba(0,122,251,0.01);'><input type='number' step='0.01' id='input-std-inv-" + ing.id + "' value='" + stdInv + "' style='width:75px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#007afb; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:8px; text-align:center; background:rgba(217,119,6,0.01);'><input type='number' step='0.01' id='input-pt-order-" + ing.id + "' value='" + ptOrder + "' style='width:75px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#d97706; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:8px; text-align:center; background:rgba(16,185,129,0.01);'><input type='number' step='0.01' id='input-max-stock-" + ing.id + "' value='" + maxStock + "' style='width:75px; padding:6px; text-align:right; font-family:monospace; font-weight:700; color:#10b981; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
+            "<td style='padding:8px; text-align:center;'><input type='number' step='0.01' id='input-sec-stock-" + ing.id + "' value='" + secStock + "' style='width:75px; padding:6px; text-align:right; font-family:monospace; border:1px solid #cbd5e1; border-radius:4px;' /></td>" +
             
-            // Column 10: Action commit button cell
-            "<td style='padding:8px; text-align:center;'><button data-id='" + ing.id + "' class='fast-save-trigger-btn' style='background:#10b981; color:white; border:none; padding:6px 12px; border-radius:4px; font-weight:700; cursor:pointer; font-size:0.75rem;'>Guardar</button></td>";
+            "<td style='padding:8px; text-align:center;'><button data-id='" + ing.id + "' class='fast-save-trigger-btn' id='btn-save-inv-" + ing.id + "' style='background:#10b981; color:white; border:none; padding:6px 12px; border-radius:4px; font-weight:700; cursor:pointer; font-size:0.75rem; transition: background-color 0.2s;'>Guardar</button></td>";
 
         var saveBtn = tr.querySelector(".fast-save-trigger-btn");
         if (saveBtn) {
@@ -3044,12 +3041,15 @@ function renderInventorySpreadsheetGrid(list) {
     }
     
     rowsTarget.appendChild(fragment);
-    console.log("⚡ Spreadsheet grid layout aligned and compiled instantly!");
 }
 
-
+// 2️⃣ BLOCK 2: LIVE SEARCH ENGINE RE-ROUTER
 function filterInventorySpreadsheetGrid() {
     var query = document.getElementById("inventory-matrix-search").value.toLowerCase().trim();
+    if (!query) {
+        renderInventorySpreadsheetGrid(MASTER_INVENTORY_ITEMS);
+        return;
+    }
     var filtered = MASTER_INVENTORY_ITEMS.filter(function(ing) {
         var nameEs = String(ing.name_es || "").toLowerCase();
         var nameEn = String(ing.name_en || "").toLowerCase();
@@ -3059,17 +3059,18 @@ function filterInventorySpreadsheetGrid() {
     renderInventorySpreadsheetGrid(filtered);
 }
 
-// 💾 NETWORKING WRITER: Commits baseline stock parameters and custom inventory mapping configurations to Supabase
+// 3️⃣ BLOCK 3: ASYNC NETWORKING WRITER WITH FIXED ID IDENTIFICATION GATES
 async function saveSingleIngredientInventoryFields(id) {
     var btn = document.getElementById("btn-save-inv-" + id);
     if (btn) {
         btn.disabled = true;
+        btn.style.background = "#64748b";
         btn.innerText = "⏳ ...";
     }
 
     try {
-        // Extract inputs cleanly from your spreadsheet grid row cells
-        var catInput = document.getElementById("input-storage-loc-" + id); // 🌟 Reads your 7 categories selection directly!
+        // Extract inputs cleanly using synchronized matching IDs across your active grid row cells
+        var catInput = document.getElementById("input-ingredient-cat-" + id); 
         var uomInput = document.getElementById("input-inv-uom-" + id);
         var factorInput = document.getElementById("input-inv-factor-" + id);
 
@@ -3079,7 +3080,7 @@ async function saveSingleIngredientInventoryFields(id) {
         var secInput = document.getElementById("input-sec-stock-" + id);
 
         var payload = {
-            ingredient_category: catInput ? catInput.value.trim() : 'secos', // 🌟 Saves your 7 Categories directly to Supabase column!
+            ingredient_category: catInput ? catInput.value.trim() : 'secos', 
             inventory_uom: uomInput ? uomInput.value.trim() : 'unidad',
             inventory_conversion_factor: factorInput ? (parseFloat(factorInput.value) || 1.0) : 1.0,
             
@@ -3107,6 +3108,7 @@ async function saveSingleIngredientInventoryFields(id) {
             throw new Error("Server rejected database patch matrix save: " + errText);
         }
         
+        // 🌟 SUCCESS VISUAL REVEAL: Flash green success notification animation instantly!
         if (btn) {
             btn.style.background = "#22c55e";
             btn.innerText = "✅ Guardado";
