@@ -192,29 +192,29 @@
             renderGeographicCategoryMatrix();
         }
 
-        function renderGeographicCategoryMatrix() {
+    function renderGeographicCategoryMatrix() {
     const workspace = document.getElementById("mobile-app-workspace-target");
     if (!workspace) return;
 
-    // 🚀 FIXED SEQUENCE MAP: Force exact matching categories list layout parameters
-    const categories = ["carne", "pescados", "fruta y verdura", "secos", "enlatados", "aceites y condimentos", "quesos"];
+    // 🚀 FIXED SEQUENCE MAP: Expanded with your 2 brand-new categories!
+    const categories = ["carne", "pescados", "fruta y verdura", "secos", "enlatados", "aceites y condimentos", "quesos", "procesados", "pan y postres"];
     
     let categoryBuckets = {};
     categories.forEach(cat => categoryBuckets[cat] = []);
 
     STAGED_SERVER_DATA_CACHE.forEach(item => {
         const ing = item.ingredients || {};
-        
-        // 🌟 FIX COMPLETED: Clean and lowercase the database string to guarantee perfect category mapping!
         let rawCat = String(ing.ingredient_category || "secos").toLowerCase().trim();
         
-        // Handle common alternate accents or variations to keep grouping bulletproof
+        // Handle common variations cleanly
         if (rawCat === "carnes") rawCat = "carne";
         if (rawCat === "pescado") rawCat = "pescados";
+        if (rawCat === "procesado") rawCat = "procesados";
+        if (rawCat === "pan" || rawCat === "postres" || rawCat === "panaderia") rawCat = "pan y postres";
         if (rawCat === "frutas y verduras" || rawCat === "verdura" || rawCat === "fruta") rawCat = "fruta y verdura";
 
         if (!categoryBuckets[rawCat]) {
-            rawCat = "secos"; // Dynamic fallback safety valve
+            rawCat = "secos"; 
         }
         categoryBuckets[rawCat].push(item);
     });
@@ -228,8 +228,8 @@
 
         itemsRenderedCount += rowsInCat.length;
         
-        // Capitalize the visual section title header for clean mobile scannability
-        const displayTitle = catName.charAt(0).toUpperCase() + catName.slice(1);
+        // Capitalize labels elegantly for clean mobile scannability
+        const displayTitle = catName === "pan y postres" ? "Pan y Postres" : catName.charAt(0).toUpperCase() + catName.slice(1);
 
         html += `
             <div class="category-block">
@@ -242,7 +242,6 @@
             const displayName = ing.name_es || ing.name_en || "Insumo";
             const countUom = ing.inventory_uom || "unidad";
             
-            // Route values natively based on active Room Tab selection switches
             const activeCountDisplay = (CURRENT_SELECTED_AREA === "Bodega") ? (row.bulk_count || 0) : (row.line_count || 0);
 
             html += `
@@ -264,6 +263,7 @@
 
     workspace.innerHTML = itemsRenderedCount > 0 ? html : `<div class="lock-screen">No hay insumos asignados a esta zona.</div>`;
 }
+
 
         async function commitDirectRoomInputValue(countRecordId) {
             const btn = document.getElementById("btn-submit-" + countRecordId);
