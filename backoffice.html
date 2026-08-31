@@ -647,14 +647,43 @@
         var _masterIngredientsLookupArray = [];
 
 
-        // Sidebar Panel Tab Routing Logic
-        function switchView(viewId) {
-            document.querySelectorAll('.view-pane').forEach(function(p) { p.classList.remove('active'); });
-            document.querySelectorAll('.nav-item').forEach(function(i) { i.classList.remove('active'); });
-            document.getElementById(viewId).classList.add('active');
-            var nav = Array.from(document.querySelectorAll('.nav-item')).find(function(item) { return item.getAttribute('onclick').includes(viewId); });
-            if (nav) { nav.classList.add('active'); document.getElementById('page-title').innerText = nav.innerText.substring(2); }
+        // Sidebar Panel Tab Routing Logic (Enhanced to support Master Inventory view tabs)
+function switchView(viewId) {
+    // 🚀 STEP A: Clear active markers and hide all view panes instantly
+    document.querySelectorAll('.view-pane').forEach(function(p) { 
+        p.classList.remove('active'); 
+        p.style.display = "none"; // Guarantees hidden views stay invisible
+    });
+    document.querySelectorAll('.nav-item').forEach(function(i) { 
+        i.classList.remove('active'); 
+        i.style.backgroundColor = ""; // Reset background highlight states
+    });
+
+    // 🚀 STEP B: Bring your targeted view pane alive onto the screen layout monitor canvas
+    var targetPane = document.getElementById(viewId);
+    if (targetPane) {
+        targetPane.classList.add('active');
+        targetPane.style.display = "block"; // Safely overrides display:none triggers cleanly!
+        
+        // 🚀 INITIALIZATION SEED: Sync session switches with Supabase live server state right upon clicking!
+        if (viewId === "view-inventory-master-session" && typeof checkLiveInventorySessionStatusFromServer === "function") {
+            checkLiveInventorySessionStatusFromServer();
         }
+    }
+
+    // Update cosmetic visual sidebar labeling markers natively
+    var nav = Array.from(document.querySelectorAll('.nav-item')).find(function(item) { 
+        return item.getAttribute('onclick') && item.getAttribute('onclick').includes(viewId); 
+    });
+    if (nav) { 
+        nav.classList.add('active'); 
+        var pageTitleElement = document.getElementById('page-title');
+        if (pageTitleElement) {
+            pageTitleElement.innerText = nav.innerText.substring(2); 
+        }
+    }
+}
+
 
         // Phase 1: Prefetch database labels to match lines cleanly
         function prefetchIngredients() {
@@ -3908,7 +3937,86 @@ document.addEventListener("click", function(event) {
         setTimeout(initializePurchasingSystemDependencies, 100);
     }
 });
+// 📡 SERVER HANDSHAKE: Verifies if an inventory session is open or closed right now
+async function checkLiveInventorySessionStatusFromServer() {
+    const valveZone = document.getElementById("inventory-session-action-valve-zone");
+    if (!valveZone) return;
 
+    try {
+        console.log("📡 Fetching active inventory state trackers from Supabase...");
+        
+        // Query the state database to look for an open counting session row window
+        const res = await fetch(API_URL + "inventory_sessions?status=eq.open", {
+            method: "GET",
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+
+        if (!res.ok) throw new Error("Failed to reach server inventory tracks.");
+        const sessions = await res.json();
+
+        // 🌟 CASE A: NO ACTIVE INVENTORY CONTEXT FOUND
+        if (!sessions || sessions.length === 0) {
+            // Get today's local date string to auto-populate your configuration picker input box
+            const todayISO = new Date().toISOString().split('T')[0];
+            
+            valveZone.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <label style="font-size:0.8rem; font-weight:700; color:var(--text-main);">📅 Fecha de Cierre:</label>
+                    <input type="date" id="admin-inventory-init-date-picker" value="${todayISO}" style="padding:6px 10px; font-size:0.82rem; border:1px solid #cbd5e1; border-radius:6px; min-height:34px; font-family:monospace;" />
+                    <button onclick="launchNewMonthlyInventorySession()" class="btn" style="background:#007afb; color:white; font-weight:700; font-size:0.8rem; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(0,122,251,0.2);">
+                        🚀 Iniciar Inventario del Mes
+                    </button>
+                </div>
+            `;
+            document.getElementById("inventory-active-audit-workspace").style.display = "none";
+            loadHistoricalClosedInventorySessionsList(); // Dynamically populates your background history select list dropdown
+            return;
+        }
+
+        // 🌟 CASE B: INVENTORY CONTEXT SECTIONS CURRENTLY ACTIVE & CONGELADO
+        const activeSession = sessions[0];
+        valveZone.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px;">
+                <span style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; font-size:0.75rem; font-weight:700; padding:6px 12px; border-radius:6px; display:inline-flex; align-items:center; gap:5px; animation: pulse 2s infinite;">
+                    ⚠️ COMPRAS CONGELADAS / INVENTARIO EN PROCESO (${activeSession.session_date})
+                </span>
+                <button onclick="finalizeAndCommitActiveInventorySession('${activeSession.id}')" class="btn" style="background:#10b981; color:white; font-weight:700; font-size:0.8rem; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(16,185,129,0.2);">
+                    🔒 Cerrar y Consolidar Inventario
+                </button>
+            </div>
+        `;
+        
+        // Trigger live spreadsheet verification audit rendering pass
+        document.getElementById("inventory-active-audit-workspace").style.display = "block";
+        renderLiveAdminAuditVarianceGrid(activeSession.id);
+
+    } catch (err) {
+        console.error("Session routing lock tracker failure:", err);
+        valveZone.innerHTML = `<span style='color:#ef4444; font-size:0.82rem; font-weight:700;'>❌ Error al conectar con Supabase: ${err.message}</span>`;
+    }
+}
+
+// 📜 ARCHEOLOGY PASS: Loads the lists of historic finalized past inventory dates
+async function loadHistoricalClosedInventorySessionsList() {
+    const dropdown = document.getElementById("selector-historical-inventory-sessions");
+    if (!dropdown) return;
+
+    try {
+        const res = await fetch(API_URL + "inventory_sessions?status=eq.closed&order=session_date.desc", {
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+        const historicalData = await res.json();
+
+        dropdown.innerHTML = '<option value="">-- Seleccione una fecha --</option>';
+        if (Array.isArray(historicalData)) {
+            historicalData.forEach(function(session) {
+                dropdown.innerHTML += `<option value="${session.id}">${session.session_date} (Finalizado)</option>`;
+            });
+        }
+    } catch (err) {
+        console.error("Failed to build archive drawer selector records list:", err);
+    }
+}
 </script>
         
 </body>
