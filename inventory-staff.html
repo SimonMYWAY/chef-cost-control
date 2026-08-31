@@ -193,64 +193,77 @@
         }
 
         function renderGeographicCategoryMatrix() {
-            const workspace = document.getElementById("mobile-app-workspace-target");
-            if (!workspace) return;
+    const workspace = document.getElementById("mobile-app-workspace-target");
+    if (!workspace) return;
 
-            // 🚀 GEOGRAPHIC MAP MATRIX: Sequence aligned perfectly to your restaurant categories list layout
-            const categories = ["carne", "pescados", "fruta y verdura", "secos", "enlatados", "aceites y condimentos", "quesos"];
-            
-            let categoryBuckets = {};
-            categories.forEach(cat => categoryBuckets[cat] = []);
+    // 🚀 FIXED SEQUENCE MAP: Force exact matching categories list layout parameters
+    const categories = ["carne", "pescados", "fruta y verdura", "secos", "enlatados", "aceites y condimentos", "quesos"];
+    
+    let categoryBuckets = {};
+    categories.forEach(cat => categoryBuckets[cat] = []);
 
-            STAGED_SERVER_DATA_CACHE.forEach(item => {
-                const ing = item.ingredients || {};
-                let rawCat = String(ing.ingredient_category || "secos").toLowerCase().trim();
-                
-                if (!categoryBuckets[rawCat]) rawCat = "secos";
-                categoryBuckets[rawCat].push(item);
-            });
+    STAGED_SERVER_DATA_CACHE.forEach(item => {
+        const ing = item.ingredients || {};
+        
+        // 🌟 FIX COMPLETED: Clean and lowercase the database string to guarantee perfect category mapping!
+        let rawCat = String(ing.ingredient_category || "secos").toLowerCase().trim();
+        
+        // Handle common alternate accents or variations to keep grouping bulletproof
+        if (rawCat === "carnes") rawCat = "carne";
+        if (rawCat === "pescado") rawCat = "pescados";
+        if (rawCat === "frutas y verduras" || rawCat === "verdura" || rawCat === "fruta") rawCat = "fruta y verdura";
 
-            let html = "";
-            let itemsRenderedCount = 0;
-
-            categories.forEach(catName => {
-                const rowsInCat = categoryBuckets[catName];
-                if (rowsInCat.length === 0) return;
-
-                itemsRenderedCount += rowsInCat.length;
-                html += `
-                    <div class="category-block">
-                        <div class="category-title">📦 ${catName}</div>
-                        <div class="card">
-                `;
-
-                rowsInCat.forEach(row => {
-                    const ing = row.ingredients || {};
-                    const displayName = ing.name_es || ing.name_en || "Insumo";
-                    const countUom = ing.inventory_uom || "unidad";
-                    
-                    // Route values natively based on active Room Tab selection switches
-                    const activeCountDisplay = (CURRENT_SELECTED_AREA === "Bodega") ? (row.bulk_count || 0) : (row.line_count || 0);
-
-                    html += `
-                        <div class="ingredient-row" id="row-container-${row.id}">
-                            <div style="flex: 1; padding-right: 12px;">
-                                <span style="font-weight: 600; display: block; font-size: 0.92rem; color: var(--text-main);">${displayName}</span>
-                                <span style="font-size: 0.72rem; color: var(--text-muted);">Unidad de Conteo: <b>${countUom}</b></span>
-                            </div>
-                            <div class="input-group">
-                                <input type="number" step="0.01" value="${activeCountDisplay > 0 ? activeCountDisplay : ''}" placeholder="0" class="count-input" id="input-field-${row.id}" />
-                                <button onclick="commitDirectRoomInputValue('${row.id}')" id="btn-submit-${row.id}" class="ok-btn">OK</button>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                html += `</div></div>`;
-            });
-
-            workspace.innerHTML = itemsRenderedCount > 0 ? html : `<div class="lock-screen">No hay insumos asignados a esta zona.</div>`;
+        if (!categoryBuckets[rawCat]) {
+            rawCat = "secos"; // Dynamic fallback safety valve
         }
+        categoryBuckets[rawCat].push(item);
+    });
+
+    let html = "";
+    let itemsRenderedCount = 0;
+
+    categories.forEach(catName => {
+        const rowsInCat = categoryBuckets[catName];
+        if (!rowsInCat || rowsInCat.length === 0) return;
+
+        itemsRenderedCount += rowsInCat.length;
+        
+        // Capitalize the visual section title header for clean mobile scannability
+        const displayTitle = catName.charAt(0).toUpperCase() + catName.slice(1);
+
+        html += `
+            <div class="category-block">
+                <div class="category-title">📦 ${displayTitle}</div>
+                <div class="card">
+        `;
+
+        rowsInCat.forEach(row => {
+            const ing = row.ingredients || {};
+            const displayName = ing.name_es || ing.name_en || "Insumo";
+            const countUom = ing.inventory_uom || "unidad";
+            
+            // Route values natively based on active Room Tab selection switches
+            const activeCountDisplay = (CURRENT_SELECTED_AREA === "Bodega") ? (row.bulk_count || 0) : (row.line_count || 0);
+
+            html += `
+                <div class="ingredient-row" id="row-container-${row.id}">
+                    <div style="flex: 1; padding-right: 12px;">
+                        <span style="font-weight: 600; display: block; font-size: 0.92rem; color: var(--text-main);">${displayName}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">Unidad de Conteo: <b>${countUom}</b></span>
+                    </div>
+                    <div class="input-group">
+                        <input type="number" step="0.01" value="${activeCountDisplay > 0 ? activeCountDisplay : ''}" placeholder="0" class="count-input" id="input-field-${row.id}" />
+                        <button onclick="commitDirectRoomInputValue('${row.id}')" id="btn-submit-${row.id}" class="ok-btn">OK</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div></div>`;
+    });
+
+    workspace.innerHTML = itemsRenderedCount > 0 ? html : `<div class="lock-screen">No hay insumos asignados a esta zona.</div>`;
+}
 
         async function commitDirectRoomInputValue(countRecordId) {
             const btn = document.getElementById("btn-submit-" + countRecordId);
