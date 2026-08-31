@@ -3085,8 +3085,9 @@ async function saveSingleIngredientInventoryFields(id) {
     }
 
     try {
-        // 🚀 STEP A: Extract both your historical metrics AND your 3 brand-new inventory fields from the live DOM inputs
+        // Extract inputs cleanly from your spreadsheet grid row cells
         var locInput = document.getElementById("input-storage-loc-" + id);
+        var catInput = document.getElementById("input-ingredient-cat-" + id); // 🌟 Captures your active category choice!
         var uomInput = document.getElementById("input-inv-uom-" + id);
         var factorInput = document.getElementById("input-inv-factor-" + id);
 
@@ -3097,6 +3098,7 @@ async function saveSingleIngredientInventoryFields(id) {
 
         var payload = {
             storage_location: locInput ? locInput.value.trim() : 'Bodega',
+            ingredient_category: catInput ? catInput.value.trim() : 'secos', // 🌟 Saves your 7 Categories directly!
             inventory_uom: uomInput ? uomInput.value.trim() : 'unidad',
             inventory_conversion_factor: factorInput ? (parseFloat(factorInput.value) || 1.0) : 1.0,
             
@@ -3108,7 +3110,6 @@ async function saveSingleIngredientInventoryFields(id) {
 
         console.log("📡 Pushing enhanced inventory mapping payload to Supabase for ID:", id, payload);
 
-        // 🚀 STEP B: Fire a direct async PATCH network request to update your ingredients catalog row disk
         const res = await fetch(API_URL + "ingredients?id=eq." + id, {
             method: "PATCH",
             headers: {
@@ -3125,7 +3126,6 @@ async function saveSingleIngredientInventoryFields(id) {
             throw new Error("Server rejected database patch matrix save: " + errText);
         }
         
-        // Visual success confirmation flash animation
         if (btn) {
             btn.style.background = "#22c55e";
             btn.innerText = "✅ Guardado";
