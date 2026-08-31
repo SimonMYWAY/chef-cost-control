@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Compras - Purchase Manager</title>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --surface: #ffffff;
+            --primary: #007afb;
+            --success: #22c55e;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+        }
+        body { 
+            background: var(--bg-main); 
+            color: var(--text-main); 
+            padding: 16px; 
+        }
+        header { 
+            background: var(--surface); 
+            padding: 16px; 
+            border-radius: 12px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+            margin-bottom: 16px; 
+            border: 1px solid var(--border); 
+        }
+        h1 { 
+            font-size: 1.25rem; 
+            font-weight: 700; 
+            margin-bottom: 4px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .subtitle { 
+            font-size: 0.85rem; 
+            color: var(--text-muted); 
+            margin-bottom: 12px; 
+        }
+        .action-btn { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            width: 100%; 
+            padding: 12px; 
+            font-size: 0.95rem; 
+            font-weight: 700; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .action-btn:disabled { 
+            background: #cbd5e1; 
+            cursor: not-allowed; 
+        }
+        .supplier-card { 
+            background: var(--surface); 
+            border: 1px solid var(--border); 
+            border-radius: 12px; 
+            padding: 16px; 
+            margin-bottom: 16px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); 
+        }
+        .supplier-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 10px; 
+            margin-bottom: 12px; 
+        }
+        .supplier-name { 
+            font-weight: 700; 
+            font-size: 1.05rem; 
+            color: var(--text-main); 
+        }
+        .po-badge { 
+            background: #eff6ff; 
+            color: var(--primary); 
+            font-size: 0.75rem; 
+            font-family: monospace; 
+            font-weight: 700; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            border: 1px solid #d0e7ff; 
+        }
+        .order-row { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 8px 0; 
+            border-bottom: 1px dashed var(--border); 
+        }
+        .order-row:last-child { 
+            border-bottom: none; 
+        }
+        .item-info { 
+            flex: 1; 
+            padding-right: 12px; 
+        }
+        .item-name { 
+            font-size: 0.9rem; 
+            font-weight: 600; 
+        }
+        .item-meta { 
+            font-size: 0.75rem; 
+            color: var(--text-muted); 
+            margin-top: 2px; 
+        }
+        .qty-input { 
+            width: 75px; 
+            padding: 6px; 
+            font-size: 0.85rem; 
+            text-align: right; 
+            border: 1px solid var(--border); 
+            border-radius: 6px; 
+            font-family: monospace; 
+            font-weight: 700; 
+            color: var(--primary); 
+        }
+        .wa-btn-container { 
+            margin-top: 14px; 
+            display: flex; 
+            gap: 8px; 
+        }
+        .wa-btn { 
+            background: #25d366; 
+            color: white; 
+            border: none; 
+            flex: 1; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-weight: 700; 
+            font-size: 0.85rem; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 6px; 
+            text-decoration: none; 
+        }
+        .screenshot-area { 
+            background: #fafafa; 
+            border: 1px solid #e2e8f0; 
+            padding: 12px; 
+            border-radius: 6px; 
+            margin-top: 10px; 
+            display: none; 
+        }
+        .screenshot-title { 
+            font-size: 0.7rem; 
+            font-weight: 700; 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em; 
+            margin-bottom: 6px; 
+            text-align: center; 
+        }
+        .slip-box { 
+            background: white; 
+            border: 1px solid #cbd5e1; 
+            padding: 12px; 
+            font-family: monospace; 
+            font-size: 0.8rem; 
+            border-radius: 4px; 
+            line-height: 1.4; 
+            color: #000; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02); 
+        }
+        .loader { 
+            text-align: center; 
+            padding: 40px; 
+            color: var(--text-muted); 
+            font-size: 0.9rem; 
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📋 Pedidos de Compra del Día</h1>
+        <p class="subtitle">Módulo de operaciones exclusivo para jefatura de compras y abastecimiento.</p>
+        <button id="calc-trigger-btn" class="action-btn" onclick="generateDailyPurchaseOrdersEngine()">
+            ⚡ Calcular Órdenes de Compra
+        </button>
+    </header>
+
+    <main id="orders-workspace-target">
+        <div class="loader">Haga clic en el botón superior para compilar variables de stock actual contra el servidor.</div>
+    </main>
+    <script>
+        // 💾 SERVER DEPLOYMENT VARIABLE CONFIGURATIONS
+        var API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
+        var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
+
+        // Global cache state holders
+        var MASTER_SUGGESTIONS_MAP = {};
+
+        // ⚡ ENGINE STEP 1: Fetch details from Supabase and run calculation logic
+        async function generateDailyPurchaseOrdersEngine() {
+            var btn = document.getElementById("calc-trigger-btn");
+            var workspace = document.getElementById("orders-workspace-target");
+            
+            btn.disabled = true;
+            btn.innerText = "⏳ Descargando métricas de insumos...";
+            workspace.innerHTML = '<div class="loader">Analizando factores de conversión y niveles críticos de stock...</div>';
+
+            try {
+                // Fetch ingredient records
+                const res = await fetch(API_URL + "ingredients?select=*", {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                if (!res.ok) throw new Error("Could not sync ingredients schema matrix.");
+                const ingredients = await res.json();
+
+                // Fetch database records history count to establish next sequential PO number
+                const poCountRes = await fetch(API_URL + "purchase_orders?select=id", {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Prefer": "count=exact" }
+                });
+                var totalPosHistoryCount = 0;
+                if (poCountRes.headers.get("content-range")) {
+                    var parts = poCountRes.headers.get("content-range").split("/");
+                    if (parts && parts[1]) totalPosHistoryCount = parseInt(parts[1]) || 0;
+                }
+
+                // Group by supplier clean mapping logic
+                MASTER_SUGGESTIONS_MAP = {};
+                var todayString = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                var orderCounter = totalPosHistoryCount + 1;
+
+                ingredients.forEach(function(ing) {
+                    var supplier = (ing.supplier_name || "Proveedor No Asignado").trim();
+                    
+                    // Math formula rules evaluation
+                    var stockActual = parseFloat(ing.current_stock || 0);
+                    var puntoPedido = parseFloat(ing.point_of_order || 0);
+                    var stockMaximo = parseFloat(ing.stock_max || 0);
+                    
+                    if (stockActual <= puntoPedido) {
+                        var cantidadFaltanteBase = stockMaximo - stockActual;
+                        if (cantidadFaltanteBase <= 0) return;
+
+                        // Conversion Factor Math: Convert standard UOM to Supplier packaging UOM
+                        var factor = parseFloat(ing.inventory_conversion_factor || 1.0);
+                        if (factor <= 0) factor = 1.0;
+                        
+                        var orderQtyInSupplierUOM = Math.ceil(cantidadFaltanteBase / factor);
+
+                        if (orderQtyInSupplierUOM > 0) {
+                            if (!MASTER_SUGGESTIONS_MAP[supplier]) {
+                                MASTER_SUGGESTIONS_MAP[supplier] = {
+                                    poNumber: "PO-" + todayString + "-" + String(orderCounter).padStart(3, '0'),
+                                    items: []
+                                };
+                                orderCounter++;
+                            }
+                            
+                            MASTER_SUGGESTIONS_MAP[supplier].items.push({
+                                id: ing.id,
+                                name: ing.name_es || ing.name_en || "Insumo",
+                                baseUOM: ing.uom || "gr",
+                                supplierUOM: ing.supplier_uom || "Unidad",
+                                factor: factor,
+                                calculatedQty: orderQtyInSupplierUOM
+                            });
+                        }
+                    }
+                });
+
+                renderSupplierPurchaseCards();
+                btn.disabled = false;
+                btn.innerText = "🔄 Recalcular Órdenes de Compra";
+
+            } catch (err) {
+                console.error(err);
+                workspace.innerHTML = '<div class="loader" style="color:#ef4444;">❌ Error al procesar compras: ' + err.message + '</div>';
+                btn.disabled = false;
+                btn.innerText = "⚡ Reintentar Cálculo";
+            }
+        }
+
+        // 🛠️ ENGINE STEP 2: Render visual tracking interfaces grouped by Supplier
+        function renderSupplierPurchaseCards() {
+            var workspace = document.getElementById("orders-workspace-target");
+            workspace.innerHTML = "";
+
+            var suppliers = Object.keys(MASTER_SUGGESTIONS_MAP);
+
+            if (suppliers.length === 0) {
+                workspace.innerHTML = '<div class="loader">✅ ¡Stock Optimizado! Ningún insumo ha cruzado la barrera del Punto de Pedido hoy.</div>';
+                return;
+            }
+
+            suppliers.forEach(function(supplierName) {
+                var data = MASTER_SUGGESTIONS_MAP[supplierName];
+                var supplierKey = supplierName.replace(/\s+/g, '-');
+                
+                var card = document.createElement("div");
+                card.className = "supplier-card";
+                card.id = "supplier-block-" + supplierKey;
+
+                var html = 
+                    '<div class="supplier-header">' +
+                        '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
+                        '<div class="po-badge">' + data.poNumber + '</div>' +
+                    '</div>' +
+                    '<div class="items-list-container">';
+
+                data.items.forEach(function(item, idx) {
+                    html += 
+                        '<div class="order-row" data-ing-id="' + item.id + '">' +
+                            '<div class="item-info">' +
+                                '<div class="item-name">' + item.name + '</div>' +
+                                '<div class="item-meta">Conversión: 1 ' + item.supplierUOM + ' = ' + item.factor + ' ' + item.baseUOM + '</div>' +
+                            '</div>' +
+                            '<div>' +
+                                '<input type="number" class="qty-input" value="' + item.calculatedQty + '" min="0" onchange="updateLiveRowQuantity(\'' + supplierName.replace(/'/g, "\\'") + '\', ' + idx + ', this.value)" />' +
+                                '<span style="font-size:0.75rem; font-weight:700; margin-left:4px; color:var(--text-muted);">' + item.supplierUOM + '</span>' +
+                            '</div>' +
+                        '</div>';
+                });
+
+                html += 
+                    '</div>' +
+                    '<div class="wa-btn-container">' +
+                        '<button class="action-btn" style="background:#475569; font-size:0.8rem; padding:10px;" onclick="approveAndLockPOToDatabase(\'' + supplierName.replace(/'/g, "\\'") + '\')">💾 Guardar Registro</button>' +
+                        '<button class="wa-btn" onclick="dispatchWhatsAppOrderText(\'' + supplierName.replace(/'/g, "\\'") + '\')">' +
+                            '<svg style="width:16px; height:16px; fill:currentColor;" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.457L0 24zm6.59-4.846c1.6.95 3.498 1.451 5.438 1.453 5.494 0 9.961-4.47 9.964-9.97.002-2.663-1.032-5.166-2.91-7.047C17.204 1.705 14.7 1.66 12.012 1.66c-5.498 0-9.965 4.47-9.968 9.97-.001 1.997.521 3.948 1.512 5.674l-.991 3.618 3.702-.971zm11.367-7.251c-.33-.164-1.951-.963-2.251-1.073-.3-.109-.518-.164-.736.164-.218.327-.844 1.062-1.035 1.281-.19.219-.382.245-.712.082-1.656-.826-2.736-1.306-3.814-3.154-.284-.488.284-.452.812-1.506.088-.182.044-.341-.022-.452-.065-.111-.518-1.248-.71-1.707-.185-.443-.372-.383-.518-.39l-.441-.008c-.152 0-.401.057-.611.284-.21.227-.801.781-.801 1.906 0 1.125.818 2.21 1.052 2.525.234.315 1.611 2.46 3.902 3.45.545.235 1.011.394 1.376.51.548.174 1.047.15 1.442.09.44-.066 1.951-.797 2.225-1.53.275-.733.275-1.363.193-1.496-.083-.134-.302-.218-.632-.382z"/></svg>' +
+                            'Enviar WhatsApp' +
+                        '</button>' +
+                    '</div>' +
+                    '<div class="screenshot-area" id="slip-container-' + supplierKey + '">' +
+                        '<div class="screenshot-title">📸 Capture esta pantalla para enviar al proveedor</div>' +
+                        '<div class="slip-box" id="slip-text-box-' + supplierKey + '"></div>' +
+                    '</div>';
+
+                card.innerHTML = html;
+                workspace.appendChild(card);
+                updateVisualScreenshotSlip(supplierName);
+            });
+        }
+        // 🛠️ ENGINE STEP 3: Handle quantity changes dynamically
+        function updateLiveRowQuantity(supplierName, itemIdx, newValue) {
+            var parsedVal = Math.ceil(parseFloat(newValue) || 0);
+            if (MASTER_SUGGESTIONS_MAP[supplierName] && MASTER_SUGGESTIONS_MAP[supplierName].items[itemIdx]) {
+                MASTER_SUGGESTIONS_MAP[supplierName].items[itemIdx].calculatedQty = parsedVal;
+                updateVisualScreenshotSlip(supplierName);
+            }
+        }
+
+        // 🛠️ ENGINE STEP 4: Auto-compile digital receipt layout structures
+        function updateVisualScreenshotSlip(supplierName) {
+            var data = MASTER_SUGGESTIONS_MAP[supplierName];
+            var supplierKey = supplierName.replace(/\s+/g, '-');
+            var container = document.getElementById("slip-container-" + supplierKey);
+            var textBox = document.getElementById("slip-text-box-" + supplierKey);
+            
+            if (!data || !textBox) return;
+
+            var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+            
+            var slipHtml = 
+                "========================================<br>" +
+                "       ORDEN DE COMPRA: " + data.poNumber + "<br>" +
+                "========================================<br>" +
+                "PROVEEDOR : " + supplierName.toUpperCase() + "<br>" +
+                "EMITIDO   : " + timeStamp + "<br>" +
+                "ESTADO    : PENDIENTE DE CONFIRMACION<br>" +
+                "----------------------------------------<br>";
+
+            data.items.forEach(function(item) {
+                if (item.calculatedQty > 0) {
+                    var line = "[ ] " + String(item.calculatedQty).padEnd(4) + " " + item.supplierUOM.padEnd(8) + " - " + item.name;
+                    slipHtml += line + "<br>";
+                }
+            });
+
+            slipHtml += 
+                "----------------------------------------<br>" +
+                "Por favor confirmar recepcion y despacho.<br>" +
+                "========================================";
+
+            textBox.innerHTML = slipHtml;
+            container.style.display = "block";
+        }
+
+        // 🛠️ ENGINE STEP 5: Format clipboard payloads & trigger link redirect routing
+        function dispatchWhatsAppOrderText(supplierName) {
+            var data = MASTER_SUGGESTIONS_MAP[supplierName];
+            if (!data) return;
+
+            // Formulate clean WhatsApp string message content parameters
+            var msg = "Hola " + supplierName + ", adjunto orden de compra *__" + data.poNumber + "__*:\n\n";
+            
+            data.items.forEach(function(item) {
+                if (item.calculatedQty > 0) {
+                    msg += "▫️ *" + item.calculatedQty + " " + item.supplierUOM + "* de " + item.name + "\n";
+                }
+            });
+
+            msg += "\nPor favor confirmar recepción y fecha de entrega. Adjunto comprobante visual.";
+            
+            var encodedText = encodeURIComponent(msg);
+            var whatsappUrl = "https://whatsapp.com" + encodedText;
+
+            // Copy text straight onto user's clipboard buffer automatically
+            navigator.clipboard.writeText(msg).then(function() {
+                alert("📝 ¡Texto de orden copiado al portapapeles! Abriendo WhatsApp... Pegue el texto y tome una captura del recibo en pantalla.");
+                window.open(whatsappUrl, '_blank');
+            }).catch(function() {
+                window.open(whatsappUrl, '_blank');
+            });
+        }
+
+        // 🛠️ ENGINE STEP 6: Push parameters to tracking records history inside Supabase
+        async function approveAndLockPOToDatabase(supplierName) {
+            var data = MASTER_SUGGESTIONS_MAP[supplierName];
+            if (!data) return;
+
+            try {
+                // Write Parent Record Header Data
+                var parentPayload = {
+                    po_number: data.poNumber,
+                    supplier_name: supplierName,
+                    status: 'Sent',
+                    total_items: data.items.filter(i => i.calculatedQty > 0).length
+                };
+
+                const resParent = await fetch(API_URL + "purchase_orders", {
+                    method: "POST",
+                    headers: {
+                        "apikey": API_KEY,
+                        "Authorization": "Bearer " + API_KEY,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify(parentPayload)
+                });
+
+                if (!resParent.ok) throw new Error("Could not log purchase header database tracking row details.");
+                const parentRowResultData = await resParent.json();
+                var generatedPoUuid = parentRowResultData[0] ? parentRowResultData[0].id : parentRowResultData.id;
+
+                // Build relational children itemization block models rows fields array maps
+                for (var i = 0; i < data.items.length; i++) {
+                    var item = data.items[i];
+                    if (item.calculatedQty > 0) {
+                        var childPayload = {
+                            po_id: generatedPoUuid,
+                            ingredient_name: item.name,
+                            quantity_ordered: item.calculatedQty,
+                            supplier_uom: item.supplierUOM
+                        };
+
+                        await fetch(API_URL + "purchase_order_items", {
+                            method: "POST",
+                            headers: {
+                                "apikey": API_KEY,
+                                "Authorization": "Bearer " + API_KEY,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(childPayload)
+                        });
+                    }
+                }
+
+                alert("💾 ¡Registro guardado exitosamente en Supabase bajo el código: " + data.poNumber);
+
+            } catch (err) {
+                console.error(err);
+                alert("❌ Fallo al guardar en base de datos: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
