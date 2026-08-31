@@ -90,10 +90,14 @@
             <div class="nav-item" onclick="switchView('view-ingredients')">📦 Lista de Ingredientes</div>
             <div class="nav-item" onclick="switchView('view-providers')">🏭 Lista de Proveedores</div>
         </div>
-                <div class="nav-group">
+        <div class="nav-group">
             <div class="nav-label">Logística y Enlaces</div>
             <div class="nav-item active" onclick="switchView('view-mappings')">🔗 Asociación y Conversión</div>
             <div class="nav-item" onclick="switchView('view-inventory-manual')">📦 Control y Ajustes de Stock</div>
+            
+            <!-- 🌟 NEW MASTER MONTHLY INVENTORY DASHBOARD CONTROLLER BUTTON -->
+            <div class="nav-item" id="nav-item-inventory-master" onclick="switchView('view-inventory-master-session')">📊 Cierres de Inventario Mensual</div>
+
             <div class="nav-item" onclick="switchView('view-orders-daily')">📋 Pedidos de Compra del Día</div>
         </div>
 
@@ -415,9 +419,92 @@
                         <tbody id="inventory-matrix-table-rows">
                             <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px; font-style:italic;">⏳ Haga clic en "Sincronizar Stock" para descargar los datos de inventario...</td></tr>
                         </tbody>
-                    </table>
+                            </table>
                 </div>
             </div>
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- 📊 NEW VIEW PANEL C: MASTER INVENTORY SESSION & AUDITING CONTROLLER     -->
+        <!-- ======================================================================= -->
+        <div id="view-inventory-master-session" class="view-pane" style="max-width: 1400px; margin: 0 auto; display: none;">
+            
+            <!-- ROW A: SESSION SWITCHES & ACTIVE BANNER CARD -->
+            <div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:22px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+                    <div>
+                        <h3 style="margin:0; color:var(--text-main); font-weight:700;">📊 Control y Cierres de Inventario Mensual</h3>
+                        <p style="margin:4px 0 0 0; font-size:0.82rem; color:var(--text-muted);">Inicie periodos de conteo físico, audite desviaciones y verifique mermas financieras.</p>
+                    </div>
+                    
+                    <!-- DYNAMIC CONTROL CONTROL TRIGGER GATE ANCHOR -->
+                    <div id="inventory-session-action-valve-zone" style="display:flex; align-items:center; gap:12px;">
+                        <span style="font-size:0.85rem; color:var(--text-muted); font-weight:600; font-style:italic;">⏳ Sincronizando estado con el servidor...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROW B: THE TWO-TIER VARIANCE AUDIT REPORT SCREEN -->
+            <div id="inventory-active-audit-workspace" style="display:none;">
+                
+                <!-- SUMMARY FINANCIAL METRICS GRID CARD LAYOUT -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:15px; margin-bottom:20px;">
+                    <div class="card" style="background:#f8fafc; border:1px solid var(--border-color); padding:15px; border-radius:8px; text-align:center;">
+                        <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Valor Total Inventariado</div>
+                        <div id="summary-inv-real-value" style="font-size:1.5rem; font-weight:700; color:#007afb; margin-top:5px; font-family:monospace;">$0.00</div>
+                    </div>
+                    <div class="card" style="background:#fff5f5; border:1px solid #fee2e2; padding:15px; border-radius:8px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#b91c1c; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Desviación Total (Mermas)</div>
+                        <div id="summary-inv-variance-value" style="font-size:1.5rem; font-weight:700; color:#ef4444; margin-top:5px; font-family:monospace;">$0.00</div>
+                    </div>
+                    <div class="card" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:8px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#15803d; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Líneas Con Alerta (>15% / $50)</div>
+                        <div id="summary-inv-alerts-count" style="font-size:1.5rem; font-weight:700; color:#16a34a; margin-top:5px; font-family:monospace;">0 Líneas</div>
+                    </div>
+                </div>
+
+                <!-- MAIN VERIFICATION AUDIT MATRIX TABLE CARD -->
+                <div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:18px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); margin:-18px -18px 15px -18px; padding:12px 18px; background:#f8fafc; border-top-left-radius:12px; border-top-right-radius:12px;">
+                        <span style="font-weight:700; color:var(--text-main); font-size:0.92rem;">🔍 Reporte Analítico de Desviaciones y Auditoría de Tifas</span>
+                        <button onclick="exportInventoryVarianceReportToExcel()" class="btn btn-blue" style="background:#16a34a; font-weight:700; font-size:0.78rem; padding:6px 12px; border-radius:6px; border:none; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
+                            📊 Exportar Reporte a Excel
+                        </button>
+                    </div>
+
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.83rem; min-width:950px;">
+                            <thead>
+                                <tr style="color:var(--text-muted); border-bottom:1px solid var(--border-color); font-weight:600; background:#fcfcfc;">
+                                    <th style="padding:10px 8px; text-align:left;">📍 Ubicación / Insumo</th>
+                                    <th style="padding:10px 8px; text-align:center; width:80px;">UOM Base</th>
+                                    <th style="padding:10px 8px; text-align:right; width:110px;">Stock Teórico</th>
+                                    <th style="padding:10px 8px; text-align:center; width:140px; color:#007afb; font-weight:700;">Conteo Real Entrada</th>
+                                    <th style="padding:10px 8px; text-align:right; width:110px;">Total Real (Base)</th>
+                                    <th style="padding:10px 8px; text-align:right; width:100px;">Desviación Qty</th>
+                                    <th style="padding:10px 8px; text-align:right; width:110px; font-weight:700;">Impacto Financiero</th>
+                                    <th style="padding:10px 8px; text-align:center; width:80px;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-admin-audit-table-rows">
+                                <tr><td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">No hay un inventario activo en este momento.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROW C: HISTORICAL ARCHIVE ARCHIVE DRAWER PANEL -->
+            <div class="card" style="background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:18px; margin-top:20px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                <h3 style="margin:0 0 12px 0; font-size:0.9rem; color:var(--text-main); font-weight:700;">📜 Historial de Inventarios Consolidados</h3>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <select id="selector-historical-inventory-sessions" style="padding:8px; font-size:0.82rem; font-weight:500; border:1px solid #cbd5e1; border-radius:6px; background:#fff; width:240px; height:36px;">
+                        <option value="">-- Seleccione una fecha --</option>
+                    </select>
+                    <button onclick="loadHistoricalClosedInventoryAuditData()" style="background:var(--text-main); color:white; padding:8px 16px; border-radius:6px; font-weight:600; font-size:0.82rem; border:none; height:36px; cursor:pointer;">Visualizar Ficha</button>
+                </div>
+            </div>
+            
         </div>
 
                 <!-- ======================================================================= -->
