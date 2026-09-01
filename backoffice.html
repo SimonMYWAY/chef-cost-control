@@ -3955,54 +3955,90 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
-// ⚡ CORRECTED DESTINATION: Clear and write directly to staged_order_calculations table
+// ⚡ ENHANCED PIPELINE INTEGRATION: Deducts consumption, updates master std_inventory, and alerts the manager app
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
     
-    if (typeof TEMTEMPORARY_STAGED_PURCHASE_LINES === "undefined" && typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined") {
-        // Fallback check for naming variations in your variables
-        window.TEMPORARY_STAGED_PURCHASE_LINES = window.TEMPORARY_STAGED_PURCHASE_LINES || window.TEMPORARY_STAGED_PURCHASE_LINES;
-    }
-
-    if (!TEMPORARY_STAGED_PURCHASE_LINES || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
+    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         alert("⚠️ No hay líneas de cálculo activas. Primero procese el archivo de ventas Revo.");
         return;
     }
 
     shipBtn.disabled = true;
     shipBtn.style.background = "#64748b";
-    shipBtn.innerText = "⏳ Enviando datos...";
+    shipBtn.innerText = "⏳ Procesando Inventario y Enviando...";
 
     try {
-        // 1. Wipe out yesterday's remaining calculations first to prevent duplicate stacking
-        await fetch(API_URL + "staged_order_calculations", { 
-            method: "DELETE", 
-            headers: { 
-                "apikey": API_KEY, 
-                "Authorization": "Bearer " + API_KEY 
-            } 
-        });
-
-        // 2. Loop and insert the fresh row calculations into your dedicated table
+        // 1️⃣ STEP 1: Loop and deduct consumption from master table to keep rows aligned
         for (var i = 0; i < TEMPORARY_STAGED_PURCHASE_LINES.length; i++) {
             var line = TEMPORARY_STAGED_PURCHASE_LINES[i];
+            var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+
+            // Fetch current live master numbers from Supabase to ensure accurate math boundaries
+            const liveRes = await fetch(API_URL + "ingredients?id=eq." + cleanIngId, {
+                method: "GET",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
+
+            if (liveRes.ok) {
+                const liveDataArray = await liveRes.json();
+                if (liveDataArray && liveDataArray.length > 0) {
+                    var currentMasterStock = parseFloat(liveDataArray[0].std_inventory || 0);
+                    var todayConsumptionAmount = parseFloat(line.consumption || 0);
+
+                    // 🛑 CLAMP GUARD: If consumption outpaces recorded stock, clamp it cleanly to 0.00
+                    var postConsumptionStockTeorico = currentMasterStock - todayConsumptionAmount;
+                    if (postConsumptionStockTeorico < 0) {
+                        console.log(`⚠️ Stock outpaced by consumption for item ID: ${cleanIngId}. Clamping row level to 0.00`);
+                        postConsumptionStockTeorico = 0.00;
+                    }
+
+                    // 🎯 ALIGNED FIELD WRITER: Immediately save the fresh baseline to the real master std_inventory column!
+                    const patchRes = await fetch(API_URL + "ingredients?id=eq." + cleanIngId, {
+                        method: "PATCH",
+                        headers: {
+                            "apikey": API_KEY,
+                            "Authorization": "Bearer " + API_KEY,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            std_inventory: parseFloat(postConsumptionStockTeorico.toFixed(2))
+                        })
+                    });
+
+                    if (!patchRes.ok) {
+                        console.error(`❌ Failed to update master stock baseline for ingredient ID: ${cleanIngId}`);
+                    }
+                }
+            }
+        }
+
+        // 2️⃣ STEP 2: Clear out yesterday's remaining calculations landing pad
+        await fetch(API_URL + "staged_order_calculations", { 
+            method: "DELETE", 
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
+        });
+
+        // 3️⃣ STEP 3: Push the fresh calculation rows to the landing table for the Purchase Manager
+        for (var k = 0; k < TEMPORARY_STAGED_PURCHASE_LINES.length; k++) {
+            var activeLine = TEMPORARY_STAGED_PURCHASE_LINES[k];
             
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
-                ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
+                ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(activeLine.ingredient_id).toLowerCase().trim()) 
                 : [];
                 
             const activeFormatRule = authorizedFormats.find(f => 
-                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+                String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
             );
 
             var payload = {
-                ingredient_id: String(line.ingredient_id),
-                ingredient_name: String(line.ingredient_name),
-                faltante_base: parseFloat(line.consumption || 0), 
-                supplier_name: String(line.supplier_id || "Proveedor No Asignado"),
-                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(line.uom || "Unidad"),
-                conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
-                pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0)
+                ingredient_id: String(activeLine.ingredient_id),
+                ingredient_name: String(activeLine.ingredient_name),
+                faltante_base: parseFloat(activeLine.consumption || 0), 
+                supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
+                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
+                pedido_sugerido: parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0),
+                conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0
             };
 
             await fetch(API_URL + "staged_order_calculations", {
@@ -4017,8 +4053,8 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         }
 
         shipBtn.style.background = "#22c55e";
-        shipBtn.innerText = "✅ ¡Enviado Exitosamente!";
-        alert("📢 ¡Matriz de compras enviada al Administrador con éxito! Los datos ya están guardados en staged_order_calculations.");
+        shipBtn.innerText = "✅ ¡Enviado e Inventario Actualizado!";
+        alert("📢 ¡Éxito! El consumo se descontó de 'std_inventory' y la sesión está lista para el Gestor de Compras.");
 
         setTimeout(function() {
             shipBtn.disabled = false;
@@ -4027,8 +4063,8 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         }, 3000);
 
     } catch (err) {
-        console.error("Transmission error:", err);
-        alert("❌ Error al enviar datos al gestor: " + err.message);
+        console.error("Critical operational dispatch crash:", err);
+        alert("❌ Error al procesar inventario o transmitir datos: " + err.message);
         shipBtn.disabled = false;
         shipBtn.style.background = "#ef4444";
         shipBtn.innerText = "Error";

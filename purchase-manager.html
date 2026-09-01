@@ -346,7 +346,7 @@
             });
         }
 
-        // ⚡ RUN TIME CORE 6: Persist approved line totals straight into Supabase relational tables
+                // ⚡ SLICK & SAFE INVENTORY ADDITION: Purely increases master stock values by the approved order volumes
         async function saveSingleSupplierGroupToSupabase(supplierName, poNumber) {
             var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -356,7 +356,7 @@
             }
 
             try {
-                // 1. Post document tracking metadata to your parent header table
+                // 1. Log the Purchase Order Document Header Document Metadata
                 var parentPayload = {
                     po_number: poNumber,
                     supplier_name: supplierName,
@@ -377,15 +377,13 @@
 
                 if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
                 const parentRowResultData = await resParent.json();
-                
-                // Read parent primary UUID key cleanly across return variations
-                var generatedPoUuid = (parentRowResultData && parentRowResultData[0]) ? parentRowResultData[0].id : (parentRowResultData ? parentRowResultData.id : null);
+                var generatedPoUuid = parentRowResultData.id;
 
-                if (!generatedPoUuid) throw new Error("No se pudo obtener el identificador único del documento guardado.");
-
-                // 2. Loop and commit granular items into your child breakdown table
+                // 2. Loop through lines to save itemization rows AND purely increase live master stock values
                 for (var i = 0; i < filteredLines.length; i++) {
                     var item = filteredLines[i];
+                    
+                    // A. Log item rows into child purchase order tables
                     var childPayload = {
                         po_id: generatedPoUuid,
                         ingredient_name: item.ingredient_name,
@@ -402,15 +400,56 @@
                         },
                         body: JSON.stringify(childPayload)
                     });
+
+                    // B. Fetch the ingredient's current live master stock value directly from Supabase
+                    const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                        method: "GET",
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                    });
+                    
+                    if (ingFetchRes.ok) {
+                        const ingDataArray = await ingFetchRes.json();
+                        if (ingDataArray && ingDataArray.length > 0) {
+                            var dbIngredient = ingDataArray[0];
+                            
+                            var currentLiveDbStock = parseFloat(dbIngredient.uom || dbIngredient.recipe_uom || dbIngredient.std_inventory || 0);
+                            var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
+                            var conversionFactor = parseFloat(item.conversion_factor || 1);
+                            
+                            // Calculate the pure additional base weight arriving from this purchase format package
+                            var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
+
+                            // 🚀 SIMPLIFIED INCREMENT ONLY: Purely add the inbound delivery on top of live stock state
+                            var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
+
+                            if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
+
+                            // C. Patch the final increased stock value back onto the ingredients master row
+                            await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                                method: "PATCH",
+                                headers: {
+                                    "apikey": API_KEY,
+                                    "Authorization": "Bearer " + API_KEY,
+                                    "Content-Type": "application/json"
+                                },
+                                body: JSON.stringify({
+                                    std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
+                                })
+                            });
+                            
+                            console.log("📊 STOCK INCREASED - [" + item.ingredient_name + "]: Added " + addedPurchaseWeight + ". New Level: " + definitiveNewInventoryLevel);
+                        }
+                    }
                 }
 
-                alert("💾 ¡Orden de Compra " + poNumber + " grabada con éxito en Supabase!");
+                alert("💾 ¡Orden de Compra " + poNumber + " grabada e inventario incrementado exitosamente en Supabase!");
 
             } catch (err) {
                 console.error(err);
-                alert("❌ Fallo crítico al guardar registro: " + err.message);
+                alert("❌ Fallo crítico al guardar o incrementar inventario: " + err.message);
             }
         }
+
                 // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
         function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
             var blockKey = supplierName.replace(/\s+/g, '-');
