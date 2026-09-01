@@ -3873,6 +3873,40 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
+                // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
+        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+            console.log("📡 Shipping active calculation layers to the manager portal...");
+            
+            // Build the exact payload mimicking your exact grid fields structure word-for-word
+            const managerExportPayload = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+                const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
+                    ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
+                    : [];
+                    
+                const activeFormatRule = authorizedFormats.find(f => 
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+                );
+
+                return {
+                    ingredient_id: line.ingredient_id,
+                    ingredient_name: line.ingredient_name,
+                    faltante_base: parseFloat(line.consumption || 0), // Your dynamic base calculation
+                    supplier_name: line.supplier_id || "Proveedor No Asignado",
+                    supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
+                    conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
+                    pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0),
+                    approved_formats_quantity: parseFloat(line.approved_formats_quantity || 0),
+                    is_approved: line.is_approved || false
+                };
+            });
+
+            // Store cleanly inside a unified cache row in your settings block for the manager app to read instantly
+            await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({ value_text: JSON.stringify(managerExportPayload), updated_at: new Date().toISOString() })
+            });
+        }
 
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);

@@ -3,441 +3,354 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal de Compras - Purchase Manager</title>
+    <title>Portal de Compras - Panel Interactivo</title>
     <style>
         :root {
-            --bg-main: #f8fafc;
-            --surface: #ffffff;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
             --primary: #007afb;
-            --success: #22c55e;
+            --success: #10b981;
             --border: #e2e8f0;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
         }
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-        }
-        body { 
-            background: var(--bg-main); 
-            color: var(--text-main); 
-            padding: 16px; 
-        }
-        header { 
-            background: var(--surface); 
-            padding: 16px; 
-            border-radius: 12px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
-            margin-bottom: 16px; 
-            border: 1px solid var(--border); 
-        }
-        h1 { 
-            font-size: 1.25rem; 
-            font-weight: 700; 
-            margin-bottom: 4px; 
-            display: flex; 
-            align-items: center; 
-            gap: 8px; 
-        }
-        .subtitle { 
-            font-size: 0.85rem; 
-            color: var(--text-muted); 
-            margin-bottom: 12px; 
-        }
-        .action-btn { 
-            background: var(--primary); 
-            color: white; 
-            border: none; 
-            width: 100%; 
-            padding: 12px; 
-            font-size: 0.95rem; 
-            font-weight: 700; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            gap: 8px; 
-        }
-        .action-btn:disabled { 
-            background: #cbd5e1; 
-            cursor: not-allowed; 
-        }
-        .supplier-card { 
-            background: var(--surface); 
-            border: 1px solid var(--border); 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 16px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02); 
-        }
-        .supplier-header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            border-bottom: 1px solid var(--border); 
-            padding-bottom: 10px; 
-            margin-bottom: 12px; 
-        }
-        .supplier-name { 
-            font-weight: 700; 
-            font-size: 1.05rem; 
-            color: var(--text-main); 
-        }
-        .po-badge { 
-            background: #eff6ff; 
-            color: var(--primary); 
-            font-size: 0.75rem; 
-            font-family: monospace; 
-            font-weight: 700; 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            border: 1px solid #d0e7ff; 
-        }
-        .order-row { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 8px 0; 
-            border-bottom: 1px dashed var(--border); 
-        }
-        .order-row:last-child { 
-            border-bottom: none; 
-        }
-        .item-info { 
-            flex: 1; 
-            padding-right: 12px; 
-        }
-        .item-name { 
-            font-size: 0.9rem; 
-            font-weight: 600; 
-        }
-        .item-meta { 
-            font-size: 0.75rem; 
-            color: var(--text-muted); 
-            margin-top: 2px; 
-        }
-        .qty-input { 
-            width: 75px; 
-            padding: 6px; 
-            font-size: 0.85rem; 
-            text-align: right; 
-            border: 1px solid var(--border); 
-            border-radius: 6px; 
-            font-family: monospace; 
-            font-weight: 700; 
-            color: var(--primary); 
-        }
-        .wa-btn-container { 
-            margin-top: 14px; 
-            display: flex; 
-            gap: 8px; 
-        }
-        .wa-btn { 
-            background: #25d366; 
-            color: white; 
-            border: none; 
-            flex: 1; 
-            padding: 10px; 
-            border-radius: 6px; 
-            font-weight: 700; 
-            font-size: 0.85rem; 
-            cursor: pointer; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            gap: 6px; 
-            text-decoration: none; 
-        }
-        .screenshot-area { 
-            background: #fafafa; 
-            border: 1px solid #e2e8f0; 
-            padding: 12px; 
-            border-radius: 6px; 
-            margin-top: 10px; 
-            display: none; 
-        }
-        .screenshot-title { 
-            font-size: 0.7rem; 
-            font-weight: 700; 
-            color: var(--text-muted); 
-            text-transform: uppercase; 
-            letter-spacing: 0.05em; 
-            margin-bottom: 6px; 
-            text-align: center; 
-        }
-        .slip-box { 
-            background: white; 
-            border: 1px solid #cbd5e1; 
-            padding: 12px; 
-            font-family: monospace; 
-            font-size: 0.8rem; 
-            border-radius: 4px; 
-            line-height: 1.4; 
-            color: #000; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.02); 
-        }
-        .loader { 
-            text-align: center; 
-            padding: 40px; 
-            color: var(--text-muted); 
-            font-size: 0.9rem; 
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        body { background: var(--bg); color: var(--text); padding: 12px; }
+        header { background: var(--card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 4px; }
+        .subtitle { font-size: 0.8rem; color: var(--muted); }
+        .btn { display: inline-block; width: 100%; margin-top: 10px; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+        
+        /* Grid Table Layout Setup */
+        .supplier-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.01); }
+        .supplier-title-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--bg); padding-bottom: 8px; margin-bottom: 12px; }
+        .supplier-name { font-weight: 700; font-size: 1.05rem; color: var(--text); }
+        .po-badge { font-family: monospace; font-size: 0.75rem; font-weight: 700; background: #eff6ff; color: var(--primary); padding: 2px 6px; border-radius: 4px; border: 1px solid #d0e7ff; }
+        
+        .item-row { background: #fafafa; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .item-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 8px; color: #1e293b; }
+        
+        /* Dynamic Matrix Columns Mapping elements Layout */
+        .fields-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .data-box { background: white; border: 1px solid #e2e8f0; padding: 6px; border-radius: 6px; }
+        .box-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; }
+        .box-val { font-weight: 700; font-size: 0.85rem; margin-top: 1px; }
+        
+        /* Interactive controls */
+        .edit-input { width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; font-family: monospace; font-weight: 700; text-align: right; color: var(--primary); font-size: 0.85rem; }
+        .select-dropdown { width: 100%; padding: 4px; border: 1px solid var(--border); border-radius: 4px; background: white; font-size: 0.8rem; font-weight: 600; color: #334155; }
+        
+        .row-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
+        .approve-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--success); cursor: pointer; }
+        .approve-toggle input { width: 16px; height: 16px; accent-color: var(--success); }
+        
+        .action-cluster { display: flex; gap: 8px; margin-top: 12px; }
+        .mini-btn { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 4px; }
+        
+        .slip-box-area { display: none; margin-top: 12px; background: #0f172a; color: #f8fafc; font-family: monospace; padding: 12px; border-radius: 6px; font-size: 0.75rem; line-height: 1.4; white-space: pre-wrap; }
+        .loader-text { text-align: center; padding: 40px; color: var(--muted); font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>📋 Pedidos de Compra del Día</h1>
-        <p class="subtitle">Módulo de operaciones exclusivo para jefatura de compras y abastecimiento.</p>
-        <button id="calc-trigger-btn" class="action-btn" onclick="generateDailyPurchaseOrdersEngine()">
-            ⚡ Calcular Órdenes de Compra
-        </button>
+        <h1>📋 Panel de Control de Compras</h1>
+        <p class="subtitle">Verificación interactiva de pedidos sincronizados con la lógica de Backoffice.</p>
+        <button class="btn" onclick="pullActiveStagedCalculationFromCloud()">🔄 Cargar Ventas Procesadas del Día</button>
     </header>
 
-    <main id="orders-workspace-target">
-        <div class="loader">Haga clic en el botón superior para compilar variables de stock actual contra el servidor.</div>
+    <main id="manager-grid-workspace">
+        <div class="loader-text">Haga clic en el botón superior para descargar la matriz de cálculo activa de hoy.</div>
     </main>
     <script>
-        // 💾 SERVER DEPLOYMENT VARIABLE CONFIGURATIONS
+        // 💾 SERVER VARIABLE CONFIGURATIONS
         var API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
         var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
 
-        // Global cache state holders
-        var MASTER_SUGGESTIONS_MAP = {};
+        // Global application data states
+        var LOCAL_STAGED_ROWS = [];
+        var ALL_AVAILABLE_SUPPLIERS = [];
 
-        // ⚡ ENGINE STEP 1: Fetch details from Supabase and run calculation logic
-        async function generateDailyPurchaseOrdersEngine() {
-            var btn = document.getElementById("calc-trigger-btn");
-            var workspace = document.getElementById("orders-workspace-target");
-            
-            btn.disabled = true;
-            btn.innerText = "⏳ Descargando métricas de insumos...";
-            workspace.innerHTML = '<div class="loader">Analizando factores de conversión y niveles críticos de stock...</div>';
+        // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud
+        async function pullActiveStagedCalculationFromCloud() {
+            var workspace = document.getElementById("manager-grid-workspace");
+            workspace.innerHTML = '<div class="loader-text">🔄 Conectando con Supabase y descargando matriz de compras...</div>';
 
             try {
-                // Fetch ingredient records
-                const res = await fetch(API_URL + "ingredients?select=*", {
+                // 1. Fetch our all active unique registered supplier names to bind to dropdown lists
+                const supplierRes = await fetch(API_URL + "ingredients?select=supplier_name", {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
-                if (!res.ok) throw new Error("Could not sync ingredients schema matrix.");
-                const ingredients = await res.json();
-
-                // Fetch database records history count to establish next sequential PO number
-                const poCountRes = await fetch(API_URL + "purchase_orders?select=id", {
-                    method: "GET",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Prefer": "count=exact" }
-                });
-                var totalPosHistoryCount = 0;
-                if (poCountRes.headers.get("content-range")) {
-                    var parts = poCountRes.headers.get("content-range").split("/");
-                    if (parts && parts[1]) totalPosHistoryCount = parseInt(parts[1]) || 0;
+                if (supplierRes.ok) {
+                    const rawSups = await supplierRes.json();
+                    const distinctSet = new Set(rawSups.map(s => (s.supplier_name || "").trim()).filter(Boolean));
+                    ALL_AVAILABLE_SUPPLIERS = Array.from(distinctSet).sort();
                 }
 
-                // Group by supplier clean mapping logic
-                MASTER_SUGGESTIONS_MAP = {};
-                var todayString = new Date().toISOString().slice(0,10).replace(/-/g,"");
-                var orderCounter = totalPosHistoryCount + 1;
+                // 2. Fetch the pre-calculated broadcast dataset array pushed out by backoffice.html
+                const settingsRes = await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                
+                if (!settingsRes.ok) throw new Error("Fallo al conectar con el servidor de configuraciones.");
+                const settingsData = await settingsRes.json();
 
-                ingredients.forEach(function(ing) {
-                    var supplier = (ing.supplier_name || "Proveedor No Asignado").trim();
-                    
-                    // Math formula rules evaluation
-                    var stockActual = parseFloat(ing.current_stock || 0);
-                    var puntoPedido = parseFloat(ing.point_of_order || 0);
-                    var stockMaximo = parseFloat(ing.stock_max || 0);
-                    
-                    if (stockActual <= puntoPedido) {
-                        var cantidadFaltanteBase = stockMaximo - stockActual;
-                        if (cantidadFaltanteBase <= 0) return;
+                if (!settingsData || settingsData.length === 0 || !settingsData[0].value_text) {
+                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontró ninguna sesión de cálculo activa de hoy. Primero procese el archivo Revo en el Backoffice.</div>';
+                    return;
+                }
 
-                        // Conversion Factor Math: Convert standard UOM to Supplier packaging UOM
-                        var factor = parseFloat(ing.inventory_conversion_factor || 1.0);
-                        if (factor <= 0) factor = 1.0;
-                        
-                        var orderQtyInSupplierUOM = Math.ceil(cantidadFaltanteBase / factor);
-
-                        if (orderQtyInSupplierUOM > 0) {
-                            if (!MASTER_SUGGESTIONS_MAP[supplier]) {
-                                MASTER_SUGGESTIONS_MAP[supplier] = {
-                                    poNumber: "PO-" + todayString + "-" + String(orderCounter).padStart(3, '0'),
-                                    items: []
-                                };
-                                orderCounter++;
-                            }
-                            
-                            MASTER_SUGGESTIONS_MAP[supplier].items.push({
-                                id: ing.id,
-                                name: ing.name_es || ing.name_en || "Insumo",
-                                baseUOM: ing.uom || "gr",
-                                supplierUOM: ing.supplier_uom || "Unidad",
-                                factor: factor,
-                                calculatedQty: orderQtyInSupplierUOM
-                            });
-                        }
+                // Parse out the transmitted array snapshot into memory
+                LOCAL_STAGED_ROWS = JSON.parse(settingsData[0].value_text);
+                
+                // For compliance, ensure approval keys exist on all entries
+                LOCAL_STAGED_ROWS.forEach(function(row) {
+                    if (row.is_approved === undefined) row.is_approved = true; 
+                    if (row.approved_formats_quantity === undefined || row.approved_formats_quantity == 0) {
+                        row.approved_formats_quantity = Math.ceil(row.pedido_sugerido || 0);
                     }
                 });
 
-                renderSupplierPurchaseCards();
-                btn.disabled = false;
-                btn.innerText = "🔄 Recalcular Órdenes de Compra";
+                renderInteractiveManagerSpreadsheetGrid();
 
             } catch (err) {
                 console.error(err);
-                workspace.innerHTML = '<div class="loader" style="color:#ef4444;">❌ Error al procesar compras: ' + err.message + '</div>';
-                btn.disabled = false;
-                btn.innerText = "⚡ Reintentar Cálculo";
+                workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al cargar datos: ' + err.message + '</div>';
             }
         }
 
-        // 🛠️ ENGINE STEP 2: Render visual tracking interfaces grouped by Supplier
-        function renderSupplierPurchaseCards() {
-            var workspace = document.getElementById("orders-workspace-target");
+        // ⚡ RUN TIME CORE 2: Group by supplier and build interactive row components
+        function renderInteractiveManagerSpreadsheetGrid() {
+            var workspace = document.getElementById("manager-grid-workspace");
             workspace.innerHTML = "";
 
-            var suppliers = Object.keys(MASTER_SUGGESTIONS_MAP);
+            var groupedData = {};
+            var poCounter = 1;
+            var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
-            if (suppliers.length === 0) {
-                workspace.innerHTML = '<div class="loader">✅ ¡Stock Optimizado! Ningún insumo ha cruzado la barrera del Punto de Pedido hoy.</div>';
+            LOCAL_STAGED_ROWS.forEach(function(row) {
+                var sup = row.supplier_name || "Proveedor No Asignado";
+                if (!groupedData[sup]) {
+                    groupedData[sup] = {
+                        poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
+                        items: []
+                    };
+                    poCounter++;
+                }
+                groupedData[sup].items.push(row);
+            });
+
+            var supplierNames = Object.keys(groupedData);
+
+            if (supplierNames.length === 0) {
+                workspace.innerHTML = '<div class="loader-text">✅ No hay líneas de compras pendientes de revisión.</div>';
                 return;
             }
 
-            suppliers.forEach(function(supplierName) {
-                var data = MASTER_SUGGESTIONS_MAP[supplierName];
-                var supplierKey = supplierName.replace(/\s+/g, '-');
-                
-                var card = document.createElement("div");
-                card.className = "supplier-card";
-                card.id = "supplier-block-" + supplierKey;
+            supplierNames.forEach(function(supplierName) {
+                var group = groupedData[supplierName];
+                var blockKey = supplierName.replace(/\s+/g, '-');
 
-                var html = 
-                    '<div class="supplier-header">' +
+                var blockDiv = document.createElement("div");
+                blockDiv.className = "supplier-block";
+                blockDiv.id = "supplier-card-" + blockKey;
+
+                var blockHtml = 
+                    '<div class="supplier-title-bar">' +
                         '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
-                        '<div class="po-badge">' + data.poNumber + '</div>' +
+                        '<div class="po-badge">' + group.poNumber + '</div>' +
                     '</div>' +
-                    '<div class="items-list-container">';
+                    '<div class="rows-container">';
 
-                data.items.forEach(function(item, idx) {
-                    html += 
-                        '<div class="order-row" data-ing-id="' + item.id + '">' +
-                            '<div class="item-info">' +
-                                '<div class="item-name">' + item.name + '</div>' +
-                                '<div class="item-meta">Conversión: 1 ' + item.supplierUOM + ' = ' + item.factor + ' ' + item.baseUOM + '</div>' +
-                            '</div>' +
-                            '<div>' +
-                                '<input type="number" class="qty-input" value="' + item.calculatedQty + '" min="0" onchange="updateLiveRowQuantity(\'' + supplierName.replace(/'/g, "\\'") + '\', ' + idx + ', this.value)" />' +
-                                '<span style="font-size:0.75rem; font-weight:700; margin-left:4px; color:var(--text-muted);">' + item.supplierUOM + '</span>' +
-                            '</div>' +
-                        '</div>';
+                group.items.forEach(function(item) {
+                    var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
+                    
+                    var providerOptionsHtml = "";
+                    ALL_AVAILABLE_SUPPLIERS.forEach(function(supOpt) {
+                        providerOptionsHtml += '<option value="' + supOpt + '" ' + (supOpt === item.supplier_name ? 'selected' : '') + '>' + supOpt + '</option>';
+                    });
+
+                    var currentEquivalenceWeightValue = (parseFloat(item.approved_formats_quantity || 0) * parseFloat(item.conversion_factor || 1)).toFixed(2);
+
+                    blockHtml += `
+                        <div class="item-row" id="manager-item-row-${trueMasterIdx}">
+                            <div class="item-title">${item.ingredient_name}</div>
+                            
+                            <div class="fields-grid">
+                                <div class="data-box">
+                                    <div class="box-label">Faltante Base</div>
+                                    <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)}</div>
+                                </div>
+                                <div class="data-box">
+                                    <div class="box-label">Formato Compra</div>
+                                    <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
+                                </div>
+                                <div class="data-box" style="grid-column: span 2;">
+                                    <div class="box-label">Proveedor Alternativo</div>
+                                    <div class="box-val" style="margin-top:3px;">
+                                        <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                            ${providerOptionsHtml}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="data-box">
+                                    <div class="box-label">Pedido Sugerido</div>
+                                    <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)}</div>
+                                </div>
+                                <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
+                                    <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
+                                    <div class="box-val" style="margin-top:2px;">
+                                        <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                                    </div>
+                                </div>
+                                <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
+                                    <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
+                                    <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">${currentEquivalenceWeightValue}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="row-footer">
+                                <label class="approve-toggle">
+                                    <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                                    <span>Línea Aprobada</span>
+                                </label>
+                            </div>
+                        </div>
+                    `;
                 });
 
-                html += 
-                    '</div>' +
-                    '<div class="wa-btn-container">' +
-                        '<button class="action-btn" style="background:#475569; font-size:0.8rem; padding:10px;" onclick="approveAndLockPOToDatabase(\'' + supplierName.replace(/'/g, "\\'") + '\')">💾 Guardar Registro</button>' +
-                        '<button class="wa-btn" onclick="dispatchWhatsAppOrderText(\'' + supplierName.replace(/'/g, "\\'") + '\')">' +
-                            '<svg style="width:16px; height:16px; fill:currentColor;" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.457L0 24zm6.59-4.846c1.6.95 3.498 1.451 5.438 1.453 5.494 0 9.961-4.47 9.964-9.97.002-2.663-1.032-5.166-2.91-7.047C17.204 1.705 14.7 1.66 12.012 1.66c-5.498 0-9.965 4.47-9.968 9.97-.001 1.997.521 3.948 1.512 5.674l-.991 3.618 3.702-.971zm11.367-7.251c-.33-.164-1.951-.963-2.251-1.073-.3-.109-.518-.164-.736.164-.218.327-.844 1.062-1.035 1.281-.19.219-.382.245-.712.082-1.656-.826-2.736-1.306-3.814-3.154-.284-.488.284-.452.812-1.506.088-.182.044-.341-.022-.452-.065-.111-.518-1.248-.71-1.707-.185-.443-.372-.383-.518-.39l-.441-.008c-.152 0-.401.057-.611.284-.21.227-.801.781-.801 1.906 0 1.125.818 2.21 1.052 2.525.234.315 1.611 2.46 3.902 3.45.545.235 1.011.394 1.376.51.548.174 1.047.15 1.442.09.44-.066 1.951-.797 2.225-1.53.275-.733.275-1.363.193-1.496-.083-.134-.302-.218-.632-.382z"/></svg>' +
-                            'Enviar WhatsApp' +
-                        '</button>' +
-                    '</div>' +
-                    '<div class="screenshot-area" id="slip-container-' + supplierKey + '">' +
-                        '<div class="screenshot-title">📸 Capture esta pantalla para enviar al proveedor</div>' +
-                        '<div class="slip-box" id="slip-text-box-' + supplierKey + '"></div>' +
-                    '</div>';
+                blockHtml += `
+                    </div>
+                    <div class="action-cluster">
+                        <button class="mini-btn" style="background:#475569;" onclick="saveSingleSupplierGroupToSupabase('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💾 Guardar Registro</button>
+                        <button class="mini-btn" style="background:#25d366;" onclick="compileAndCopyWhatsAppSupplierText('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💬 WhatsApp</button>
+                    </div>
+                    <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
+                `;
 
-                card.innerHTML = html;
-                workspace.appendChild(card);
-                updateVisualScreenshotSlip(supplierName);
+                blockDiv.innerHTML = blockHtml;
+                workspace.appendChild(blockDiv);
+                updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
             });
         }
-        // 🛠️ ENGINE STEP 3: Handle quantity changes dynamically
-        function updateLiveRowQuantity(supplierName, itemIdx, newValue) {
-            var parsedVal = Math.ceil(parseFloat(newValue) || 0);
-            if (MASTER_SUGGESTIONS_MAP[supplierName] && MASTER_SUGGESTIONS_MAP[supplierName].items[itemIdx]) {
-                MASTER_SUGGESTIONS_MAP[supplierName].items[itemIdx].calculatedQty = parsedVal;
-                updateVisualScreenshotSlip(supplierName);
+        // ⚡ RUN TIME CORE 3: Input event bindings and math synchronization outputs
+        function updateLiveRowApprovedQuantity(idx, val) {
+            var parsedValue = Math.ceil(parseFloat(val) || 0);
+            LOCAL_STAGED_ROWS[idx].approved_formats_quantity = parsedValue;
+            
+            // Recalculate cell text metrics directly on screen layout fields elements
+            var equivalenceTarget = document.getElementById("equivalence-display-node-" + idx);
+            if (equivalenceTarget) {
+                var factor = parseFloat(LOCAL_STAGED_ROWS[idx].conversion_factor || 1);
+                equivalenceTarget.innerText = (parsedValue * factor).toFixed(2);
+            }
+            refreshAllActiveReceiptDisplays();
+        }
+
+        function updateLiveRowSupplierAssignment(idx, chosenSupplier) {
+            LOCAL_STAGED_ROWS[idx].supplier_name = chosenSupplier;
+            // Delay rendering slightly to preserve input focuses smoothly
+            setTimeout(renderInteractiveManagerSpreadsheetGrid, 400);
+        }
+
+        function updateLiveRowApprovalToggleState(idx, isChecked) {
+            LOCAL_STAGED_ROWS[idx].is_approved = isChecked;
+            refreshAllActiveReceiptDisplays();
+        }
+
+        function refreshAllActiveReceiptDisplays() {
+            // Sweep grid elements layers to reload active preview windows text outputs
+            var blockDivs = document.getElementsByClassName("supplier-block");
+            for (var i = 0; i < blockDivs.length; i++) {
+                var badgeNode = blockDivs[i].querySelector(".po-badge");
+                var rawNode = blockDivs[i].querySelector(".supplier-name");
+                if (badgeNode && rawNode) {
+                    var rawName = rawNode.innerText.replace("🏢 ", "").trim();
+                    updateVisualReceiptReceiptSlipMarkdown(rawName, badgeNode.innerText);
+                }
             }
         }
 
-        // 🛠️ ENGINE STEP 4: Auto-compile digital receipt layout structures
-        function updateVisualScreenshotSlip(supplierName) {
-            var data = MASTER_SUGGESTIONS_MAP[supplierName];
-            var supplierKey = supplierName.replace(/\s+/g, '-');
-            var container = document.getElementById("slip-container-" + supplierKey);
-            var textBox = document.getElementById("slip-text-box-" + supplierKey);
-            
-            if (!data || !textBox) return;
+        // ⚡ RUN TIME CORE 4: Compile the digital WhatsApp screenshot cards layouts
+        function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
+            var blockKey = supplierName.replace(/\s+/g, '-');
+            var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
+            if (!slipContainer) return;
+
+            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
+
+            if (filteredLines.length === 0) {
+                slipContainer.style.display = "none";
+                return;
+            }
 
             var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
-            
-            var slipHtml = 
-                "========================================<br>" +
-                "       ORDEN DE COMPRA: " + data.poNumber + "<br>" +
-                "========================================<br>" +
-                "PROVEEDOR : " + supplierName.toUpperCase() + "<br>" +
-                "EMITIDO   : " + timeStamp + "<br>" +
-                "ESTADO    : PENDIENTE DE CONFIRMACION<br>" +
-                "----------------------------------------<br>";
+            var txt = 
+                "========================================\n" +
+                "       ORDEN DE COMPRA: " + poNumber + "\n" +
+                "========================================\n" +
+                "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
+                "EMITIDO   : " + timeStamp + "\n" +
+                "ESTADO    : APROBADO Y CONFIRMADO\n" +
+                "----------------------------------------\n";
 
-            data.items.forEach(function(item) {
-                if (item.calculatedQty > 0) {
-                    var line = "[ ] " + String(item.calculatedQty).padEnd(4) + " " + item.supplierUOM.padEnd(8) + " - " + item.name;
-                    slipHtml += line + "<br>";
-                }
+            filteredLines.forEach(function(item) {
+                txt += "[ ] " + String(item.approved_formats_quantity).padEnd(4) + " " + item.supplier_uom.padEnd(8) + " - " + item.ingredient_name + "\n";
             });
 
-            slipHtml += 
-                "----------------------------------------<br>" +
-                "Por favor confirmar recepcion y despacho.<br>" +
+            txt += 
+                "----------------------------------------\n" +
+                "Por favor confirmar recepción y despacho.\n" +
                 "========================================";
 
-            textBox.innerHTML = slipHtml;
-            container.style.display = "block";
+            slipContainer.innerText = txt;
+            slipContainer.style.display = "block";
         }
 
-        // 🛠️ ENGINE STEP 5: Format clipboard payloads & trigger link redirect routing
-        function dispatchWhatsAppOrderText(supplierName) {
-            var data = MASTER_SUGGESTIONS_MAP[supplierName];
-            if (!data) return;
+        // ⚡ RUN TIME CORE 5: Format text payloads & trigger clipboard copy redirection routines
+        function compileAndCopyWhatsAppSupplierText(supplierName, poNumber) {
+            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
-            // Formulate clean WhatsApp string message content parameters
-            var msg = "Hola " + supplierName + ", adjunto orden de compra *__" + data.poNumber + "__*:\n\n";
-            
-            data.items.forEach(function(item) {
-                if (item.calculatedQty > 0) {
-                    msg += "▫️ *" + item.calculatedQty + " " + item.supplierUOM + "* de " + item.name + "\n";
-                }
+            if (filteredLines.length === 0) {
+                alert("⚠️ No hay líneas marcadas como APROBADAS con cantidades superiores a 0 para este proveedor.");
+                return;
+            }
+
+            var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + poNumber + "__*:\n\n";
+            filteredLines.forEach(function(item) {
+                msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
             });
+            msg += "\nPor favor confirmar recepción y fecha de entrega estimada. Adjunto comprobante de recibo visual.";
 
-            msg += "\nPor favor confirmar recepción y fecha de entrega. Adjunto comprobante visual.";
-            
             var encodedText = encodeURIComponent(msg);
             var whatsappUrl = "https://whatsapp.com" + encodedText;
 
-            // Copy text straight onto user's clipboard buffer automatically
             navigator.clipboard.writeText(msg).then(function() {
-                alert("📝 ¡Texto de orden copiado al portapapeles! Abriendo WhatsApp... Pegue el texto y tome una captura del recibo en pantalla.");
+                alert("📝 ¡Texto formateado copiado al portapapeles! Abriendo chat de WhatsApp Web/App... Pegue la orden y adjunte captura de pantalla del bloque negro inferior.");
                 window.open(whatsappUrl, '_blank');
             }).catch(function() {
                 window.open(whatsappUrl, '_blank');
             });
         }
 
-        // 🛠️ ENGINE STEP 6: Push parameters to tracking records history inside Supabase
-        async function approveAndLockPOToDatabase(supplierName) {
-            var data = MASTER_SUGGESTIONS_MAP[supplierName];
-            if (!data) return;
+        // ⚡ RUN TIME CORE 6: Persist approved data sets permanently inside Supabase relational logs
+        async function saveSingleSupplierGroupToSupabase(supplierName, poNumber) {
+            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
+
+            if (filteredLines.length === 0) {
+                alert("⚠️ No hay elementos válidos marcados como aprobados para confirmar.");
+                return;
+            }
 
             try {
-                // Write Parent Record Header Data
+                // 1. Post parent table record fields metadata header configurations parameters rows values
                 var parentPayload = {
-                    po_number: data.poNumber,
+                    po_number: poNumber,
                     supplier_name: supplierName,
                     status: 'Sent',
-                    total_items: data.items.filter(i => i.calculatedQty > 0).length
+                    total_items: filteredLines.length
                 };
 
                 const resParent = await fetch(API_URL + "purchase_orders", {
@@ -451,38 +364,36 @@
                     body: JSON.stringify(parentPayload)
                 });
 
-                if (!resParent.ok) throw new Error("Could not log purchase header database tracking row details.");
+                if (!resParent.ok) throw new Error("Database rejected saving the purchase document header tracking row registry row.");
                 const parentRowResultData = await resParent.json();
-                var generatedPoUuid = parentRowResultData[0] ? parentRowResultData[0].id : parentRowResultData.id;
+                var generatedPoUuid = parentRowResultData ? parentRowResultData.id : parentRowResultData.id;
 
-                // Build relational children itemization block models rows fields array maps
-                for (var i = 0; i < data.items.length; i++) {
-                    var item = data.items[i];
-                    if (item.calculatedQty > 0) {
-                        var childPayload = {
-                            po_id: generatedPoUuid,
-                            ingredient_name: item.name,
-                            quantity_ordered: item.calculatedQty,
-                            supplier_uom: item.supplierUOM
-                        };
+                // 2. Post itemized child rows into relational tables fields breakdowns mapping fields references arrays
+                for (var i = 0; i < filteredLines.length; i++) {
+                    var item = filteredLines[i];
+                    var childPayload = {
+                        po_id: generatedPoUuid,
+                        ingredient_name: item.ingredient_name,
+                        quantity_ordered: item.approved_formats_quantity,
+                        supplier_uom: item.supplier_uom
+                    };
 
-                        await fetch(API_URL + "purchase_order_items", {
-                            method: "POST",
-                            headers: {
-                                "apikey": API_KEY,
-                                "Authorization": "Bearer " + API_KEY,
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify(childPayload)
-                        });
-                    }
+                    await fetch(API_URL + "purchase_order_items", {
+                        method: "POST",
+                        headers: {
+                            "apikey": API_KEY,
+                            "Authorization": "Bearer " + API_KEY,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(childPayload)
+                    });
                 }
 
-                alert("💾 ¡Registro guardado exitosamente en Supabase bajo el código: " + data.poNumber);
+                alert("💾 ¡Orden de Compra " + poNumber + " grabada con éxito en la base de datos de historial de Supabase!");
 
             } catch (err) {
                 console.error(err);
-                alert("❌ Fallo al guardar en base de datos: " + err.message);
+                alert("❌ Fallo crítico al intentar guardar registro en servidor: " + err.message);
             }
         }
     </script>
