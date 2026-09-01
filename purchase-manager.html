@@ -62,7 +62,7 @@
     <script>
         // 💾 SERVER VARIABLE CONFIGURATIONS
         var API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
-        var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x"; // Overwrite with your true anon key
+        var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x"; // Put your actual anon key here
 
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
@@ -73,7 +73,7 @@
             workspace.innerHTML = '<div class="loader-text">🔄 Cargando registros directamente desde la base de datos...</div>';
 
             try {
-                // 1. Fetch raw ingredients base units to map recipe labels
+                // 1. Fetch raw ingredients base units to map recipe labels word-for-word
                 const ingRes = await fetch(API_URL + "ingredients?select=id,recipe_uom,uom", {
                     method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
@@ -352,7 +352,9 @@
                 const parentRowResultData = await resParent.json();
                 
                 // Read parent primary UUID key cleanly across return variations
-                var generatedPoUuid = (parentRowResultData && parentRowResultData[0]) ? parentRowResultData[0].id : parentRowResultData.id;
+                var generatedPoUuid = (parentRowResultData && parentRowResultData[0]) ? parentRowResultData[0].id : (parentRowResultData ? parentRowResultData.id : null);
+
+                if (!generatedPoUuid) throw new Error("No se pudo obtener el identificador único del documento guardado.");
 
                 // 2. Loop and commit granular items into your child breakdown table
                 for (var i = 0; i < filteredLines.length; i++) {
