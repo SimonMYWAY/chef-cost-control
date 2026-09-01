@@ -21,7 +21,6 @@
         .subtitle { font-size: 0.8rem; color: var(--muted); }
         .btn { display: inline-block; width: 100%; margin-top: 10px; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
         
-        /* Grid Table Layout Setup */
         .supplier-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.01); }
         .supplier-title-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--bg); padding-bottom: 8px; margin-bottom: 12px; }
         .supplier-name { font-weight: 700; font-size: 1.05rem; color: var(--text); }
@@ -30,13 +29,11 @@
         .item-row { background: #fafafa; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
         .item-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 8px; color: #1e293b; }
         
-        /* Dynamic Matrix Columns Mapping elements Layout */
         .fields-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
         .data-box { background: white; border: 1px solid #e2e8f0; padding: 6px; border-radius: 6px; }
-        .box-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; }
+        .box-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; font-weight: 700; }
         .box-val { font-weight: 700; font-size: 0.85rem; margin-top: 1px; }
         
-        /* Interactive controls */
         .edit-input { width: 100%; padding: 4px 6px; border: 1px solid var(--primary); border-radius: 4px; font-family: monospace; font-weight: 700; text-align: right; color: var(--primary); font-size: 0.85rem; }
         .select-dropdown { width: 100%; padding: 4px; border: 1px solid var(--border); border-radius: 4px; background: white; font-size: 0.8rem; font-weight: 600; color: #334155; }
         
@@ -64,58 +61,61 @@
     </main>
     <script>
         // 💾 SERVER VARIABLE CONFIGURATIONS
-        var API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
-        var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
+        var API_URL = "https://supabase.co";
+        var API_KEY = "your-anon-key"; // Overwrite with your true anon key
 
-        // Global application data states
         var LOCAL_STAGED_ROWS = [];
-        var ALL_AVAILABLE_SUPPLIERS = [];
+        var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-                // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud table
+        // ⚡ RUN TIME CORE 1: Fetch calculations and lookup configurations
         async function pullActiveStagedCalculationFromCloud() {
             var workspace = document.getElementById("manager-grid-workspace");
-            workspace.innerHTML = '<div class="loader-text">🔄 Conectando con Supabase y descargando matriz de compras...</div>';
+            workspace.innerHTML = '<div class="loader-text">🔄 Cargando registros directamente desde la base de datos...</div>';
 
             try {
-                // 1. Query your dedicated suppliers table for dropdown menu options
-                const supplierRes = await fetch(API_URL + "suppliers?select=id,name", {
-                    method: "GET",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                // 1. Fetch raw ingredients base units to map recipe labels
+                const ingRes = await fetch(API_URL + "ingredients?select=id,recipe_uom,uom", {
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
-                
-                if (supplierRes.ok) {
-                    const rawSups = await supplierRes.json();
-                    ALL_AVAILABLE_SUPPLIERS = rawSups.map(function(s) {
-                        return {
-                            id: String(s.id).trim(),
-                            name: String(s.name || "Proveedor Innombrado").trim()
-                        };
-                    }).sort((a, b) => a.name.localeCompare(b.name));
+                var recipeUnitsLookup = {};
+                if (ingRes.ok) {
+                    const ings = await ingRes.json();
+                    ings.forEach(i => recipeUnitsLookup[String(i.id).trim()] = i.recipe_uom || i.uom || "gr");
                 }
 
-                // 2. 🎯 CORRECTED LANDING ZONE: Fetch records directly from staged_order_calculations table
+                // 2. Fetch alternative definitions linked to ingredients via supplier_formats
+                const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                if (formatsRes.ok) {
+                    GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
+                }
+
+                // 3. Read directly from your exact staged_order_calculations setup
                 const dataTableRes = await fetch(API_URL + "staged_order_calculations?select=*", {
-                    method: "GET",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
                 
-                if (!dataTableRes.ok) throw new Error("Fallo al descargar datos de la tabla staged_order_calculations.");
+                if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
                 const cloudRows = await dataTableRes.json();
 
                 if (!cloudRows || cloudRows.length === 0) {
-                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros en la tabla staged_order_calculations. Procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
+                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros. Procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
                     return;
                 }
 
-                // Map database columns directly to local staging states
+                // 🎯 MAP EXTREMELY CLEAN: Zero duplicates, matching database columns exactly
                 LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+                    var cleanIngId = String(row.ingredient_id).trim();
                     return {
-                        ingredient_id: row.ingredient_id,
+                        id: row.id,
+                        ingredient_id: cleanIngId,
                         ingredient_name: row.ingredient_name,
                         faltante_base: parseFloat(row.faltante_base || 0),
-                        supplier_name: row.supplier_name,
-                        supplier_uom: row.supplier_uom,
-                        conversion_factor: parseFloat(row.conversion_factor || 1),
+                        recipe_uom: recipeUnitsLookup[cleanIngId] || "gr", 
+                        supplier_name: row.supplier_name || "Proveedor No Asignado",
+                        supplier_uom: row.supplier_uom || "Formato", 
+                        conversion_factor: parseFloat(row.conversion_factor || 1), 
                         pedido_sugerido: parseFloat(row.pedido_sugerido || 0),
                         approved_formats_quantity: Math.ceil(row.pedido_sugerido || 0),
                         is_approved: true
@@ -126,147 +126,155 @@
 
             } catch (err) {
                 console.error(err);
-                workspace.innerHTML = '<div class="loader-text" style="var(--muted)">❌ Error al cargar la matriz: ' + err.message + '</div>';
+                workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al cargar la matriz: ' + err.message + '</div>';
             }
         }
+        // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
+        function renderInteractiveManagerSpreadsheetGrid() {
+            var workspace = document.getElementById("manager-grid-workspace");
+            workspace.innerHTML = "";
 
+            var groupedData = {};
+            var poCounter = 1;
+            var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
-        // ⚡ RUN TIME CORE 2: Group by supplier and build interactive row components
-function renderInteractiveManagerSpreadsheetGrid() {
-    var workspace = document.getElementById("manager-grid-workspace");
-    workspace.innerHTML = "";
-
-    var groupedData = {};
-    var poCounter = 1;
-    var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-
-    LOCAL_STAGED_ROWS.forEach(function(row) {
-        var sup = row.supplier_name || "Proveedor No Asignado";
-        if (!groupedData[sup]) {
-            groupedData[sup] = {
-                poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
-                items: []
-            };
-            poCounter++;
-        }
-        groupedData[sup].items.push(row);
-    });
-
-    var supplierNames = Object.keys(groupedData);
-
-    if (supplierNames.length === 0) {
-        workspace.innerHTML = '<div class="loader-text">✅ No hay líneas de compras pendientes de revisión.</div>';
-        return;
-    }
-
-    supplierNames.forEach(function(supplierName) {
-        var group = groupedData[supplierName];
-        var blockKey = supplierName.replace(/\s+/g, '-');
-
-        var blockDiv = document.createElement("div");
-        blockDiv.className = "supplier-block";
-        blockDiv.id = "supplier-card-" + blockKey;
-
-        var blockHtml = 
-            '<div class="supplier-title-bar">' +
-                '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
-                '<div class="po-badge">' + group.poNumber + '</div>' +
-            '</div>' +
-            '<div class="rows-container">';
-
-        group.items.forEach(function(item) {
-            var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
-            
-            // 🏢 RELATIONAL DROPDOWN BUILDER: Uses true database IDs and legible Names
-            var supplierDropdownOptions = "";
-            ALL_AVAILABLE_SUPPLIERS.forEach(function(supOpt) {
-                // Check if this option matches either the saved supplier name or the database ID
-                var isSelected = (supOpt.name === item.supplier_name || supOpt.id === item.supplier_name) ? 'selected' : '';
-                supplierDropdownOptions += '<option value="' + supOpt.name + '" ' + isSelected + '>' + supOpt.name + '</option>';
+            LOCAL_STAGED_ROWS.forEach(function(row) {
+                var sup = row.supplier_name || "Proveedor No Asignado";
+                if (!groupedData[sup]) {
+                    groupedData[sup] = {
+                        poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
+                        items: []
+                    };
+                    poCounter++;
+                }
+                groupedData[sup].items.push(row);
             });
 
-            var currentEquivalenceWeightValue = (parseFloat(item.approved_formats_quantity || 0) * parseFloat(item.conversion_factor || 1)).toFixed(2);
+            Object.keys(groupedData).forEach(function(supplierName) {
+                var group = groupedData[supplierName];
+                var blockKey = supplierName.replace(/\s+/g, '-');
 
-            blockHtml += `
-                <div class="item-row" id="manager-item-row-${trueMasterIdx}">
-                    <div class="item-title">${item.ingredient_name}</div>
+                var blockDiv = document.createElement("div");
+                blockDiv.className = "supplier-block";
+
+                var blockHtml = 
+                    '<div class="supplier-title-bar">' +
+                        '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
+                        '<div class="po-badge">' + group.poNumber + '</div>' +
+                    '</div>' +
+                    '<div class="rows-container">';
+
+                group.items.forEach(function(item) {
+                    var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
                     
-                    <div class="fields-grid">
-                        <div class="data-box">
-                            <div class="box-label">Faltante Base</div>
-                            <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)}</div>
-                        </div>
-                        <div class="data-box">
-                            <div class="box-label">Formato Compra</div>
-                            <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
-                        </div>
-                        <div class="data-box" style="grid-column: span 2;">
-                            <div class="box-label">Proveedor Alternativo</div>
-                            <div class="box-val" style="margin-top:3px;">
-                                <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
-                                    ${supplierDropdownOptions}
-                                </select>
+                    // 🔒 STRICT SUPPLIER FILTER: Show only lines linked to this item inside supplier_formats
+                    var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
+                        return String(f.ingredient_id).trim() === String(item.ingredient_id).trim();
+                    });
+
+                    var supplierDropdownOptions = '<option value="' + item.supplier_name + '" selected>' + item.supplier_name + '</option>';
+                    validLinkedFormats.forEach(function(fmt) {
+                        var optName = String(fmt.provider_name).trim();
+                        if (optName !== item.supplier_name) {
+                            supplierDropdownOptions += '<option value="' + optName + '">' + optName + '</option>';
+                        }
+                    });
+
+                    var currentEquivalenceWeightValue = (parseFloat(item.approved_formats_quantity || 0) * parseFloat(item.conversion_factor || 1)).toFixed(2);
+
+                    blockHtml += `
+                        <div class="item-row" id="manager-item-row-${trueMasterIdx}">
+                            <div class="item-title">${item.ingredient_name}</div>
+                            
+                            <div class="fields-grid">
+                                <div class="data-box">
+                                    <div class="box-label">Faltante Base</div>
+                                    <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)} ${item.recipe_uom}</div>
+                                </div>
+                                <div class="data-box">
+                                    <div class="box-label">Formato Compra</div>
+                                    <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
+                                </div>
+                                <div class="data-box" style="grid-column: span 2;">
+                                    <div class="box-label">Proveedor Asignado</div>
+                                    <div class="box-val" style="margin-top:3px;">
+                                        <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                            ${supplierDropdownOptions}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="data-box">
+                                    <div class="box-label">Pedido Sugerido</div>
+                                    <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)} ${item.supplier_uom}</div>
+                                </div>
+                                <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
+                                    <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
+                                    <div class="box-val" style="margin-top:2px;">
+                                        <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                                    </div>
+                                </div>
+                                <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
+                                    <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
+                                    <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">
+                                        ${currentEquivalenceWeightValue} ${item.recipe_uom}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row-footer">
+                                <label class="approve-toggle">
+                                    <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                                    <span>Línea Aprobada</span>
+                                </label>
                             </div>
                         </div>
-                        <div class="data-box">
-                            <div class="box-label">Pedido Sugerido</div>
-                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)}</div>
-                        </div>
-                        <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
-                            <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
-                            <div class="box-val" style="margin-top:2px;">
-                                <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
-                            </div>
-                        </div>
-                        <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
-                            <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
-                            <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">${currentEquivalenceWeightValue}</div>
-                        </div>
+                    `;
+                });
+
+                blockHtml += `
                     </div>
-                    
-                    <div class="row-footer">
-                        <label class="approve-toggle">
-                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
-                            <span>Línea Aprobada</span>
-                        </label>
+                    <div class="action-cluster">
+                        <button class="mini-btn" style="background:#475569;" onclick="saveSingleSupplierGroupToSupabase('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💾 Guardar Registro</button>
+                        <button class="mini-btn" style="background:#25d366;" onclick="compileAndCopyWhatsAppSupplierText('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💬 WhatsApp</button>
                     </div>
-                </div>
-            `;
-        });
+                    <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
+                `;
 
-        blockHtml += `
-            </div>
-            <div class="action-cluster">
-                <button class="mini-btn" style="background:#475569;" onclick="saveSingleSupplierGroupToSupabase('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💾 Guardar Registro</button>
-                <button class="mini-btn" style="background:#25d366;" onclick="compileAndCopyWhatsAppSupplierText('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💬 WhatsApp</button>
-            </div>
-            <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
-        `;
-
-        blockDiv.innerHTML = blockHtml;
-        workspace.appendChild(blockDiv);
-        updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
-    });
-}
-
+                blockDiv.innerHTML = blockHtml;
+                workspace.appendChild(blockDiv);
+                updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
+            });
+        }
         // ⚡ RUN TIME CORE 3: Input event bindings and math synchronization outputs
         function updateLiveRowApprovedQuantity(idx, val) {
             var parsedValue = Math.ceil(parseFloat(val) || 0);
             LOCAL_STAGED_ROWS[idx].approved_formats_quantity = parsedValue;
             
-            // Recalculate cell text metrics directly on screen layout fields elements
+            // Recalculate text metrics instantly on screen layout elements matching row pointers
             var equivalenceTarget = document.getElementById("equivalence-display-node-" + idx);
             if (equivalenceTarget) {
                 var factor = parseFloat(LOCAL_STAGED_ROWS[idx].conversion_factor || 1);
-                equivalenceTarget.innerText = (parsedValue * factor).toFixed(2);
+                var uomLabel = LOCAL_STAGED_ROWS[idx].recipe_uom;
+                equivalenceTarget.innerText = (parsedValue * factor).toFixed(2) + " " + uomLabel;
             }
             refreshAllActiveReceiptDisplays();
         }
 
         function updateLiveRowSupplierAssignment(idx, chosenSupplier) {
+            // Re-map purchase format strings directly based on matching supplier formats lookup records
+            var matchedFormat = GLOBAL_SUPPLIER_FORMATS_LIST.find(function(f) {
+                return String(f.ingredient_id).trim() === String(LOCAL_STAGED_ROWS[idx].ingredient_id).trim() && 
+                       String(f.provider_name).trim() === String(chosenSupplier).trim();
+            });
+
             LOCAL_STAGED_ROWS[idx].supplier_name = chosenSupplier;
-            // Delay rendering slightly to preserve input focuses smoothly
-            setTimeout(renderInteractiveManagerSpreadsheetGrid, 400);
+            if (matchedFormat) {
+                LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom || "Formato";
+                LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
+            }
+            
+            // Refresh table grids to group items instantly under the newly assigned supplier card block
+            setTimeout(renderInteractiveManagerSpreadsheetGrid, 200);
         }
 
         function updateLiveRowApprovalToggleState(idx, isChecked) {
@@ -275,7 +283,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
         }
 
         function refreshAllActiveReceiptDisplays() {
-            // Sweep grid elements layers to reload active preview windows text outputs
             var blockDivs = document.getElementsByClassName("supplier-block");
             for (var i = 0; i < blockDivs.length; i++) {
                 var badgeNode = blockDivs[i].querySelector(".po-badge");
@@ -286,44 +293,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 }
             }
         }
-
-        // ⚡ RUN TIME CORE 4: Compile the digital WhatsApp screenshot cards layouts
-        function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
-            var blockKey = supplierName.replace(/\s+/g, '-');
-            var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
-            if (!slipContainer) return;
-
-            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
-
-            if (filteredLines.length === 0) {
-                slipContainer.style.display = "none";
-                return;
-            }
-
-            var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
-            var txt = 
-                "========================================\n" +
-                "       ORDEN DE COMPRA: " + poNumber + "\n" +
-                "========================================\n" +
-                "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
-                "EMITIDO   : " + timeStamp + "\n" +
-                "ESTADO    : APROBADO Y CONFIRMADO\n" +
-                "----------------------------------------\n";
-
-            filteredLines.forEach(function(item) {
-                txt += "[ ] " + String(item.approved_formats_quantity).padEnd(4) + " " + item.supplier_uom.padEnd(8) + " - " + item.ingredient_name + "\n";
-            });
-
-            txt += 
-                "----------------------------------------\n" +
-                "Por favor confirmar recepción y despacho.\n" +
-                "========================================";
-
-            slipContainer.innerText = txt;
-            slipContainer.style.display = "block";
-        }
-
-        // ⚡ RUN TIME CORE 5: Format text payloads & trigger clipboard copy redirection routines
+        // ⚡ RUN TIME CORE 5: Format plain-text WhatsApp order notifications
         function compileAndCopyWhatsAppSupplierText(supplierName, poNumber) {
             var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -342,14 +312,14 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var whatsappUrl = "https://whatsapp.com" + encodedText;
 
             navigator.clipboard.writeText(msg).then(function() {
-                alert("📝 ¡Texto formateado copiado al portapapeles! Abriendo chat de WhatsApp Web/App... Pegue la orden y adjunte captura de pantalla del bloque negro inferior.");
+                alert("📝 ¡Texto copiado! Abriendo chat de WhatsApp...");
                 window.open(whatsappUrl, '_blank');
             }).catch(function() {
                 window.open(whatsappUrl, '_blank');
             });
         }
 
-        // ⚡ RUN TIME CORE 6: Persist approved data sets permanently inside Supabase relational logs
+        // ⚡ RUN TIME CORE 6: Persist approved line totals straight into Supabase relational tables
         async function saveSingleSupplierGroupToSupabase(supplierName, poNumber) {
             var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -359,7 +329,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             }
 
             try {
-                // 1. Post parent table record fields metadata header configurations parameters rows values
+                // 1. Post document tracking metadata to your parent header table
                 var parentPayload = {
                     po_number: poNumber,
                     supplier_name: supplierName,
@@ -378,11 +348,13 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     body: JSON.stringify(parentPayload)
                 });
 
-                if (!resParent.ok) throw new Error("Database rejected saving the purchase document header tracking row registry row.");
+                if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
                 const parentRowResultData = await resParent.json();
-                var generatedPoUuid = parentRowResultData ? parentRowResultData.id : parentRowResultData.id;
+                
+                // Read parent primary UUID key cleanly across return variations
+                var generatedPoUuid = (parentRowResultData && parentRowResultData[0]) ? parentRowResultData[0].id : parentRowResultData.id;
 
-                // 2. Post itemized child rows into relational tables fields breakdowns mapping fields references arrays
+                // 2. Loop and commit granular items into your child breakdown table
                 for (var i = 0; i < filteredLines.length; i++) {
                     var item = filteredLines[i];
                     var childPayload = {
@@ -403,11 +375,11 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     });
                 }
 
-                alert("💾 ¡Orden de Compra " + poNumber + " grabada con éxito en la base de datos de historial de Supabase!");
+                alert("💾 ¡Orden de Compra " + poNumber + " grabada con éxito en Supabase!");
 
             } catch (err) {
                 console.error(err);
-                alert("❌ Fallo crítico al intentar guardar registro en servidor: " + err.message);
+                alert("❌ Fallo crítico al guardar registro: " + err.message);
             }
         }
     </script>
