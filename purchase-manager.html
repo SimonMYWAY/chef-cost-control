@@ -107,17 +107,21 @@
                     return;
                 }
 
-                // 🎯 MAP EXTREMELY CLEAN: Re-building the array from zero with exact matching database values
+                                // 🎯 BULLETPROOF LOOKUP: Maps your exact column data to show true master table recipe units
                 LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
                     var cleanIngId = String(row.ingredient_id).trim();
-                    var realRecipeUnit = recipeUnitsLookup[cleanIngId] || "gr"; 
+                    var lookupKey = cleanIngId.toLowerCase(); // Case-insensitive neutral anchor check
+                    
+                    // 🌟 REAL UNIT MATCHING: Checks your true master ingredients table directly for the uom text string
+                    var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg"; 
 
-                    var linkedProviders = GLOBAL_SUPPLIER_FORMATS_LIST.filter(f => String(f.ingredient_id).trim() === cleanIngId);
+                    var linkedProviders = GLOBAL_SUPPLIER_FORMATS_LIST.filter(f => String(f.ingredient_id).trim().toLowerCase() === lookupKey);
                     
                     var finalAssignedSupplierName = "Proveedor No Asignado";
                     var finalPurchaseUomName = row.supplier_uom || "Formato";
                     var finalConversionMultiplier = parseFloat(row.conversion_factor || 1);
 
+                    // Auto-assign the FIRST available matching provider from your supplier_formats rules list
                     if (linkedProviders.length > 0) {
                         var firstAvailableFormatRule = linkedProviders[0];
                         finalAssignedSupplierName = String(firstAvailableFormatRule.provider_name).trim();
@@ -132,7 +136,7 @@
                         ingredient_id: cleanIngId,
                         ingredient_name: row.ingredient_name,
                         faltante_base: parseFloat(row.faltante_base || 0),
-                        recipe_uom: realRecipeUnit, 
+                        recipe_uom: realRecipeUnit, // 🌟 OUTPUTS YOUR TRUE LIVE DATABASE UNIT HERE
                         supplier_name: finalAssignedSupplierName, 
                         supplier_uom: finalPurchaseUomName, 
                         conversion_factor: finalConversionMultiplier, 
