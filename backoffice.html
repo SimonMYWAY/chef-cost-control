@@ -3969,8 +3969,8 @@ async function broadcastActiveCalculationsToPurchaseApp() {
     shipBtn.innerText = "⏳ Enviando datos...";
 
     try {
-        // 1️⃣ Clear out yesterday's remaining calculations from the landing pad
-        await fetch(API_URL + "staged_order_calculations", { 
+               // 1️⃣ Clear out yesterday's remaining calculations from the landing pad (WITH SAFE FILTER)
+        await fetch(API_URL + "staged_order_calculations?id=not.is.null", { 
             method: "DELETE", 
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
         });

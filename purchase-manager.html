@@ -76,14 +76,20 @@
                 // 🛑 CRITICAL RESET: Clear the memory array cache completely on every single load click!
                 LOCAL_STAGED_ROWS = [];
 
-                // 1. Fetch raw ingredients base units to map recipe labels safely
-                const ingRes = await fetch(API_URL + "ingredients?select=id,recipe_uom,uom", {
+                                // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
+                const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
                     method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
                 var recipeUnitsLookup = {};
                 if (ingRes.ok) {
                     const ings = await ingRes.json();
-                    ings.forEach(i => recipeUnitsLookup[String(i.id).trim()] = i.recipe_uom || i.uom || "gr");
+                    ings.forEach(function(i) {
+                        if (i.id) {
+                            // 🌟 CASE RECOVERY FIX: Lowercase keys to match text regardless of character case variations
+                            var cleanIdKey = String(i.id).toLowerCase().trim();
+                            recipeUnitsLookup[cleanIdKey] = i.uom ? String(i.uom).trim() : "Unid";
+                        }
+                    });
                 }
 
                 // 2. Fetch alternative definitions linked to ingredients via supplier_formats
