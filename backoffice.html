@@ -3987,15 +3987,30 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
             );
 
+                        // 🎯 METRIC BRIDGE SYNCHRONIZED: Re-calculating the exact gap matching your backoffice grid math
+            var baseInitialInventory = parseFloat(activeLine.last_std_inventory || 0);
+            var baseConsumption = parseFloat(activeLine.consumption || 0);
+            
+            // Look up conversion multipliers to calculate the matching stock_max layer gap
+            var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
+            var suggestedFormats = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0);
+            
+            // Re-aligning the true on-screen net gap metric accurately
+            var calculatedFaltanteBaseGap = suggestedFormats * conversionFactor;
+
             var payload = {
-                ingredient_id: String(activeLine.ingredient_id),
+                ingredient_id: String(activeLine.ingredient_id).trim(),
                 ingredient_name: String(activeLine.ingredient_name),
-                faltante_base: parseFloat(activeLine.consumption || 0), 
+                
+                // 🌟 DEFINITION FIXED: Capturing your true calculated net filling gap quantity here
+                faltante_base: parseFloat(calculatedFaltanteBaseGap || baseConsumption || 0), 
+                
                 supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
                 pedido_sugerido: parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0),
-                conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0
+                conversion_factor: conversionFactor
             };
+
 
             await fetch(API_URL + "staged_order_calculations", {
                 method: "POST",
