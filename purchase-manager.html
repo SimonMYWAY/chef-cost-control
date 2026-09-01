@@ -67,26 +67,26 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-                // ⚡ RUN TIME CORE 1: Sync calculations, lookup true recipe units, and auto-assign default suppliers
+                // ⚡ RE-ENGINEERED SYNC: Instantly resets memory cache vectors to prevent multi-click duplication
         async function pullActiveStagedCalculationFromCloud() {
             var workspace = document.getElementById("manager-grid-workspace");
-            workspace.innerHTML = '<div class="loader-text">🔄 Cargando registros directamente desde la base de datos...</div>';
+            workspace.innerHTML = '<div class="loader-text">🔄 Sincronizando datos de compras y formatos de proveedores...</div>';
 
             try {
-                // 1. Fetch real recipe units (uom) directly from your ingredients table
-                const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
+                // 🛑 CRITICAL RESET: Clear the memory array cache completely on every single load click!
+                LOCAL_STAGED_ROWS = [];
+
+                // 1. Fetch raw ingredients base units to map recipe labels safely
+                const ingRes = await fetch(API_URL + "ingredients?select=id,recipe_uom,uom", {
                     method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
                 var recipeUnitsLookup = {};
                 if (ingRes.ok) {
                     const ings = await ingRes.json();
-                    ings.forEach(i => {
-                        // Ensure we key by exact text IDs matching your system setup
-                        recipeUnitsLookup[String(i.id).trim()] = i.uom ? String(i.uom).trim() : "Unid";
-                    });
+                    ings.forEach(i => recipeUnitsLookup[String(i.id).trim()] = i.recipe_uom || i.uom || "gr");
                 }
 
-                // 2. Fetch alternative definitions linked to ingredients via supplier_formats mapping rules
+                // 2. Fetch alternative definitions linked to ingredients via supplier_formats
                 const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
                     method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
@@ -94,7 +94,7 @@
                     GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
                 }
 
-                // 3. Read directly from your exact staged_order_calculations columns setup
+                // 3. Read directly from your exact staged_order_calculations setup
                 const dataTableRes = await fetch(API_URL + "staged_order_calculations?select=*", {
                     method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
@@ -103,33 +103,27 @@
                 const cloudRows = await dataTableRes.json();
 
                 if (!cloudRows || cloudRows.length === 0) {
-                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros. Procese el archivo Revo en el Backoffice y presione \"Enviar a Gte. de Compras\".</div>';
+                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros. Procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
                     return;
                 }
 
-                // 🎯 FIXED METRIC ALIGNMENTS: Smart mapping row variables
+                // 🎯 MAP EXTREMELY CLEAN: Re-building the array from zero with exact matching database values
                 LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
                     var cleanIngId = String(row.ingredient_id).trim();
-                    
-                    // A. Lookup True Recipe UOM safely from your map, ignoring any hardcoded fallback variables
-                    var realRecipeUnit = recipeUnitsLookup[cleanIngId] || "Kg"; 
+                    var realRecipeUnit = recipeUnitsLookup[cleanIngId] || "gr"; 
 
-                    // B. STRICT VENDOR GUARD: Filter supplier_formats to find valid matching provider rules for this item
                     var linkedProviders = GLOBAL_SUPPLIER_FORMATS_LIST.filter(f => String(f.ingredient_id).trim() === cleanIngId);
                     
-                    // Establish defaults fallbacks
                     var finalAssignedSupplierName = "Proveedor No Asignado";
                     var finalPurchaseUomName = row.supplier_uom || "Formato";
                     var finalConversionMultiplier = parseFloat(row.conversion_factor || 1);
 
-                    // If a specific rule exists in supplier_formats, grab the FIRST available link on the list!
                     if (linkedProviders.length > 0) {
                         var firstAvailableFormatRule = linkedProviders[0];
                         finalAssignedSupplierName = String(firstAvailableFormatRule.provider_name).trim();
                         finalPurchaseUomName = String(firstAvailableFormatRule.purchase_uom || "Formato").trim();
                         finalConversionMultiplier = parseFloat(firstAvailableFormatRule.units_per_purchase || 1);
                     } else if (row.supplier_name && row.supplier_name !== "Proveedor No Asignado") {
-                        // Secondary fallback condition check
                         finalAssignedSupplierName = row.supplier_name;
                     }
 
@@ -138,8 +132,8 @@
                         ingredient_id: cleanIngId,
                         ingredient_name: row.ingredient_name,
                         faltante_base: parseFloat(row.faltante_base || 0),
-                        recipe_uom: realRecipeUnit, // 🌟 FIXED: Outputting your real units directly from ingredients table now
-                        supplier_name: finalAssignedSupplierName, // 🌟 FIXED: Auto-assigns the first available provider from formats list
+                        recipe_uom: realRecipeUnit, 
+                        supplier_name: finalAssignedSupplierName, 
                         supplier_uom: finalPurchaseUomName, 
                         conversion_factor: finalConversionMultiplier, 
                         pedido_sugerido: parseFloat(row.pedido_sugerido || 0),
