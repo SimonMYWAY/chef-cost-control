@@ -535,6 +535,13 @@
                         <input type="file" id="sales-excel-upload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="processDailySalesFileIngestion(event)" />
                         <button onclick="triggerSalesFileSelectionGuard()" id="btn-upload-sales-action" class="btn btn-blue" style="background:#007afb; font-weight:bold; display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">📂 Cargar Ventas del Día</button>
                         <button onclick="executeFinalInventoryProcurementCommit()" id="btn-commit-all-orders" class="btn btn-green" style="background:#10b981; font-weight:bold; display:none; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">💾 Confirmar y Exportar Excel</button>
+                        <!-- 🚀 NEW INTERACTIVE PROCUREMENT DISPATCH VECTOR -->
+                        <button id="dispatch-to-manager-portal-btn" 
+                                onclick="broadcastActiveCalculationsToPurchaseApp()" 
+                                style="background: #007afb; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-left: 8px;">
+                               📡 Enviar a Gte. de Compras
+                        </button>
+
                     </div>
                 </div>
                 
@@ -3948,7 +3955,77 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
+// ⚡ SINGLE SOURCE OF TRUTH VECTOR: Ship live calculation states directly to the manager app
+async function broadcastActiveCalculationsToPurchaseApp() {
+    var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
+    
+    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
+        alert("⚠️ No hay líneas de cálculo activas. Primero procese el archivo de ventas Revo.");
+        return;
+    }
 
+    shipBtn.disabled = true;
+    shipBtn.style.background = "#64748b";
+    shipBtn.innerText = "⏳ Enviando datos...";
+
+    try {
+        // Map out the temporary staged purchase items exactly matching your active grid math variables
+        const managerExportPayload = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+            const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
+                ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
+                : [];
+                
+            const activeFormatRule = authorizedFormats.find(f => 
+                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+            );
+
+            return {
+                ingredient_id: line.ingredient_id,
+                ingredient_name: line.ingredient_name,
+                faltante_base: parseFloat(line.consumption || 0), // Base depletion math from your recipe configuration
+                supplier_name: line.supplier_id || "Proveedor No Asignado",
+                supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
+                conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
+                pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0),
+                approved_formats_quantity: parseFloat(line.approved_formats_quantity || line.suggested_formats_quantity || 0),
+                is_approved: true // Default to true so the manager can deselect rows manually
+            };
+        });
+
+        // Push this clean data snapshot to your system settings table entry row inside Supabase
+        const res = await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
+            method: "PATCH",
+            headers: { 
+                "apikey": API_KEY, 
+                "Authorization": "Bearer " + API_KEY, 
+                "Content-Type": "application/json" 
+            },
+            body: JSON.stringify({ 
+                value_text: JSON.stringify(managerExportPayload), 
+                updated_at: new Date().toISOString() 
+            })
+        });
+
+        if (!res.ok) throw new Error("El servidor rechazó el almacenamiento de la sesión.");
+
+        shipBtn.style.background = "#22c55e";
+        shipBtn.innerText = "✅ ¡Enviado Exitosamente!";
+        alert("📢 ¡Matriz de compras enviada al Administrador con éxito! Ya puede consultarse desde purchase-manager.html");
+
+        setTimeout(function() {
+            shipBtn.disabled = false;
+            shipBtn.style.background = "#007afb";
+            shipBtn.innerText = "📡 Enviar a Gte. de Compras";
+        }, 3000);
+
+    } catch (err) {
+        console.error("Failed to transmit order layout session:", err);
+        alert("❌ Error al enviar datos al gestor: " + err.message);
+        shipBtn.disabled = false;
+        shipBtn.style.background = "#ef4444";
+        shipBtn.innerText = "Error";
+    }
+}
 
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
