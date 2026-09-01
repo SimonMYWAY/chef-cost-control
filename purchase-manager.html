@@ -384,6 +384,42 @@
                 alert("❌ Fallo crítico al guardar registro: " + err.message);
             }
         }
+                // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
+        function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
+            var blockKey = supplierName.replace(/\s+/g, '-');
+            var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
+            if (!slipContainer) return;
+
+            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
+
+            if (filteredLines.length === 0) {
+                slipContainer.style.display = "none";
+                return;
+            }
+
+            var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+            var txt = 
+                "========================================\n" +
+                "       ORDEN DE COMPRA: " + poNumber + "\n" +
+                "========================================\n" +
+                "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
+                "EMITIDO   : " + timeStamp + "\n" +
+                "ESTADO    : APROBADO Y CONFIRMADO\n" +
+                "----------------------------------------\n";
+
+            filteredLines.forEach(function(item) {
+                txt += "[ ] " + String(item.approved_formats_quantity).padEnd(4) + " " + item.supplier_uom.padEnd(8) + " - " + item.ingredient_name + "\n";
+            });
+
+            txt += 
+                "----------------------------------------\n" +
+                "Por favor confirmar recepción y despacho.\n" +
+                "========================================";
+
+            slipContainer.innerText = txt;
+            slipContainer.style.display = "block";
+        }
+
     </script>
 </body>
 </html>
