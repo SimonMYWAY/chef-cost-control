@@ -71,21 +71,27 @@
         var LOCAL_STAGED_ROWS = [];
         var ALL_AVAILABLE_SUPPLIERS = [];
 
-        // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud
+                // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud
         async function pullActiveStagedCalculationFromCloud() {
             var workspace = document.getElementById("manager-grid-workspace");
             workspace.innerHTML = '<div class="loader-text">🔄 Conectando con Supabase y descargando matriz de compras...</div>';
 
             try {
-                // 1. Fetch our all active unique registered supplier names to bind to dropdown lists
-                const supplierRes = await fetch(API_URL + "ingredients?select=supplier_name", {
+                // 1. 🏢 TRUE TABLE TARGET: Query your actual dedicated suppliers table for IDs and Names
+                const supplierRes = await fetch(API_URL + "suppliers?select=id,name", {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
+                
                 if (supplierRes.ok) {
                     const rawSups = await supplierRes.json();
-                    const distinctSet = new Set(rawSups.map(s => (s.supplier_name || "").trim()).filter(Boolean));
-                    ALL_AVAILABLE_SUPPLIERS = Array.from(distinctSet).sort();
+                    // Map out the records into clean key-value structures
+                    ALL_AVAILABLE_SUPPLIERS = rawSups.map(function(s) {
+                        return {
+                            id: String(s.id).trim(),
+                            name: String(s.name || "Proveedor Innombrado").trim()
+                        };
+                    }).sort((a, b) => a.name.localeCompare(b.name));
                 }
 
                 // 2. Fetch the pre-calculated broadcast dataset array pushed out by backoffice.html
@@ -97,13 +103,13 @@
                 if (!settingsRes.ok) throw new Error("Fallo al conectar con el servidor de configuraciones.");
                 const settingsData = await settingsRes.json();
 
-                if (!settingsData || settingsData.length === 0 || !settingsData[0].value_text) {
-                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontró ninguna sesión de cálculo activa de hoy. Primero procese el archivo Revo en el Backoffice.</div>';
+                if (!settingsData || settingsData.length === 0 || !settingsData.value_text) {
+                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontró ninguna sesión de cálculo activa de hoy. Primero procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
                     return;
                 }
 
                 // Parse out the transmitted array snapshot into memory
-                LOCAL_STAGED_ROWS = JSON.parse(settingsData[0].value_text);
+                LOCAL_STAGED_ROWS = JSON.parse(settingsData.value_text);
                 
                 // For compliance, ensure approval keys exist on all entries
                 LOCAL_STAGED_ROWS.forEach(function(row) {
@@ -121,120 +127,125 @@
             }
         }
 
+
         // ⚡ RUN TIME CORE 2: Group by supplier and build interactive row components
-        function renderInteractiveManagerSpreadsheetGrid() {
-            var workspace = document.getElementById("manager-grid-workspace");
-            workspace.innerHTML = "";
+function renderInteractiveManagerSpreadsheetGrid() {
+    var workspace = document.getElementById("manager-grid-workspace");
+    workspace.innerHTML = "";
 
-            var groupedData = {};
-            var poCounter = 1;
-            var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    var groupedData = {};
+    var poCounter = 1;
+    var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
-            LOCAL_STAGED_ROWS.forEach(function(row) {
-                var sup = row.supplier_name || "Proveedor No Asignado";
-                if (!groupedData[sup]) {
-                    groupedData[sup] = {
-                        poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
-                        items: []
-                    };
-                    poCounter++;
-                }
-                groupedData[sup].items.push(row);
+    LOCAL_STAGED_ROWS.forEach(function(row) {
+        var sup = row.supplier_name || "Proveedor No Asignado";
+        if (!groupedData[sup]) {
+            groupedData[sup] = {
+                poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
+                items: []
+            };
+            poCounter++;
+        }
+        groupedData[sup].items.push(row);
+    });
+
+    var supplierNames = Object.keys(groupedData);
+
+    if (supplierNames.length === 0) {
+        workspace.innerHTML = '<div class="loader-text">✅ No hay líneas de compras pendientes de revisión.</div>';
+        return;
+    }
+
+    supplierNames.forEach(function(supplierName) {
+        var group = groupedData[supplierName];
+        var blockKey = supplierName.replace(/\s+/g, '-');
+
+        var blockDiv = document.createElement("div");
+        blockDiv.className = "supplier-block";
+        blockDiv.id = "supplier-card-" + blockKey;
+
+        var blockHtml = 
+            '<div class="supplier-title-bar">' +
+                '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
+                '<div class="po-badge">' + group.poNumber + '</div>' +
+            '</div>' +
+            '<div class="rows-container">';
+
+        group.items.forEach(function(item) {
+            var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
+            
+            // 🏢 RELATIONAL DROPDOWN BUILDER: Uses true database IDs and legible Names
+            var supplierDropdownOptions = "";
+            ALL_AVAILABLE_SUPPLIERS.forEach(function(supOpt) {
+                // Check if this option matches either the saved supplier name or the database ID
+                var isSelected = (supOpt.name === item.supplier_name || supOpt.id === item.supplier_name) ? 'selected' : '';
+                supplierDropdownOptions += '<option value="' + supOpt.name + '" ' + isSelected + '>' + supOpt.name + '</option>';
             });
 
-            var supplierNames = Object.keys(groupedData);
+            var currentEquivalenceWeightValue = (parseFloat(item.approved_formats_quantity || 0) * parseFloat(item.conversion_factor || 1)).toFixed(2);
 
-            if (supplierNames.length === 0) {
-                workspace.innerHTML = '<div class="loader-text">✅ No hay líneas de compras pendientes de revisión.</div>';
-                return;
-            }
-
-            supplierNames.forEach(function(supplierName) {
-                var group = groupedData[supplierName];
-                var blockKey = supplierName.replace(/\s+/g, '-');
-
-                var blockDiv = document.createElement("div");
-                blockDiv.className = "supplier-block";
-                blockDiv.id = "supplier-card-" + blockKey;
-
-                var blockHtml = 
-                    '<div class="supplier-title-bar">' +
-                        '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
-                        '<div class="po-badge">' + group.poNumber + '</div>' +
-                    '</div>' +
-                    '<div class="rows-container">';
-
-                group.items.forEach(function(item) {
-                    var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
+            blockHtml += `
+                <div class="item-row" id="manager-item-row-${trueMasterIdx}">
+                    <div class="item-title">${item.ingredient_name}</div>
                     
-                    var providerOptionsHtml = "";
-                    ALL_AVAILABLE_SUPPLIERS.forEach(function(supOpt) {
-                        providerOptionsHtml += '<option value="' + supOpt + '" ' + (supOpt === item.supplier_name ? 'selected' : '') + '>' + supOpt + '</option>';
-                    });
-
-                    var currentEquivalenceWeightValue = (parseFloat(item.approved_formats_quantity || 0) * parseFloat(item.conversion_factor || 1)).toFixed(2);
-
-                    blockHtml += `
-                        <div class="item-row" id="manager-item-row-${trueMasterIdx}">
-                            <div class="item-title">${item.ingredient_name}</div>
-                            
-                            <div class="fields-grid">
-                                <div class="data-box">
-                                    <div class="box-label">Faltante Base</div>
-                                    <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)}</div>
-                                </div>
-                                <div class="data-box">
-                                    <div class="box-label">Formato Compra</div>
-                                    <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
-                                </div>
-                                <div class="data-box" style="grid-column: span 2;">
-                                    <div class="box-label">Proveedor Alternativo</div>
-                                    <div class="box-val" style="margin-top:3px;">
-                                        <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
-                                            ${providerOptionsHtml}
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="data-box">
-                                    <div class="box-label">Pedido Sugerido</div>
-                                    <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)}</div>
-                                </div>
-                                <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
-                                    <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
-                                    <div class="box-val" style="margin-top:2px;">
-                                        <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
-                                    </div>
-                                </div>
-                                <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
-                                    <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
-                                    <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">${currentEquivalenceWeightValue}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="row-footer">
-                                <label class="approve-toggle">
-                                    <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
-                                    <span>Línea Aprobada</span>
-                                </label>
+                    <div class="fields-grid">
+                        <div class="data-box">
+                            <div class="box-label">Faltante Base</div>
+                            <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)}</div>
+                        </div>
+                        <div class="data-box">
+                            <div class="box-label">Formato Compra</div>
+                            <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
+                        </div>
+                        <div class="data-box" style="grid-column: span 2;">
+                            <div class="box-label">Proveedor Alternativo</div>
+                            <div class="box-val" style="margin-top:3px;">
+                                <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                    ${supplierDropdownOptions}
+                                </select>
                             </div>
                         </div>
-                    `;
-                });
-
-                blockHtml += `
+                        <div class="data-box">
+                            <div class="box-label">Pedido Sugerido</div>
+                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)}</div>
+                        </div>
+                        <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
+                            <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
+                            <div class="box-val" style="margin-top:2px;">
+                                <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                            </div>
+                        </div>
+                        <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
+                            <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
+                            <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">${currentEquivalenceWeightValue}</div>
+                        </div>
                     </div>
-                    <div class="action-cluster">
-                        <button class="mini-btn" style="background:#475569;" onclick="saveSingleSupplierGroupToSupabase('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💾 Guardar Registro</button>
-                        <button class="mini-btn" style="background:#25d366;" onclick="compileAndCopyWhatsAppSupplierText('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💬 WhatsApp</button>
+                    
+                    <div class="row-footer">
+                        <label class="approve-toggle">
+                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                            <span>Línea Aprobada</span>
+                        </label>
                     </div>
-                    <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
-                `;
+                </div>
+            `;
+        });
 
-                blockDiv.innerHTML = blockHtml;
-                workspace.appendChild(blockDiv);
-                updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
-            });
-        }
+        blockHtml += `
+            </div>
+            <div class="action-cluster">
+                <button class="mini-btn" style="background:#475569;" onclick="saveSingleSupplierGroupToSupabase('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💾 Guardar Registro</button>
+                <button class="mini-btn" style="background:#25d366;" onclick="compileAndCopyWhatsAppSupplierText('${supplierName.replace(/'/g, "\\'")}', '${group.poNumber}')">💬 WhatsApp</button>
+            </div>
+            <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
+        `;
+
+        blockDiv.innerHTML = blockHtml;
+        workspace.appendChild(blockDiv);
+        updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
+    });
+}
+
         // ⚡ RUN TIME CORE 3: Input event bindings and math synchronization outputs
         function updateLiveRowApprovedQuantity(idx, val) {
             var parsedValue = Math.ceil(parseFloat(val) || 0);
