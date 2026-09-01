@@ -71,13 +71,13 @@
         var LOCAL_STAGED_ROWS = [];
         var ALL_AVAILABLE_SUPPLIERS = [];
 
-                // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud
+                // ⚡ RUN TIME CORE 1: Sync active calculation matrix states from the cloud table
         async function pullActiveStagedCalculationFromCloud() {
             var workspace = document.getElementById("manager-grid-workspace");
             workspace.innerHTML = '<div class="loader-text">🔄 Conectando con Supabase y descargando matriz de compras...</div>';
 
             try {
-                // 1. 🏢 TRUE TABLE TARGET: Query your actual dedicated suppliers table for IDs and Names
+                // 1. Query your dedicated suppliers table for dropdown menu options
                 const supplierRes = await fetch(API_URL + "suppliers?select=id,name", {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -85,7 +85,6 @@
                 
                 if (supplierRes.ok) {
                     const rawSups = await supplierRes.json();
-                    // Map out the records into clean key-value structures
                     ALL_AVAILABLE_SUPPLIERS = rawSups.map(function(s) {
                         return {
                             id: String(s.id).trim(),
@@ -94,36 +93,40 @@
                     }).sort((a, b) => a.name.localeCompare(b.name));
                 }
 
-                // 2. Fetch the pre-calculated broadcast dataset array pushed out by backoffice.html
-                const settingsRes = await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
+                // 2. 🎯 CORRECTED LANDING ZONE: Fetch records directly from staged_order_calculations table
+                const dataTableRes = await fetch(API_URL + "staged_order_calculations?select=*", {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
                 
-                if (!settingsRes.ok) throw new Error("Fallo al conectar con el servidor de configuraciones.");
-                const settingsData = await settingsRes.json();
+                if (!dataTableRes.ok) throw new Error("Fallo al descargar datos de la tabla staged_order_calculations.");
+                const cloudRows = await dataTableRes.json();
 
-                if (!settingsData || settingsData.length === 0 || !settingsData.value_text) {
-                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontró ninguna sesión de cálculo activa de hoy. Primero procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
+                if (!cloudRows || cloudRows.length === 0) {
+                    workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros en la tabla staged_order_calculations. Procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
                     return;
                 }
 
-                // Parse out the transmitted array snapshot into memory
-                LOCAL_STAGED_ROWS = JSON.parse(settingsData.value_text);
-                
-                // For compliance, ensure approval keys exist on all entries
-                LOCAL_STAGED_ROWS.forEach(function(row) {
-                    if (row.is_approved === undefined) row.is_approved = true; 
-                    if (row.approved_formats_quantity === undefined || row.approved_formats_quantity == 0) {
-                        row.approved_formats_quantity = Math.ceil(row.pedido_sugerido || 0);
-                    }
+                // Map database columns directly to local staging states
+                LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+                    return {
+                        ingredient_id: row.ingredient_id,
+                        ingredient_name: row.ingredient_name,
+                        faltante_base: parseFloat(row.faltante_base || 0),
+                        supplier_name: row.supplier_name,
+                        supplier_uom: row.supplier_uom,
+                        conversion_factor: parseFloat(row.conversion_factor || 1),
+                        pedido_sugerido: parseFloat(row.pedido_sugerido || 0),
+                        approved_formats_quantity: Math.ceil(row.pedido_sugerido || 0),
+                        is_approved: true
+                    };
                 });
 
                 renderInteractiveManagerSpreadsheetGrid();
 
             } catch (err) {
                 console.error(err);
-                workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al cargar datos: ' + err.message + '</div>';
+                workspace.innerHTML = '<div class="loader-text" style="var(--muted)">❌ Error al cargar la matriz: ' + err.message + '</div>';
             }
         }
 

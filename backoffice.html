@@ -3955,11 +3955,16 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
-// ⚡ SINGLE SOURCE OF TRUTH VECTOR: Ship live calculation states directly to the manager app
+// ⚡ CORRECTED DESTINATION: Clear and write directly to staged_order_calculations table
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
     
-    if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
+    if (typeof TEMTEMPORARY_STAGED_PURCHASE_LINES === "undefined" && typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined") {
+        // Fallback check for naming variations in your variables
+        window.TEMPORARY_STAGED_PURCHASE_LINES = window.TEMPORARY_STAGED_PURCHASE_LINES || window.TEMPORARY_STAGED_PURCHASE_LINES;
+    }
+
+    if (!TEMPORARY_STAGED_PURCHASE_LINES || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         alert("⚠️ No hay líneas de cálculo activas. Primero procese el archivo de ventas Revo.");
         return;
     }
@@ -3969,8 +3974,19 @@ async function broadcastActiveCalculationsToPurchaseApp() {
     shipBtn.innerText = "⏳ Enviando datos...";
 
     try {
-        // Map out the temporary staged purchase items exactly matching your active grid math variables
-        const managerExportPayload = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+        // 1. Wipe out yesterday's remaining calculations first to prevent duplicate stacking
+        await fetch(API_URL + "staged_order_calculations", { 
+            method: "DELETE", 
+            headers: { 
+                "apikey": API_KEY, 
+                "Authorization": "Bearer " + API_KEY 
+            } 
+        });
+
+        // 2. Loop and insert the fresh row calculations into your dedicated table
+        for (var i = 0; i < TEMPORARY_STAGED_PURCHASE_LINES.length; i++) {
+            var line = TEMPORARY_STAGED_PURCHASE_LINES[i];
+            
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                 : [];
@@ -3979,38 +3995,30 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
             );
 
-            return {
-                ingredient_id: line.ingredient_id,
-                ingredient_name: line.ingredient_name,
-                faltante_base: parseFloat(line.consumption || 0), // Base depletion math from your recipe configuration
-                supplier_name: line.supplier_id || "Proveedor No Asignado",
-                supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
+            var payload = {
+                ingredient_id: String(line.ingredient_id),
+                ingredient_name: String(line.ingredient_name),
+                faltante_base: parseFloat(line.consumption || 0), 
+                supplier_name: String(line.supplier_id || "Proveedor No Asignado"),
+                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(line.uom || "Unidad"),
                 conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
-                pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0),
-                approved_formats_quantity: parseFloat(line.approved_formats_quantity || line.suggested_formats_quantity || 0),
-                is_approved: true // Default to true so the manager can deselect rows manually
+                pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0)
             };
-        });
 
-        // Push this clean data snapshot to your system settings table entry row inside Supabase
-        const res = await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
-            method: "PATCH",
-            headers: { 
-                "apikey": API_KEY, 
-                "Authorization": "Bearer " + API_KEY, 
-                "Content-Type": "application/json" 
-            },
-            body: JSON.stringify({ 
-                value_text: JSON.stringify(managerExportPayload), 
-                updated_at: new Date().toISOString() 
-            })
-        });
-
-        if (!res.ok) throw new Error("El servidor rechazó el almacenamiento de la sesión.");
+            await fetch(API_URL + "staged_order_calculations", {
+                method: "POST",
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY, 
+                    "Content-Type": "application/json" 
+                },
+                body: JSON.stringify(payload)
+            });
+        }
 
         shipBtn.style.background = "#22c55e";
         shipBtn.innerText = "✅ ¡Enviado Exitosamente!";
-        alert("📢 ¡Matriz de compras enviada al Administrador con éxito! Ya puede consultarse desde purchase-manager.html");
+        alert("📢 ¡Matriz de compras enviada al Administrador con éxito! Los datos ya están guardados en staged_order_calculations.");
 
         setTimeout(function() {
             shipBtn.disabled = false;
@@ -4019,7 +4027,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         }, 3000);
 
     } catch (err) {
-        console.error("Failed to transmit order layout session:", err);
+        console.error("Transmission error:", err);
         alert("❌ Error al enviar datos al gestor: " + err.message);
         shipBtn.disabled = false;
         shipBtn.style.background = "#ef4444";
