@@ -113,7 +113,7 @@
                     return;
                 }
                 console.log("💥 RAW INCOMING ROW DATA SAMPLE:", cloudRows[0]);
-                console.log("🔑 ALL SERVER PROPERTY NAMES:", Object.keys(cloudRows));
+                console.log("🔑 ALL SERVER PROPERTY NAMES:", Object.keys(cloudRows[0]));
 
                                 // 🎯 BULLETPROOF LOOKUP: Maps your exact column data to show true master table recipe units
                 LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
