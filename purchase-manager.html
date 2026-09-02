@@ -138,13 +138,12 @@
                         finalAssignedSupplierName = row.supplier_name;
                     }
 
-                                        return {
+                       return {
                         id: row.id,
                         ingredient_id: cleanIngId,
                         ingredient_name: row.ingredient_name,
-                        // 🎯 FIX: Changed row.faltante_base to row.suggested_quantity to pull true raw recipe values
-                        faltante_base: parseFloat(row.suggested_quantity || 0),
-                        recipe_uom: realRecipeUnit, // 🌟 OUTPUTS YOUR TRUE LIVE DATABASE UNIT HERE (e.g., 'oja')
+                        faltante_base: parseFloat(row.faltante_base || 0), // 🌟 Captures the 100 perfectly now!
+                        recipe_uom: realRecipeUnit, 
                         supplier_name: finalAssignedSupplierName, 
                         supplier_uom: finalPurchaseUomName, 
                         conversion_factor: finalConversionMultiplier, 
