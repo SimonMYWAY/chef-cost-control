@@ -345,9 +345,8 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
     }
 
     try {
-        // --- 🔍 STEP 1: LIVE SERVER STATUS VALIDATION ---
-        // Ask Supabase directly if this specific PO number already exists
-        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber), {
+        // --- 🔍 STEP 1: STRICT SUPPLIER + PO SERVER VALIDATION ---
+        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber) + "&supplier_name=eq." + encodeURIComponent(supplierName), {
             method: "GET",
             headers: {
                 "apikey": API_KEY,
@@ -358,10 +357,9 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         if (!checkPoRes.ok) throw new Error("Fallo de red al verificar duplicados en el servidor.");
         const existingPoData = await checkPoRes.json();
         
-        // Track whether we need to write to the database or if it's already there
         var isAlreadySaved = (existingPoData && existingPoData.length > 0);
 
-        // --- STEP 2: LIVE MASTER DATABASE RECORDING (Only executes if the PO is new!) ---
+        // --- STEP 2: LIVE MASTER DATABASE RECORDING ---
         if (!isAlreadySaved) {
             var parentPayload = {
                 po_number: poNumber,
@@ -415,7 +413,8 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
                     if (ingDataArray && ingDataArray.length > 0) {
-                        var dbIngredient = ingDataArray[0]; // 🎯 FIX: Direct mapping to the first returned element
+                        // 🎯 CORRECTION: Securely select the first object inside the database data response array
+                        var dbIngredient = ingDataArray[0]; 
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -424,8 +423,8 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                         var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                         if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
-                        // Patch increased stock level back
-                        await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                        // Patch increased stock level back onto master row
+                        const patchIngRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
                             method: "PATCH",
                             headers: {
                                 "apikey": API_KEY,
@@ -436,12 +435,15 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                                 std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                             })
                         });
+                        
+                        if (!patchIngRes.ok) throw new Error("No se pudo actualizar el stock del ingrediente " + item.ingredient_name);
+                        console.log("📊 STOCK INCREMENTADO - [" + item.ingredient_name + "]: Nuevo Nivel: " + definitiveNewInventoryLevel);
                     }
                 }
             }
-            console.log("💾 Base de datos de inventario actualizada de manera limpia.");
+            console.log("💾 Base de datos e inventario registrados de manera limpia.");
         } else {
-            console.log("⏭️ PO Detectada en Supabase. Omitiendo incremento redundante de inventario.");
+            console.log("⏭️ Esta orden específica de proveedor ya existe en Supabase. Omitiendo duplicación de inventario.");
         }
 
         // --- STEP 3: FORMAT & CLIPBOARD COPY ---
@@ -474,9 +476,9 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         }
 
         if (!isAlreadySaved) {
-            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y texto copiado! Abre WhatsApp para enviar.");
+            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y orden copiada al portapapeles! Abre WhatsApp para enviar.");
         } else {
-            alert("📋 El pedido ya estaba registrado. ¡Texto copiado de nuevo al portapapeles sin duplicar stock! Abre WhatsApp para enviar.");
+            alert("📋 Esta orden ya estaba registrada. ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
         }
         
         window.open("https://whatsapp.com", '_blank');
@@ -486,7 +488,6 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase. Envío detenido: " + err.message);
     }
 }
-
 
 // 🎯 STEP D: Finalize and dim card once confirmed by operator
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
