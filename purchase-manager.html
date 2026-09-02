@@ -344,12 +344,24 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         return;
     }
 
-    var supplierCard = document.getElementById(cardElementId);
-    // 🔍 Check if this specific card was already successfully saved in a previous click
-    var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
-
     try {
-        // --- STEP A: LIVE MASTER DATABASE RECORDING (Skip if already saved!) ---
+        // --- 🔍 STEP 1: LIVE SERVER STATUS VALIDATION ---
+        // Ask Supabase directly if this specific PO number already exists
+        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber), {
+            method: "GET",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY
+            }
+        });
+
+        if (!checkPoRes.ok) throw new Error("Fallo de red al verificar duplicados en el servidor.");
+        const existingPoData = await checkPoRes.json();
+        
+        // Track whether we need to write to the database or if it's already there
+        var isAlreadySaved = (existingPoData && existingPoData.length > 0);
+
+        // --- STEP 2: LIVE MASTER DATABASE RECORDING (Only executes if the PO is new!) ---
         if (!isAlreadySaved) {
             var parentPayload = {
                 po_number: poNumber,
@@ -403,7 +415,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
                     if (ingDataArray && ingDataArray.length > 0) {
-                        var dbIngredient = ingDataArray[0]; // Fix array target mapping
+                        var dbIngredient = ingDataArray[0]; // 🎯 FIX: Direct mapping to the first returned element
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -427,12 +439,12 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                     }
                 }
             }
-            console.log("💾 Base de datos e inventario actualizados correctamente.");
+            console.log("💾 Base de datos de inventario actualizada de manera limpia.");
         } else {
-            console.log("⏭️ Registro ya guardado previamente. Omitiendo duplicación de inventario.");
+            console.log("⏭️ PO Detectada en Supabase. Omitiendo incremento redundante de inventario.");
         }
 
-        // --- STEP B: FORMAT & CLIPBOARD COPY ---
+        // --- STEP 3: FORMAT & CLIPBOARD COPY ---
         var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + poNumber + "__*:\n\n";
         filteredLines.forEach(function(item) {
             msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
@@ -441,7 +453,8 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
 
         await navigator.clipboard.writeText(msg);
 
-        // --- STEP C: LIVE INTERACTIVE INTERFACE RESPONSE UPDATE ---
+        // --- STEP 4: LIVE INTERACTIVE INTERFACE RESPONSE UPDATE ---
+        var supplierCard = document.getElementById(cardElementId);
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
             
@@ -463,7 +476,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         if (!isAlreadySaved) {
             alert("💾 ¡Datos guardados en Supabase, inventario incrementado y texto copiado! Abre WhatsApp para enviar.");
         } else {
-            alert("📋 ¡Texto de orden copiado nuevamente al portapapeles! Abre WhatsApp para enviar.");
+            alert("📋 El pedido ya estaba registrado. ¡Texto copiado de nuevo al portapapeles sin duplicar stock! Abre WhatsApp para enviar.");
         }
         
         window.open("https://whatsapp.com", '_blank');
@@ -473,6 +486,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase. Envío detenido: " + err.message);
     }
 }
+
 
 // 🎯 STEP D: Finalize and dim card once confirmed by operator
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
