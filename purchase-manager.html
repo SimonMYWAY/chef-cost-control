@@ -522,40 +522,71 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     }
 }
 
-        // 🎯 STEP 5: Finalize and dim card once confirmed by operator
-        async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
-            try {
-                // Update rows to 'dispatched' state in your database tables
-                const { error } = await supabase
-                    .from('staged_order_calculations')
-                    .update({ status: 'dispatched' })
-                    .eq('supplier_name', supplierName)
-                    .eq('status', 'saved_pending_whatsapp');
-
-                if (error) throw error;
-
-                var supplierCard = document.getElementById(cardElementId);
-                if (supplierCard) {
-                    // Visually dim out the card and push it down the page layout hierarchy gracefully
-                    supplierCard.style.opacity = "0.4";
-                    supplierCard.style.filter = "grayscale(100%)";
-                    supplierCard.style.pointerEvents = "none";
-                    
-                    var badge = supplierCard.querySelector(".status-indicator");
-                    if (badge) {
-                        badge.style.background = "#2ecc71";
-                        badge.innerHTML = "✅ Orden Enviada Exitosamente";
-                    }
-                }
-                
-                alert("🏁 ¡Orden marcada como enviada! Pasando al siguiente proveedor.");
-                
-            } catch (err) {
-                alert("❌ Error actualizando el estado de envío.");
+        // 🎯 STEP D: Finalize and dim card once confirmed by operator
+async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
+    try {
+        // Query database to locate the order currently sitting in the WhatsApp pending state
+        const findPoRes = await fetch(API_URL + "purchase_orders?supplier_name=eq." + encodeURIComponent(supplierName) + "&status=eq.saved_pending_whatsapp", {
+            method: "GET",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY
             }
+        });
+
+        if (!findPoRes.ok) throw new Error("Fallo de red al buscar la orden.");
+        const poDataArray = await findPoRes.json();
+
+        // Check if we found a valid record in the array response
+        if (poDataArray && poDataArray.length > 0) {
+            var targetRecord = poDataArray[poDataArray.length - 1]; 
+            var poRecordId = targetRecord.id;
+
+            // Patch the matching row status property to 'dispatched'
+            const patchRes = await fetch(API_URL + "purchase_orders?id=eq." + poRecordId, {
+                method: "PATCH",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ status: 'dispatched' })
+            });
+
+            if (!patchRes.ok) throw new Error("No se pudo actualizar el estado de la orden en el servidor.");
         }
 
+        var supplierCard = document.getElementById(cardElementId);
+        if (supplierCard) {
+            // Apply visual dimming and graying effects
+            supplierCard.style.opacity = "0.3";
+            supplierCard.style.filter = "grayscale(100%)";
+            supplierCard.style.pointerEvents = "none";
+            
+            var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
+            if (targetContainer) {
+                targetContainer.innerHTML = `
+                    <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                        ✅ Orden Enviada Exitosamente
+                    </div>
+                `;
+            }
+            
+            // Push card to the bottom of the workspace layout hierarchy container
+            var containerParent = supplierCard.parentNode;
+            if (containerParent) {
+                containerParent.appendChild(supplierCard);
+            }
+        }
         
+        alert("🏁 ¡Orden finalizada con éxito y movida al final de la cola!");
+        
+    } catch (err) {
+        console.error("Dispatch Error Detail:", err);
+        alert("❌ Error actualizando el estado de envío final en Supabase: " + err.message);
+    }
+}
+     
 
                 // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
         function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
