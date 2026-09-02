@@ -167,23 +167,29 @@ function renderInteractiveManagerSpreadsheetGrid() {
     workspace.innerHTML = "";
 
     var groupedData = {};
-    var poCounter = 1;
+    var poCounter = 1; // Starts at 1 and increases cleanly for EVERY separate block
     var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
+    // First, group items under distinct supplier keys safely
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
             groupedData[sup] = {
-                poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
+                poNumber: "", // Will be assigned sequentially next
                 items: []
             };
-            poCounter++;
         }
         groupedData[sup].items.push(row);
     });
 
+    // Second, loop through the distinct suppliers to assign GUARANTEED unique sequential PO numbers
     Object.keys(groupedData).forEach(function(supplierName) {
         var group = groupedData[supplierName];
+        
+        // 🎯 FIX: Each supplier gets a unique sequential code number (001, 002, 003...)
+        group.poNumber = "PO-" + todayString + "-" + String(poCounter).padStart(3, '0');
+        poCounter++; 
+
         var blockKey = supplierName.replace(/\s+/g, '-');
         var escapedSupplierName = supplierName.replace(/'/g, "\\'");
 
@@ -263,7 +269,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
             `;
         });
 
-        // 🔘 UNIFIED BUTTON SYSTEM: Only ONE primary button handles the whole initialization block
         blockHtml += `
             </div>
             <div class="action-cluster" style="display: flex; flex-direction: column; gap: 8px;">
@@ -345,8 +350,8 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
     }
 
     try {
-        // --- 🔍 STEP 1: STRICT SUPPLIER + PO SERVER VALIDATION ---
-        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber) + "&supplier_name=eq." + encodeURIComponent(supplierName), {
+        // --- 🔍 STEP 1: VALIDATE RECORD BY HISTORIC PO NUMBER IN SUPABASE ---
+        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber), {
             method: "GET",
             headers: {
                 "apikey": API_KEY,
@@ -361,6 +366,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
 
         // --- STEP 2: LIVE MASTER DATABASE RECORDING ---
         if (!isAlreadySaved) {
+            // Keep the po_number column intact as it is verified to exist in Supabase!
             var parentPayload = {
                 po_number: poNumber,
                 supplier_name: supplierName,
@@ -413,7 +419,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
                     if (ingDataArray && ingDataArray.length > 0) {
-                        // 🎯 CORRECTION: Securely select the first object inside the database data response array
+                        // 🎯 FIX: Select array index [0] to read std_inventory property safely
                         var dbIngredient = ingDataArray[0]; 
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
