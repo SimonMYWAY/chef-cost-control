@@ -112,10 +112,8 @@
                     workspace.innerHTML = '<div class="loader-text">⚠️ No se encontraron registros. Procese el archivo Revo en el Backoffice y presione "Enviar a Gte. de Compras".</div>';
                     return;
                 }
-                console.log("💥 RAW INCOMING ROW DATA SAMPLE:", cloudRows[0]);
-                console.log("🔑 ALL SERVER PROPERTY NAMES:", Object.keys(cloudRows[0]));
-
-                                // 🎯 BULLETPROOF LOOKUP: Maps your exact column data to show true master table recipe units
+              
+                // 🎯 BULLETPROOF LOOKUP: Maps your exact column data to show true master table recipe units
                 LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
                     var cleanIngId = String(row.ingredient_id).trim();
                     var lookupKey = cleanIngId.toLowerCase(); // Case-insensitive neutral anchor check
@@ -139,12 +137,13 @@
                         finalAssignedSupplierName = row.supplier_name;
                     }
 
-                       return {
+                    return {
                         id: row.id,
                         ingredient_id: cleanIngId,
                         ingredient_name: row.ingredient_name,
-                        faltante_base: parseFloat(row.faltante_base || 0), // 🌟 Captures the 100 perfectly now!
-                        recipe_uom: realRecipeUnit, 
+                        // 🎯 REVERSE MATH FIX: Reconstructs the raw recipe quantity for visual reference safely
+                        faltante_base: parseFloat(row.faltante_base || 0) * finalConversionMultiplier,
+                        recipe_uom: realRecipeUnit, // 🌟 OUTPUTS YOUR TRUE LIVE DATABASE UNIT HERE
                         supplier_name: finalAssignedSupplierName, 
                         supplier_uom: finalPurchaseUomName, 
                         conversion_factor: finalConversionMultiplier, 
@@ -152,7 +151,6 @@
                         approved_formats_quantity: Math.ceil(row.pedido_sugerido || 0),
                         is_approved: true
                     };
-
                 });
 
                 renderInteractiveManagerSpreadsheetGrid();
