@@ -341,7 +341,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             }
         }
 // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
-async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElementId) {
+async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -349,26 +349,59 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         return;
     }
 
+    var blockKey = supplierName.replace(/\s+/g, '-');
+    
+    // Extract local time variables to prevent UTC date shifting issues
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    var todayString = yyyy + mm + dd; 
+    
+    var definitivePoNumber = "";
+
     try {
-        // --- 🔍 STEP 1: VALIDATE RECORD BY HISTORIC PO NUMBER IN SUPABASE ---
-        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(poNumber), {
+        // --- 🔍 STEP 1: DYNAMIC LIVE MAX PO NUMBER LOOKUP ---
+        // 🎯 FIX: We swap the * wildcard selector out for % so Supabase performs a true wildcard match search
+        const fetchTodayPos = await fetch(API_URL + "purchase_orders?po_number=ilike.PO-" + todayString + "-%&select=po_number,supplier_name,status", {
             method: "GET",
-            headers: {
-                "apikey": API_KEY,
-                "Authorization": "Bearer " + API_KEY
-            }
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
 
-        if (!checkPoRes.ok) throw new Error("Fallo de red al verificar duplicados en el servidor.");
-        const existingPoData = await checkPoRes.json();
-        
-        var isAlreadySaved = (existingPoData && existingPoData.length > 0);
+        if (!fetchTodayPos.ok) throw new Error("No se pudieron consultar los registros históricos de órdenes del día.");
+        const todayOrdersArray = await fetchTodayPos.json();
+
+        // Check if this supplier already has an active order recorded today to prevent double-saving stock
+        var existingSupplierOrder = todayOrdersArray.find(o => o.supplier_name === supplierName && o.status === 'saved_pending_whatsapp');
+        var isAlreadySaved = !!existingSupplierOrder;
+
+        if (isAlreadySaved) {
+            definitivePoNumber = existingSupplierOrder.po_number;
+            console.log("⏭️ Orden existente localizada en Supabase: " + definitivePoNumber);
+        } else {
+            // Calculate the next global order sequence safely
+            var maxSequence = 0;
+            todayOrdersArray.forEach(function(order) {
+                if (order.po_number) {
+                    var segments = order.po_number.split("-");
+                    // 🎯 FIX: Explicitly target the third segment index string position ([2]) to pull digits cleanly
+                    if (segments.length === 3) {
+                        var seqNum = parseInt(segments[2], 10);
+                        if (!isNaN(seqNum) && seqNum > maxSequence) {
+                            maxSequence = seqNum;
+                        }
+                    }
+                }
+            });
+            var nextSequence = maxSequence + 1;
+            definitivePoNumber = "PO-" + todayString + "-" + String(nextSequence).padStart(3, '0');
+            console.log("✨ Nueva PO única calculada por el servidor: " + definitivePoNumber);
+        }
 
         // --- STEP 2: LIVE MASTER DATABASE RECORDING ---
         if (!isAlreadySaved) {
-            // Keep the po_number column intact as it is verified to exist in Supabase!
             var parentPayload = {
-                po_number: poNumber,
+                po_number: definitivePoNumber,
                 supplier_name: supplierName,
                 status: 'saved_pending_whatsapp', 
                 total_items: filteredLines.length
@@ -419,8 +452,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
                     if (ingDataArray && ingDataArray.length > 0) {
-                        // 🎯 FIX: Select array index [0] to read std_inventory property safely
-                        var dbIngredient = ingDataArray[0]; 
+                        var dbIngredient = ingDataArray[0]; // Safely extract first array object item reference index
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -443,17 +475,13 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                         });
                         
                         if (!patchIngRes.ok) throw new Error("No se pudo actualizar el stock del ingrediente " + item.ingredient_name);
-                        console.log("📊 STOCK INCREMENTADO - [" + item.ingredient_name + "]: Nuevo Nivel: " + definitiveNewInventoryLevel);
                     }
                 }
             }
-            console.log("💾 Base de datos e inventario registrados de manera limpia.");
-        } else {
-            console.log("⏭️ Esta orden específica de proveedor ya existe en Supabase. Omitiendo duplicación de inventario.");
         }
 
         // --- STEP 3: FORMAT & CLIPBOARD COPY ---
-        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + poNumber + "__*:\n\n";
+        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + definitivePoNumber + "__*:\n\n";
         filteredLines.forEach(function(item) {
             msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
         });
@@ -466,11 +494,18 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
             
+            // Render the final calculated PO number badge onto the title bar live
+            var poBadge = document.getElementById("po-badge-node-" + blockKey);
+            if (poBadge) {
+                poBadge.innerHTML = definitivePoNumber;
+                poBadge.style.background = "var(--primary)";
+            }
+
             var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
             if (targetContainer) {
                 targetContainer.innerHTML = `
                     <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        📝 Guardado - Pendiente de enviar en WhatsApp
+                        📝 Guardado - Pendiente de enviar en WhatsApp (${definitivePoNumber})
                     </div>
                 `;
             }
@@ -482,16 +517,16 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         }
 
         if (!isAlreadySaved) {
-            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y orden copiada al portapapeles! Abre WhatsApp para enviar.");
+            alert("💾 ¡Nueva Orden " + definitivePoNumber + " guardada con éxito! Inventario incrementado y texto copiado.");
         } else {
-            alert("📋 Esta orden ya estaba registrada. ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
+            alert("📋 La orden " + definitivePoNumber + " ya estaba registrada. ¡Texto vuelto a copiar de forma segura sin duplicar stock!");
         }
         
         window.open("https://whatsapp.com", '_blank');
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
-        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase. Envío detenido: " + err.message);
+        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase: " + err.message);
     }
 }
 
