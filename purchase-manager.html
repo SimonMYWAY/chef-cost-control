@@ -335,7 +335,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 }
             }
         }
-        // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
+// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
 async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -344,83 +344,92 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         return;
     }
 
+    var supplierCard = document.getElementById(cardElementId);
+    // 🔍 Check if this specific card was already successfully saved in a previous click
+    var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
+
     try {
-        // --- STEP A: LIVE MASTER DATABASE RECORDING ---
-        var parentPayload = {
-            po_number: poNumber,
-            supplier_name: supplierName,
-            status: 'saved_pending_whatsapp', // Track initial lifecycle status state
-            total_items: filteredLines.length
-        };
-
-        const resParent = await fetch(API_URL + "purchase_orders", {
-            method: "POST",
-            headers: {
-                "apikey": API_KEY,
-                "Authorization": "Bearer " + API_KEY,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            },
-            body: JSON.stringify(parentPayload)
-        });
-
-        if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
-        const parentRowResultData = await resParent.json();
-        var generatedPoUuid = parentRowResultData.id;
-
-        // Loop through lines to save itemization rows AND update stock levels using fetch
-        for (var i = 0; i < filteredLines.length; i++) {
-            var item = filteredLines[i];
-            
-            var childPayload = {
-                po_id: generatedPoUuid,
-                ingredient_name: item.ingredient_name,
-                quantity_ordered: item.approved_formats_quantity,
-                supplier_uom: item.supplier_uom
+        // --- STEP A: LIVE MASTER DATABASE RECORDING (Skip if already saved!) ---
+        if (!isAlreadySaved) {
+            var parentPayload = {
+                po_number: poNumber,
+                supplier_name: supplierName,
+                status: 'saved_pending_whatsapp', 
+                total_items: filteredLines.length
             };
 
-            await fetch(API_URL + "purchase_order_items", {
+            const resParent = await fetch(API_URL + "purchase_orders", {
                 method: "POST",
                 headers: {
                     "apikey": API_KEY,
                     "Authorization": "Bearer " + API_KEY,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
                 },
-                body: JSON.stringify(childPayload)
+                body: JSON.stringify(parentPayload)
             });
 
-            // Fetch current inventory directly
-            const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
-                method: "GET",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            if (ingFetchRes.ok) {
-                const ingDataArray = await ingFetchRes.json();
-                if (ingDataArray && ingDataArray.length > 0) {
-                    var dbIngredient = ingDataArray[0];
-                    var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
-                    var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
-                    var conversionFactor = parseFloat(item.conversion_factor || 1);
-                    
-                    var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
-                    var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
-                    if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
+            if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
+            const parentRowResultData = await resParent.json();
+            var generatedPoUuid = parentRowResultData.id;
 
-                    // Patch increased stock level back
-                    await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
-                        method: "PATCH",
-                        headers: {
-                            "apikey": API_KEY,
-                            "Authorization": "Bearer " + API_KEY,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
-                        })
-                    });
+            // Loop through lines to save itemization rows AND update stock levels
+            for (var i = 0; i < filteredLines.length; i++) {
+                var item = filteredLines[i];
+                
+                var childPayload = {
+                    po_id: generatedPoUuid,
+                    ingredient_name: item.ingredient_name,
+                    quantity_ordered: item.approved_formats_quantity,
+                    supplier_uom: item.supplier_uom
+                };
+
+                await fetch(API_URL + "purchase_order_items", {
+                    method: "POST",
+                    headers: {
+                        "apikey": API_KEY,
+                        "Authorization": "Bearer " + API_KEY,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(childPayload)
+                });
+
+                // Fetch current inventory directly
+                const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                
+                if (ingFetchRes.ok) {
+                    const ingDataArray = await ingFetchRes.json();
+                    if (ingDataArray && ingDataArray.length > 0) {
+                        var dbIngredient = ingDataArray[0]; // Fix array target mapping
+                        var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
+                        var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
+                        var conversionFactor = parseFloat(item.conversion_factor || 1);
+                        
+                        var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
+                        var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
+                        if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
+
+                        // Patch increased stock level back
+                        await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                            method: "PATCH",
+                            headers: {
+                                "apikey": API_KEY,
+                                "Authorization": "Bearer " + API_KEY,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
+                            })
+                        });
+                    }
                 }
             }
+            console.log("💾 Base de datos e inventario actualizados correctamente.");
+        } else {
+            console.log("⏭️ Registro ya guardado previamente. Omitiendo duplicación de inventario.");
         }
 
         // --- STEP B: FORMAT & CLIPBOARD COPY ---
@@ -433,7 +442,6 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         await navigator.clipboard.writeText(msg);
 
         // --- STEP C: LIVE INTERACTIVE INTERFACE RESPONSE UPDATE ---
-        var supplierCard = document.getElementById(cardElementId);
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
             
@@ -452,7 +460,12 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
             }
         }
 
-        alert("💾 ¡Datos guardados en Supabase, inventario incrementado y texto copiado! Abre WhatsApp para enviar.");
+        if (!isAlreadySaved) {
+            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y texto copiado! Abre WhatsApp para enviar.");
+        } else {
+            alert("📋 ¡Texto de orden copiado nuevamente al portapapeles! Abre WhatsApp para enviar.");
+        }
+        
         window.open("https://whatsapp.com", '_blank');
 
     } catch (err) {
