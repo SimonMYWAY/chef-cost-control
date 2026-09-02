@@ -167,29 +167,29 @@ function renderInteractiveManagerSpreadsheetGrid() {
     workspace.innerHTML = "";
 
     var groupedData = {};
-    var poCounter = 1; // Starts at 1 and increases cleanly for EVERY separate block
-    var todayString = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    var poCounter = 1;
+    
+    // Extract local time variables to prevent UTC date shifting issues
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    var todayString = yyyy + mm + dd; 
 
-    // First, group items under distinct supplier keys safely
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
             groupedData[sup] = {
-                poNumber: "", // Will be assigned sequentially next
+                poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
                 items: []
             };
+            poCounter++;
         }
         groupedData[sup].items.push(row);
     });
 
-    // Second, loop through the distinct suppliers to assign GUARANTEED unique sequential PO numbers
     Object.keys(groupedData).forEach(function(supplierName) {
         var group = groupedData[supplierName];
-        
-        // 🎯 FIX: Each supplier gets a unique sequential code number (001, 002, 003...)
-        group.poNumber = "PO-" + todayString + "-" + String(poCounter).padStart(3, '0');
-        poCounter++; 
-
         var blockKey = supplierName.replace(/\s+/g, '-');
         var escapedSupplierName = supplierName.replace(/'/g, "\\'");
 
@@ -288,7 +288,9 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
         blockDiv.innerHTML = blockHtml;
         workspace.appendChild(blockDiv);
-        updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
+        if (typeof updateVisualReceiptReceiptSlipMarkdown === "function") {
+            updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
+        }
     });
 }
 
@@ -341,7 +343,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             }
         }
 // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
-async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
+async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -349,59 +351,14 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         return;
     }
 
-    var blockKey = supplierName.replace(/\s+/g, '-');
-    
-    // Extract local time variables to prevent UTC date shifting issues
-    var today = new Date();
-    var yyyy = today.getFullYear();
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var dd = String(today.getDate()).padStart(2, '0');
-    var todayString = yyyy + mm + dd; 
-    
-    var definitivePoNumber = "";
+    var supplierCard = document.getElementById(cardElementId);
+    var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
 
     try {
-        // --- 🔍 STEP 1: DYNAMIC LIVE MAX PO NUMBER LOOKUP ---
-        // 🎯 FIX: We swap the * wildcard selector out for % so Supabase performs a true wildcard match search
-        const fetchTodayPos = await fetch(API_URL + "purchase_orders?po_number=ilike.PO-" + todayString + "-%&select=po_number,supplier_name,status", {
-            method: "GET",
-            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-
-        if (!fetchTodayPos.ok) throw new Error("No se pudieron consultar los registros históricos de órdenes del día.");
-        const todayOrdersArray = await fetchTodayPos.json();
-
-        // Check if this supplier already has an active order recorded today to prevent double-saving stock
-        var existingSupplierOrder = todayOrdersArray.find(o => o.supplier_name === supplierName && o.status === 'saved_pending_whatsapp');
-        var isAlreadySaved = !!existingSupplierOrder;
-
-        if (isAlreadySaved) {
-            definitivePoNumber = existingSupplierOrder.po_number;
-            console.log("⏭️ Orden existente localizada en Supabase: " + definitivePoNumber);
-        } else {
-            // Calculate the next global order sequence safely
-            var maxSequence = 0;
-            todayOrdersArray.forEach(function(order) {
-                if (order.po_number) {
-                    var segments = order.po_number.split("-");
-                    // 🎯 FIX: Explicitly target the third segment index string position ([2]) to pull digits cleanly
-                    if (segments.length === 3) {
-                        var seqNum = parseInt(segments[2], 10);
-                        if (!isNaN(seqNum) && seqNum > maxSequence) {
-                            maxSequence = seqNum;
-                        }
-                    }
-                }
-            });
-            var nextSequence = maxSequence + 1;
-            definitivePoNumber = "PO-" + todayString + "-" + String(nextSequence).padStart(3, '0');
-            console.log("✨ Nueva PO única calculada por el servidor: " + definitivePoNumber);
-        }
-
-        // --- STEP 2: LIVE MASTER DATABASE RECORDING ---
+        // --- STEP 1: MASTER DATABASE RECORDING ---
         if (!isAlreadySaved) {
             var parentPayload = {
-                po_number: definitivePoNumber,
+                po_number: poNumber,
                 supplier_name: supplierName,
                 status: 'saved_pending_whatsapp', 
                 total_items: filteredLines.length
@@ -452,7 +409,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
                     if (ingDataArray && ingDataArray.length > 0) {
-                        var dbIngredient = ingDataArray[0]; // Safely extract first array object item reference index
+                        var dbIngredient = ingDataArray[0]; 
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -478,10 +435,13 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                     }
                 }
             }
+            console.log("💾 Base de datos e inventario registrados de manera limpia.");
+        } else {
+            console.log("⏭️ Esta orden ya ha sido guardada en la interfaz local. Omitiendo duplicación de inventario.");
         }
 
-        // --- STEP 3: FORMAT & CLIPBOARD COPY ---
-        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + definitivePoNumber + "__*:\n\n";
+        // --- STEP 2: FORMAT & CLIPBOARD COPY ---
+        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + poNumber + "__*:\n\n";
         filteredLines.forEach(function(item) {
             msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
         });
@@ -489,23 +449,15 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
         await navigator.clipboard.writeText(msg);
 
-        // --- STEP 4: LIVE INTERACTIVE INTERFACE RESPONSE UPDATE ---
-        var supplierCard = document.getElementById(cardElementId);
+        // --- STEP 3: INTERFACE STATE UPDATES ---
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
             
-            // Render the final calculated PO number badge onto the title bar live
-            var poBadge = document.getElementById("po-badge-node-" + blockKey);
-            if (poBadge) {
-                poBadge.innerHTML = definitivePoNumber;
-                poBadge.style.background = "var(--primary)";
-            }
-
             var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
             if (targetContainer) {
                 targetContainer.innerHTML = `
                     <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        📝 Guardado - Pendiente de enviar en WhatsApp (${definitivePoNumber})
+                        📝 Guardado - Pendiente de enviar en WhatsApp
                     </div>
                 `;
             }
@@ -517,9 +469,9 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         }
 
         if (!isAlreadySaved) {
-            alert("💾 ¡Nueva Orden " + definitivePoNumber + " guardada con éxito! Inventario incrementado y texto copiado.");
+            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y orden copiada al portapapeles! Abre WhatsApp para enviar.");
         } else {
-            alert("📋 La orden " + definitivePoNumber + " ya estaba registrada. ¡Texto vuelto a copiar de forma segura sin duplicar stock!");
+            alert("📋 ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
         }
         
         window.open("https://whatsapp.com", '_blank');
