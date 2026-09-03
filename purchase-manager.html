@@ -309,43 +309,6 @@ function updateLiveRowApprovalToggleState(idx, state) {
     refreshAllActiveReceiptDisplays();
 }
 
-        // ⚡ RUN TIME CORE 3: Input event bindings and math synchronization outputs
-        function updateLiveRowApprovedQuantity(idx, val) {
-            var parsedValue = Math.ceil(parseFloat(val) || 0);
-            LOCAL_STAGED_ROWS[idx].approved_formats_quantity = parsedValue;
-            
-            // Recalculate text metrics instantly on screen layout elements matching row pointers
-            var equivalenceTarget = document.getElementById("equivalence-display-node-" + idx);
-            if (equivalenceTarget) {
-                var factor = parseFloat(LOCAL_STAGED_ROWS[idx].conversion_factor || 1);
-                var uomLabel = LOCAL_STAGED_ROWS[idx].recipe_uom;
-                equivalenceTarget.innerText = (parsedValue * factor).toFixed(2) + " " + uomLabel;
-            }
-            refreshAllActiveReceiptDisplays();
-        }
-
-        function updateLiveRowSupplierAssignment(idx, chosenSupplier) {
-            // Re-map purchase format strings directly based on matching supplier formats lookup records
-            var matchedFormat = GLOBAL_SUPPLIER_FORMATS_LIST.find(function(f) {
-                return String(f.ingredient_id).trim() === String(LOCAL_STAGED_ROWS[idx].ingredient_id).trim() && 
-                       String(f.provider_name).trim() === String(chosenSupplier).trim();
-            });
-
-            LOCAL_STAGED_ROWS[idx].supplier_name = chosenSupplier;
-            if (matchedFormat) {
-                LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom || "Formato";
-                LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
-            }
-            
-            // Refresh table grids to group items instantly under the newly assigned supplier card block
-            setTimeout(renderInteractiveManagerSpreadsheetGrid, 200);
-        }
-
-        function updateLiveRowApprovalToggleState(idx, isChecked) {
-            LOCAL_STAGED_ROWS[idx].is_approved = isChecked;
-            refreshAllActiveReceiptDisplays();
-        }
-
         function refreshAllActiveReceiptDisplays() {
             var blockDivs = document.getElementsByClassName("supplier-block");
             for (var i = 0; i < blockDivs.length; i++) {
