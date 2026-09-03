@@ -3880,18 +3880,15 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-                // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
+        // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
             
             var batchUniqueToken = "BATCH-" + (definitiveDeclaredSalesDateStr || new Date().toISOString().slice(0,10).replace(/-/g,""));
 
-            // A. PUSH OUT THE OLD SHIP: Clear out yesterday's uncommitted rows completely from the staging table
+            // A. PUSH OUT THE OLD SHIP: Clear staging table rows cleanly
             await fetch(API_URL + "staged_order_calculations", {
                 method: "DELETE",
-                headers: {
-                    "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY
-                }
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
             console.log("🧹 Previous staged lines cleared from cloud port.");
 
@@ -3904,15 +3901,20 @@ async function executeFinalInventoryProcurementCommit() {
                     String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
                 );
 
+                // Calculate values cleanly to maintain your exact database variables word-for-word
+                const baseFaltante = parseFloat(line.faltante || 0);
+
                 return {
                     calculation_batch_id: batchUniqueToken,
                     ingredient_id: line.ingredient_id,
                     ingredient_name: line.ingredient_name,
-                    faltante_base: parseFloat(line.consumption || line.faltante || 0),
+                    // 🎯 FIX: Store the raw base requirement weight exactly as it is calculated
+                    faltante_base: baseFaltante, 
+                    // 🎯 FIX: Fallback safely to line.uom to capture the true master recipe text string
+                    recipe_uom: line.uom || "Kg", 
                     supplier_uom: activeFormatRule ? activeFormatRule.purchase_uom : (line.uom || "Unidad"),
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
                     supplier_name: line.supplier_id || "Proveedor No Asignado",
-                    // 🎯 CORE VECTOR: Ensure it outputs the true positive number here to qualify as active cargo
                     pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1)
                 };
             });
@@ -3920,11 +3922,7 @@ async function executeFinalInventoryProcurementCommit() {
             // Post the fresh unified batch block down to Supabase tables at once
             const pushCargoRes = await fetch(API_URL + "staged_order_calculations", {
                 method: "POST",
-                headers: {
-                    "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY,
-                    "Content-Type": "application/json"
-                },
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                 body: JSON.stringify(targetCargoPayloadArray)
             });
 
