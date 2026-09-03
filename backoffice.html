@@ -3897,7 +3897,7 @@ async function executeFinalInventoryProcurementCommit() {
                 return {
                     ingredient_id: line.ingredient_id,
                     ingredient_name: line.ingredient_name,
-                    faltante_base: parseFloat(line.consumption || 0), // Your dynamic base calculation
+                    faltante_base: parseFloat(line.consumption || 0), 
                     supplier_name: line.supplier_id || "Proveedor No Asignado",
                     supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
@@ -3907,11 +3907,20 @@ async function executeFinalInventoryProcurementCommit() {
                 };
             });
 
-            // Store cleanly inside a unified cache row in your settings block for the manager app to read instantly
-            await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
-                method: "PATCH",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                body: JSON.stringify({ value_text: JSON.stringify(managerExportPayload), updated_at: new Date().toISOString() })
+            // 🎯 UPSERT CORRECTION: Force Supabase to create the missing row dynamically if it doesn't exist
+            await fetch(`${API_URL}system_settings`, {
+                method: "POST",
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY, 
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates" // Crucial header for native Upsert operation
+                },
+                body: JSON.stringify({ 
+                    key: "active_manager_order_staging",
+                    value_text: JSON.stringify(managerExportPayload), 
+                    updated_at: new Date().toISOString() 
+                })
             });
         }
 
