@@ -3880,30 +3880,35 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-               // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
-        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+        // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
+        // 🎯 SCOPE FIX: Fall back to CACHED_CONVERSION_MAPPINGS array if the primary staging line vector is cleared
+        var activeLinesSource = (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0)
+            ? TEMPORARY_STAGED_PURCHASE_LINES 
+            : (typeof approvedLines !== "undefined" ? approvedLines : []);
+
+        if (activeLinesSource.length > 0) {
             console.log("📡 Shipping active calculation layers to the manager portal...");
             
             // Build the exact payload mimicking your exact grid fields structure word-for-word
-            const managerExportPayload = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+            const managerExportPayload = activeLinesSource.map(line => {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                     : [];
                     
                 const activeFormatRule = authorizedFormats.find(f => 
-                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id).toLowerCase().trim()
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || line.supplier_name).toLowerCase().trim()
                 );
 
                 return {
                     ingredient_id: line.ingredient_id,
                     ingredient_name: line.ingredient_name,
-                    faltante_base: parseFloat(line.consumption || 0), 
-                    supplier_name: line.supplier_id || "Proveedor No Asignado",
+                    faltante_base: parseFloat(line.consumption || line.faltante || 0), 
+                    supplier_name: line.supplier_id || line.supplier_name || "Proveedor No Asignado",
                     supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
                     pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0),
                     approved_formats_quantity: parseFloat(line.approved_formats_quantity || 0),
-                    is_approved: line.is_approved || false
+                    is_approved: line.is_approved !== undefined ? line.is_approved : true
                 };
             });
 
@@ -3958,6 +3963,8 @@ async function executeFinalInventoryProcurementCommit() {
             } catch (innerErr) {
                 console.error("❌ Error broadcasting cargo staging:", innerErr);
             }
+        } else {
+            console.log("⚠️ Warning: No active purchase line structures detected. Broadcast skipped.");
         }
 
         if (updatePromises.length > 0) {
@@ -3965,7 +3972,7 @@ async function executeFinalInventoryProcurementCommit() {
             console.log("🚀 All Supabase stock conversion increments written safely to server disks.");
         }
 
-        if (approvedLines.length > 0) {
+        if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             const downloadUrl = URL.createObjectURL(blob);
@@ -3979,7 +3986,7 @@ async function executeFinalInventoryProcurementCommit() {
             
             alert("📊 ¡Reporte de Formatos Procesado y Guardado con Éxito!");
         } else {
-            alert("✅ Consumos del día processed. El stock ha sido descontado correctamente.");
+            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente.");
         }
 
         if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
@@ -4001,6 +4008,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
+
 // ⚡ RESTORED CONVEYOR: Purely transmits calculations without modifying master inventory
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
