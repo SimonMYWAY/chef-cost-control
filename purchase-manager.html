@@ -75,7 +75,7 @@ async function pullActiveStagedCalculationFromCloud() {
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table (YOUR ORIGINAL OPERATIONAL METHOD)
+        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
         const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -84,7 +84,7 @@ async function pullActiveStagedCalculationFromCloud() {
             const ings = await ingRes.json();
             ings.forEach(function(i) {
                 if (i.id) {
-                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Unid";
+                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
                 }
             });
         }
@@ -97,7 +97,7 @@ async function pullActiveStagedCalculationFromCloud() {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
         }
 
-        // 3. Read only elements where suggested order amount is greater than 0
+        // 3. Read only active elements where suggested order amount is greater than 0
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -118,12 +118,14 @@ async function pullActiveStagedCalculationFromCloud() {
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             var finalMultiplier = parseFloat(row.conversion_factor || 1);
 
+            // 🎯 FIXED MATH: Faltante Base on screen displays in pure recipe UOM units
+            var calculatedFaltanteBaseRecipeWeight = parseFloat(row.faltante_base || 0);
+
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                // 🎯 REVERSE MULTIPLIER FIX: Aligns perfectly with your original function math
-                faltante_base: parseFloat(row.faltante_base || 0) * finalMultiplier,
+                faltante_base: calculatedFaltanteBaseRecipeWeight,
                 recipe_uom: realRecipeUnit, 
                 supplier_name: row.supplier_name || "Proveedor No Asignado", 
                 supplier_uom: row.supplier_uom || "Formato", 

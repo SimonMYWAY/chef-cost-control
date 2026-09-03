@@ -3894,8 +3894,11 @@ async function executeFinalInventoryProcurementCommit() {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
                     : [];
+                
+                // 🎯 FIXED PROVIDER ASSIGNMENT: Locate format rule checking both name and provider_id
                 const activeFormatRule = authorizedFormats.find(f => 
-                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim() ||
+                    String(f.provider_id).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
                 );
 
                 return {
@@ -3904,7 +3907,7 @@ async function executeFinalInventoryProcurementCommit() {
                     faltante_base: parseFloat(line.faltante || 0), 
                     supplier_uom: activeFormatRule ? activeFormatRule.purchase_uom : (line.uom || "Unidad"),
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
-                    supplier_name: line.supplier_id || "Proveedor No Asignado",
+                    supplier_name: activeFormatRule ? activeFormatRule.provider_name : (line.supplier_id || "Proveedor No Asignado"),
                     pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1)
                 };
             });
