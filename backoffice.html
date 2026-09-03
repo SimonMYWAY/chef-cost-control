@@ -3880,7 +3880,7 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-                // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
+               // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
             console.log("📡 Shipping active calculation layers to the manager portal...");
             
@@ -3907,22 +3907,57 @@ async function executeFinalInventoryProcurementCommit() {
                 };
             });
 
-                        // 🎯 FIXED UPSERT: Explicitly pass '?on_conflict=key' in the URL so Supabase knows how to handle the rule
-            await fetch(`${API_URL}system_settings?on_conflict=key`, {
-                method: "POST",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY, 
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates" 
-                },
-                body: JSON.stringify({ 
-                    key: "active_manager_order_staging",
-                    value_text: JSON.stringify(managerExportPayload), 
-                    updated_at: new Date().toISOString() 
-                })
-            });
+            try {
+                // 🔍 STEP 1: Safe Verification GET Request Check
+                const checkRowRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                    method: "GET",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
 
+                let rowExists = false;
+                if (checkRowRes.ok) {
+                    const rowData = await checkRowRes.json();
+                    if (rowData && rowData.length > 0) {
+                        rowExists = true;
+                    }
+                }
+
+                if (!rowExists) {
+                    // ➕ STEP 2A: Row does not exist. Use a standard POST to create it.
+                    console.log("📝 Key 'active_manager_order_staging' not found. Creating a fresh row...");
+                    await fetch(`${API_URL}system_settings`, {
+                        method: "POST",
+                        headers: { 
+                            "apikey": API_KEY, 
+                            "Authorization": "Bearer " + API_KEY, 
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ 
+                            key: "active_manager_order_staging",
+                            value_text: JSON.stringify(managerExportPayload), 
+                            updated_at: new Date().toISOString() 
+                        })
+                    });
+                } else {
+                    // 🔄 STEP 2B: Row exists. Use a standard PATCH to overwrite it cleanly.
+                    console.log("🔄 Key 'active_manager_order_staging' found. Overwriting existing layout data...");
+                    await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                        method: "PATCH",
+                        headers: { 
+                            "apikey": API_KEY, 
+                            "Authorization": "Bearer " + API_KEY, 
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ 
+                            value_text: JSON.stringify(managerExportPayload), 
+                            updated_at: new Date().toISOString() 
+                        })
+                    });
+                }
+                console.log("✅ Cargo hold successfully initialized in system_settings!");
+            } catch (innerErr) {
+                console.error("❌ Error broadcasting cargo staging:", innerErr);
+            }
         }
 
         if (updatePromises.length > 0) {
@@ -3936,7 +3971,7 @@ async function executeFinalInventoryProcurementCommit() {
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')[0]}.csv`);
             link.style.visibility = "hidden";
             document.body.appendChild(link);
             link.click();
@@ -3944,12 +3979,13 @@ async function executeFinalInventoryProcurementCommit() {
             
             alert("📊 ¡Reporte de Formatos Procesado y Guardado con Éxito!");
         } else {
-            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente.");
+            alert("✅ Consumos del día processed. El stock ha sido descontado correctamente.");
         }
 
         if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Fecha histórica actualizada a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
+        // Clear runtime state objects safely
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
@@ -3958,7 +3994,7 @@ async function executeFinalInventoryProcurementCommit() {
         document.getElementById("btn-commit-all-orders").style.display = "none";
 
         if (typeof fetchInventoryMatrixData === "function") await fetchInventoryMatrixData();
-        syncChronologicalDateDOMFields();
+        if (typeof syncChronologicalDateDOMFields === "function") syncChronologicalDateDOMFields();
 
     } catch (err) {
         console.error(err);
