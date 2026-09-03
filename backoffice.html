@@ -3880,23 +3880,36 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-        // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
+                // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
         console.log("=== 🔍 DEBUG START: BROADCAST SYSTEM ===");
         
-        var activeLinesSource = [];
-        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined") {
-            console.log("📦 TEMPORARY_STAGED_PURCHASE_LINES exists. Length:", TEMPORARY_STAGED_PURCHASE_LINES.length);
-            activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
-        } else {
-            console.log("❌ TEMPORARY_STAGED_PURCHASE_LINES is undefined!");
+        // Ensure the system date tracking update is added to the promise chain right away
+        if (definitiveDeclaredSalesDateStr) {
+            console.log("📅 Staging chronology timeline advancement request to database for:", definitiveDeclaredSalesDateStr);
+            updatePromises.push(
+                fetch(`${API_URL}system_settings?key=eq.last_sales_date_processed`, {
+                    method: "PATCH",
+                    headers: { 
+                        "apikey": API_KEY, 
+                        "Authorization": "Bearer " + API_KEY, 
+                        "Content-Type": "application/json" 
+                    },
+                    body: JSON.stringify({ 
+                        value_text: definitiveDeclaredSalesDateStr, 
+                        updated_at: new Date().toISOString() 
+                    })
+                })
+            );
         }
 
-        if (activeLinesSource.length === 0 && typeof approvedLines !== "undefined") {
-            console.log("🔄 Primary array empty. Falling back to approvedLines. Length:", approvedLines.length);
+        var activeLinesSource = [];
+        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+            console.log("📦 TEMPORARY_STAGED_PURCHASE_LINES loaded. Count:", TEMPORARY_STAGED_PURCHASE_LINES.length);
+            activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
+        } else if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
+            console.log("🔄 Primary array empty. Falling back to approvedLines collection array. Count:", approvedLines.length);
             activeLinesSource = approvedLines;
         }
-
-        console.log("📋 Final activeLinesSource count selected for packaging:", activeLinesSource.length);
 
         if (activeLinesSource.length > 0) {
             console.log("📡 Shipping active calculation layers to the manager portal...");
@@ -3923,72 +3936,53 @@ async function executeFinalInventoryProcurementCommit() {
                 };
             });
 
-            console.log("📦 Formatted Payload generated ready to send:", JSON.stringify(managerExportPayload));
-
             try {
                 const checkUrl = `${API_URL}system_settings?key=eq.active_manager_order_staging`;
-                console.log("🌐 URL Target Check:", checkUrl);
-
                 const checkRowRes = await fetch(checkUrl, {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
 
-                console.log("📡 GET Request Response Status:", checkRowRes.status);
-
                 let rowExists = false;
                 if (checkRowRes.ok) {
                     const rowData = await checkRowRes.json();
-                    console.log("📊 Records found matching row query key:", rowData);
-                    if (rowData && rowData.length > 0) {
-                        rowExists = true;
-                    }
+                    if (rowData && rowData.length > 0) rowExists = true;
                 }
 
                 if (!rowExists) {
-                    console.log("➕ Sending POST request to create new row...");
-                    const postRes = await fetch(`${API_URL}system_settings`, {
+                    console.log("➕ Executing standard POST for active_manager_order_staging...");
+                    await fetch(`${API_URL}system_settings`, {
                         method: "POST",
-                        headers: { 
-                            "apikey": API_KEY, 
-                            "Authorization": "Bearer " + API_KEY, 
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ 
                             key: "active_manager_order_staging",
                             value_text: JSON.stringify(managerExportPayload), 
                             updated_at: new Date().toISOString() 
                         })
                     });
-                    console.log("📡 POST Response Status Code:", postRes.status);
                 } else {
-                    console.log("🔄 Sending PATCH request to update existing row...");
-                    const patchRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                    console.log("🔄 Executing target PATCH for active_manager_order_staging...");
+                    await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
                         method: "PATCH",
-                        headers: { 
-                            "apikey": API_KEY, 
-                            "Authorization": "Bearer " + API_KEY, 
-                            "Content-Type": "application/json"
-                        },
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ 
                             value_text: JSON.stringify(managerExportPayload), 
                             updated_at: new Date().toISOString() 
                         })
                     });
-                    console.log("📡 PATCH Response Status Code:", patchRes.status);
                 }
-                console.log("=== 🏁 DEBUG END: SUCCESS PATH ===");
+                console.log("=== 🏁 DEBUG END: MANAGER CARGO COPIED ===");
             } catch (innerErr) {
-                console.error("❌ CRITICAL NETWORK FETCH ERROR:", innerErr);
+                console.error("❌ CRITICAL CARGO BROADCAST FETCH ERROR:", innerErr);
             }
         } else {
-            console.log("⚠️ WARNING: Broadcast skipped because activeLinesSource count is ZERO.");
-            console.log("=== 🏁 DEBUG END: SKIPPED PATH ===");
+            console.log("⚠️ WARNING: Staging broadcast cell write skipped because data row count is ZERO.");
         }
 
+        // 🚀 FIRE ALL STAGED QUEUE EVENTS: Execute date tracking changes and stock deductions simultaneously
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
-            console.log("🚀 All Supabase stock conversion increments written safely to server disks.");
+            console.log("🚀 All database operations and timeline changes written to Supabase server disks successfully.");
         }
 
         if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
@@ -3997,7 +3991,7 @@ async function executeFinalInventoryProcurementCommit() {
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')}.csv`);
             link.style.visibility = "hidden";
             document.body.appendChild(link);
             link.click();
@@ -4011,7 +4005,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Fecha histórica actualizada a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
-        // Clear runtime state objects safely
+        // Clean runtime state objects safely
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
@@ -4027,6 +4021,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
+
 
 // ⚡ RESTORED CONVEYOR: Purely transmits calculations without modifying master inventory
 async function broadcastActiveCalculationsToPurchaseApp() {
