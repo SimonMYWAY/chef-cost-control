@@ -3882,17 +3882,14 @@ async function executeFinalInventoryProcurementCommit() {
         }
         // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
-            
-            var batchUniqueToken = "BATCH-" + (definitiveDeclaredSalesDateStr || new Date().toISOString().slice(0,10).replace(/-/g,""));
 
             // A. PUSH OUT THE OLD SHIP: Clear staging table rows cleanly
             await fetch(API_URL + "staged_order_calculations", {
                 method: "DELETE",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
-            console.log("🧹 Previous staged lines cleared from cloud port.");
 
-            // B. LOAD THE NEW SHIP: Build the fresh array structures to upload to the manager hold
+            // B. LOAD THE NEW SHIP: Build structures matching ONLY your confirmed database fields
             const targetCargoPayloadArray = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
@@ -3901,17 +3898,10 @@ async function executeFinalInventoryProcurementCommit() {
                     String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
                 );
 
-                // Calculate values cleanly to maintain your exact database variables word-for-word
-                const baseFaltante = parseFloat(line.faltante || 0);
-
                 return {
-                    calculation_batch_id: batchUniqueToken,
                     ingredient_id: line.ingredient_id,
                     ingredient_name: line.ingredient_name,
-                    // 🎯 FIX: Store the raw base requirement weight exactly as it is calculated
-                    faltante_base: baseFaltante, 
-                    // 🎯 FIX: Fallback safely to line.uom to capture the true master recipe text string
-                    recipe_uom: line.uom || "Kg", 
+                    faltante_base: parseFloat(line.faltante || 0), 
                     supplier_uom: activeFormatRule ? activeFormatRule.purchase_uom : (line.uom || "Unidad"),
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
                     supplier_name: line.supplier_id || "Proveedor No Asignado",
