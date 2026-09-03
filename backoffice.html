@@ -3881,22 +3881,33 @@ async function executeFinalInventoryProcurementCommit() {
             );
         }
         // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
-        // 🎯 SCOPE FIX: Fall back to CACHED_CONVERSION_MAPPINGS array if the primary staging line vector is cleared
-        var activeLinesSource = (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0)
-            ? TEMPORARY_STAGED_PURCHASE_LINES 
-            : (typeof approvedLines !== "undefined" ? approvedLines : []);
+        console.log("=== 🔍 DEBUG START: BROADCAST SYSTEM ===");
+        
+        var activeLinesSource = [];
+        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined") {
+            console.log("📦 TEMPORARY_STAGED_PURCHASE_LINES exists. Length:", TEMPORARY_STAGED_PURCHASE_LINES.length);
+            activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
+        } else {
+            console.log("❌ TEMPORARY_STAGED_PURCHASE_LINES is undefined!");
+        }
+
+        if (activeLinesSource.length === 0 && typeof approvedLines !== "undefined") {
+            console.log("🔄 Primary array empty. Falling back to approvedLines. Length:", approvedLines.length);
+            activeLinesSource = approvedLines;
+        }
+
+        console.log("📋 Final activeLinesSource count selected for packaging:", activeLinesSource.length);
 
         if (activeLinesSource.length > 0) {
             console.log("📡 Shipping active calculation layers to the manager portal...");
             
-            // Build the exact payload mimicking your exact grid fields structure word-for-word
             const managerExportPayload = activeLinesSource.map(line => {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                     : [];
                     
                 const activeFormatRule = authorizedFormats.find(f => 
-                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || line.supplier_name).toLowerCase().trim()
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || line.supplier_name || "").toLowerCase().trim()
                 );
 
                 return {
@@ -3912,25 +3923,31 @@ async function executeFinalInventoryProcurementCommit() {
                 };
             });
 
+            console.log("📦 Formatted Payload generated ready to send:", JSON.stringify(managerExportPayload));
+
             try {
-                // 🔍 STEP 1: Safe Verification GET Request Check
-                const checkRowRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                const checkUrl = `${API_URL}system_settings?key=eq.active_manager_order_staging`;
+                console.log("🌐 URL Target Check:", checkUrl);
+
+                const checkRowRes = await fetch(checkUrl, {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
 
+                console.log("📡 GET Request Response Status:", checkRowRes.status);
+
                 let rowExists = false;
                 if (checkRowRes.ok) {
                     const rowData = await checkRowRes.json();
+                    console.log("📊 Records found matching row query key:", rowData);
                     if (rowData && rowData.length > 0) {
                         rowExists = true;
                     }
                 }
 
                 if (!rowExists) {
-                    // ➕ STEP 2A: Row does not exist. Use a standard POST to create it.
-                    console.log("📝 Key 'active_manager_order_staging' not found. Creating a fresh row...");
-                    await fetch(`${API_URL}system_settings`, {
+                    console.log("➕ Sending POST request to create new row...");
+                    const postRes = await fetch(`${API_URL}system_settings`, {
                         method: "POST",
                         headers: { 
                             "apikey": API_KEY, 
@@ -3943,10 +3960,10 @@ async function executeFinalInventoryProcurementCommit() {
                             updated_at: new Date().toISOString() 
                         })
                     });
+                    console.log("📡 POST Response Status Code:", postRes.status);
                 } else {
-                    // 🔄 STEP 2B: Row exists. Use a standard PATCH to overwrite it cleanly.
-                    console.log("🔄 Key 'active_manager_order_staging' found. Overwriting existing layout data...");
-                    await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                    console.log("🔄 Sending PATCH request to update existing row...");
+                    const patchRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
                         method: "PATCH",
                         headers: { 
                             "apikey": API_KEY, 
@@ -3958,13 +3975,15 @@ async function executeFinalInventoryProcurementCommit() {
                             updated_at: new Date().toISOString() 
                         })
                     });
+                    console.log("📡 PATCH Response Status Code:", patchRes.status);
                 }
-                console.log("✅ Cargo hold successfully initialized in system_settings!");
+                console.log("=== 🏁 DEBUG END: SUCCESS PATH ===");
             } catch (innerErr) {
-                console.error("❌ Error broadcasting cargo staging:", innerErr);
+                console.error("❌ CRITICAL NETWORK FETCH ERROR:", innerErr);
             }
         } else {
-            console.log("⚠️ Warning: No active purchase line structures detected. Broadcast skipped.");
+            console.log("⚠️ WARNING: Broadcast skipped because activeLinesSource count is ZERO.");
+            console.log("=== 🏁 DEBUG END: SKIPPED PATH ===");
         }
 
         if (updatePromises.length > 0) {
