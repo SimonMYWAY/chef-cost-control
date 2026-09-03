@@ -3883,7 +3883,6 @@ async function executeFinalInventoryProcurementCommit() {
         // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
         console.log("=== 🔍 DEBUG START: BROADCAST SYSTEM ===");
         
-        // Ensure the calendar timeline advance command uses your working URL structure layout perfectly
         if (definitiveDeclaredSalesDateStr) {
             console.log("📅 Staging chronology timeline advancement request to database for:", definitiveDeclaredSalesDateStr);
             updatePromises.push(
@@ -3903,7 +3902,8 @@ async function executeFinalInventoryProcurementCommit() {
         }
 
         var activeLinesSource = [];
-        if (typeof TEMTEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+        // 🎯 TYPO CORRECTED: Changed TEMTEMPORARY to TEMPORARY
+        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
             console.log("📦 TEMPORARY_STAGED_PURCHASE_LINES loaded. Count:", TEMPORARY_STAGED_PURCHASE_LINES.length);
             activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
         } else if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
@@ -3937,7 +3937,6 @@ async function executeFinalInventoryProcurementCommit() {
             });
 
             try {
-                // 🎯 ALIGNED URL SYNTAX: Mapped exactly to match your working first block layout rules
                 const checkUrl = API_URL + "system_settings?key=eq.active_manager_order_staging";
                 
                 const checkRowRes = await fetch(checkUrl, {
@@ -3981,7 +3980,6 @@ async function executeFinalInventoryProcurementCommit() {
             console.log("⚠️ WARNING: Staging broadcast cell write skipped because data row count is ZERO.");
         }
 
-        // 🚀 FIRE QUEUE EVENTS: Execute date tracking changes and stock deductions simultaneously
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
             console.log("🚀 All database operations and timeline changes written to Supabase server disks successfully.");
@@ -4007,7 +4005,6 @@ async function executeFinalInventoryProcurementCommit() {
         if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Fecha histórica actualizada a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
-        // Clear runtime state objects safely
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
