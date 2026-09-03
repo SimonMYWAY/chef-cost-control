@@ -3880,100 +3880,55 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-                // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
-        console.log("=== 🔓 EMERGENCY AUTO-UNLOCK ACTIVATED ===");
-        
-        // Forcefully reset any background lock variables before running the network save
-        if (typeof DASHBOARD_ENGINE_FROZEN !== "undefined") DASHBOARD_ENGINE_FROZEN = false;
-        if (typeof SECURITY_GATEWAY_ACTIVE !== "undefined") SECURITY_GATEWAY_ACTIVE = false;
-
-        if (definitiveDeclaredSalesDateStr) {
-            updatePromises.push(
-                fetch(API_URL + "system_settings?key=eq.last_sales_date_processed", {
-                    method: "PATCH",
-                    headers: { 
-                        "apikey": API_KEY, 
-                        "Authorization": "Bearer " + API_KEY, 
-                        "Content-Type": "application/json" 
-                    },
-                    body: JSON.stringify({ 
-                        value_text: definitiveDeclaredSalesDateStr, 
-                        updated_at: new Date().toISOString() 
-                    })
-                })
-            );
-        }
-
-        var activeLinesSource = [];
+                // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
-            activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
-        } else if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
-            activeLinesSource = approvedLines;
-        }
-
-        if (activeLinesSource.length > 0) {
-            console.log("📡 Shipping active calculation layers to the manager portal...");
             
-            const managerExportPayload = activeLinesSource.map(line => {
-                const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
-                    ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
+            var batchUniqueToken = "BATCH-" + (definitiveDeclaredSalesDateStr || new Date().toISOString().slice(0,10).replace(/-/g,""));
+
+            // A. PUSH OUT THE OLD SHIP: Clear out yesterday's uncommitted rows completely from the staging table
+            await fetch(API_URL + "staged_order_calculations", {
+                method: "DELETE",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY
+                }
+            });
+            console.log("🧹 Previous staged lines cleared from cloud port.");
+
+            // B. LOAD THE NEW SHIP: Build the fresh array structures to upload to the manager hold
+            const targetCargoPayloadArray = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+                const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
+                    ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
                     : [];
-                    
                 const activeFormatRule = authorizedFormats.find(f => 
-                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || line.supplier_name || "").toLowerCase().trim()
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
                 );
 
                 return {
+                    calculation_batch_id: batchUniqueToken,
                     ingredient_id: line.ingredient_id,
                     ingredient_name: line.ingredient_name,
-                    faltante_base: parseFloat(line.consumption || line.faltante || 0), 
-                    supplier_name: line.supplier_id || line.supplier_name || "Proveedor No Asignado",
-                    supplier_uom: activeFormatRule ? (activeFormatRule.purchase_uom || "Formato") : (line.uom || "Unidad"),
-                    conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0,
-                    pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0),
-                    approved_formats_quantity: parseFloat(line.approved_formats_quantity || 0),
-                    is_approved: line.is_approved !== undefined ? line.is_approved : true
+                    faltante_base: parseFloat(line.consumption || line.faltante || 0),
+                    supplier_uom: activeFormatRule ? activeFormatRule.purchase_uom : (line.uom || "Unidad"),
+                    conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
+                    supplier_name: line.supplier_id || "Proveedor No Asignado",
+                    // 🎯 CORE VECTOR: Ensure it outputs the true positive number here to qualify as active cargo
+                    pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1)
                 };
             });
 
-            try {
-                const checkUrl = API_URL + "system_settings?key=eq.active_manager_order_staging";
-                
-                const checkRowRes = await fetch(checkUrl, {
-                    method: "GET",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
+            // Post the fresh unified batch block down to Supabase tables at once
+            const pushCargoRes = await fetch(API_URL + "staged_order_calculations", {
+                method: "POST",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(targetCargoPayloadArray)
+            });
 
-                let rowExists = false;
-                if (checkRowRes.ok) {
-                    const rowData = await checkRowRes.json();
-                    if (rowData && rowData.length > 0) rowExists = true;
-                }
-
-                if (!rowExists) {
-                    await fetch(API_URL + "system_settings", {
-                        method: "POST",
-                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
-                            key: "active_manager_order_staging",
-                            value_text: JSON.stringify(managerExportPayload), 
-                            updated_at: new Date().toISOString() 
-                        })
-                    });
-                } else {
-                    await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
-                        method: "PATCH",
-                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
-                            value_text: JSON.stringify(managerExportPayload), 
-                            updated_at: new Date().toISOString() 
-                        })
-                    });
-                }
-                console.log("=== 🏁 MANAGER CARGO COPIED WITH OVERRIDE ===");
-            } catch (innerErr) {
-                console.error("❌ CARGO BROADCAST FETCH ERROR:", innerErr);
-            }
+            if (!pushCargoRes.ok) console.error("⚠️ Failed to load calculations staging container.");
         }
 
         if (updatePromises.length > 0) {
@@ -3986,7 +3941,7 @@ async function executeFinalInventoryProcurementCommit() {
             const downloadUrl = URL.createObjectURL(blob);
             
             link.setAttribute("href", downloadUrl);
-            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr || new Date().toISOString().split('T')}.csv`);
+            link.setAttribute("download", `Pedidos_Sugeridos_${definitiveDeclaredSalesDateStr}.csv`);
             link.style.visibility = "hidden";
             document.body.appendChild(link);
             link.click();
@@ -3994,12 +3949,9 @@ async function executeFinalInventoryProcurementCommit() {
             
             alert("📊 ¡Reporte de Formatos Procesado y Guardado con Éxito!");
         } else {
-            alert("✅ Consumos del día procesados. El stock ha sido descontado correctamente.");
+            alert("✅ Consumos del día procesados correctamente.");
         }
 
-        if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
-        if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b>`;
-        
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
@@ -4008,14 +3960,12 @@ async function executeFinalInventoryProcurementCommit() {
         document.getElementById("btn-commit-all-orders").style.display = "none";
 
         if (typeof fetchInventoryMatrixData === "function") await fetchInventoryMatrixData();
-        if (typeof syncChronologicalDateDOMFields === "function") syncChronologicalDateDOMFields();
 
     } catch (err) {
         console.error(err);
-        if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
+        if (feedback) feedback.innerHTML = "❌ Error al procesar en el servidor.";
     }
 }
-
 
 // ⚡ RESTORED CONVEYOR: Purely transmits calculations without modifying master inventory
 async function broadcastActiveCalculationsToPurchaseApp() {

@@ -67,15 +67,27 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-    // ⚡ RE-ENGINEERED SYNC: Downloads the active single-cell cargo container from system_settings
+// ⚡ RE-ENGINEERED SYNC: Reads directly from active pending lines inside staged_order_calculations
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa desde system_settings...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch alternative definitions linked to ingredients via supplier_formats
+        // 1. Fetch raw ingredients matrix data for layout units mapping reference
+        const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+        var recipeUnitsLookup = {};
+        if (ingRes.ok) {
+            const ings = await ingRes.json();
+            ings.forEach(function(i) {
+                if (i.id) recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Unid";
+            });
+        }
+
+        // 2. Fetch active definition tables mapping values
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -83,39 +95,33 @@ async function pullActiveStagedCalculationFromCloud() {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
         }
 
-        // 🎯 2. READ THE SINGLE SOURCE OF TRUTH CACHE LAYER
-        const settingsRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+        // 🎯 3. TARGET ROW QUERY: Read only elements where suggested order amount is greater than 0 (gt.0)
+        const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         
-        if (!settingsRes.ok) throw new Error("Fallo al descargar la configuración active_manager_order_staging.");
-        const settingsData = await settingsRes.json();
-
-        if (!settingsData || settingsData.length === 0 || !settingsData[0].value_text) {
-            workspace.innerHTML = '<div class="loader-text">⚠️ No hay barcos de carga activos en puerto. Procese el inventario en el Backoffice primero.</div>';
-            return;
-        }
-              
-        // Parse the raw JSON payload text directly from the settings row cell
-        var cloudRows = JSON.parse(settingsData[0].value_text);
+        if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
+        const cloudRows = await dataTableRes.json();
 
         if (!cloudRows || cloudRows.length === 0) {
-            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de este barco han sido procesadas con éxito! Bodega vacía.</div>';
+            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
             return;
         }
               
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+            var cleanIngId = String(row.ingredient_id).trim();
             return {
-                ingredient_id: row.ingredient_id,
+                id: row.id,
+                ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
                 faltante_base: parseFloat(row.faltante_base || 0),
-                recipe_uom: row.recipe_uom || "Kg", 
+                recipe_uom: recipeUnitsLookup[cleanIngId.toLowerCase()] || "Kg", 
                 supplier_name: row.supplier_name || "Proveedor No Asignado", 
                 supplier_uom: row.supplier_uom || "Formato", 
                 conversion_factor: parseFloat(row.conversion_factor || 1), 
                 pedido_sugerido: parseFloat(row.pedido_sugerido || 0),
-                approved_formats_quantity: Math.ceil(row.approved_formats_quantity || row.pedido_sugerido || 0),
-                is_approved: row.is_approved !== undefined ? row.is_approved : true
+                approved_formats_quantity: Math.ceil(row.pedido_sugerido || 0),
+                is_approved: true
             };
         });
 
@@ -126,7 +132,6 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
-
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
@@ -449,48 +454,29 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
     }
 }
 
-// 🎯 STEP D: Finalize, dim card, remove supplier lines from port cargo string, and update system_settings
+// 🎯 STEP D: Finalize, dim card, and mark rows as dispatched by dropping pedido_sugerido to 0
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     try {
-        // 🚢 CLEAR CARGO HOLD ITEMS FROM LOCAL CACHE MEMORY
-        // Keep only items that DO NOT belong to the supplier we just finished dispatching
-        var remainingCargoLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name !== supplierName);
+        var matchedItems = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName);
 
-        // Map memory records back to your exact standard export structure syntax format word-for-word
-        var updatedPayloadBlock = remainingCargoLines.map(line => {
-            return {
-                ingredient_id: line.ingredient_id,
-                ingredient_name: line.ingredient_name,
-                faltante_base: line.faltante_base,
-                supplier_name: line.supplier_name,
-                supplier_uom: line.supplier_uom,
-                conversion_factor: line.conversion_factor,
-                pedido_sugerido: line.pedido_sugerido,
-                approved_formats_quantity: line.approved_formats_quantity,
-                is_approved: line.is_approved
-            };
-        });
+        for (var i = 0; i < matchedItems.length; i++) {
+            var item = matchedItems[i];
+            
+            // 🚢 FLIP THE FLAG IN STAGING TABLE DIRECTLY BY OVERWRITING VALUE METRIC TO 0
+            await fetch(API_URL + "staged_order_calculations?id=eq." + item.id, {
+                method: "PATCH",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ pedido_sugerido: 0 })
+            });
+        }
 
-        // 📡 SAVE THE CLEANED CARGO STRIP OVERWRITTEN BACK TO SUPABASE INSTANTLY
-        const updateSettingsRes = await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
-            method: "PATCH",
-            headers: { 
-                "apikey": API_KEY, 
-                "Authorization": "Bearer " + API_KEY, 
-                "Content-Type": "application/json" 
-            },
-            body: JSON.stringify({ 
-                value_text: JSON.stringify(updatedPayloadBlock), 
-                updated_at: new Date().toISOString() 
-            })
-        });
-
-        if (!updateSettingsRes.ok) throw new Error("El servidor rechazó la actualización de limpieza de la bodega.");
-
-        // Visually fade and dim out the card immediately on the current screen view state
         var supplierCard = document.getElementById(cardElementId);
         if (supplierCard) {
-            supplierCard.style.opacity = "0.15";
+            supplierCard.style.opacity = "0.2";
             supplierCard.style.filter = "grayscale(100%)";
             supplierCard.style.pointerEvents = "none";
             
@@ -498,33 +484,31 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
             if (targetContainer) {
                 targetContainer.innerHTML = `
                     <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        ✅ Despachado y Eliminado de Puerto
+                        ✅ Despachado y Removido de Puerto
                     </div>
                 `;
             }
             
-            // Push card elegantly down to the bottom of the visible workspace list layout hierarchy container
             var containerParent = supplierCard.parentNode;
             if (containerParent) {
                 containerParent.appendChild(supplierCard);
             }
         }
         
-        alert("🏁 ¡Orden finalizada con éxito! El cargamento de " + supplierName + " ha sido despachado y removido de la bodega.");
+        alert("🏁 ¡Orden finalizada! El cargamento de " + supplierName + " ha sido despachado.");
         
-        // If everything is completely empty, give immediate visual notice to the operator
-        if (remainingCargoLines.length === 0) {
-            document.getElementById("manager-grid-workspace").innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de este barco han sido despachadas con éxito! Bodega vacía.</div>';
-        } else {
-            // Update local memory to mirror the processed state without forcing a hard page refresh loop
-            LOCAL_STAGED_ROWS = remainingCargoLines;
+        // Remove matching lines locally from memory array layout view
+        LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(r => r.supplier_name !== supplierName);
+        if (LOCAL_STAGED_ROWS.length === 0) {
+            document.getElementById("manager-grid-workspace").innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido despachadas con éxito! Bodega vacía.</div>';
         }
         
     } catch (err) {
         console.error(err);
-        alert("❌ Error actualizando la limpieza del contenedor central de settings: " + err.message);
+        alert("❌ Error actualizando el estado de descarga de la bodega: " + err.message);
     }
 }
+
         // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
         function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
             var blockKey = supplierName.replace(/\s+/g, '-');
