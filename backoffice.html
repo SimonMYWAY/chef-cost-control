@@ -3880,14 +3880,14 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-                // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
+        // 🚀 SINGLE SOURCE OF TRUTH VECTOR: Broadcast active parameters to the Purchase Manager app
         console.log("=== 🔍 DEBUG START: BROADCAST SYSTEM ===");
         
-        // Ensure the system date tracking update is added to the promise chain right away
+        // Ensure the calendar timeline advance command uses your working URL structure layout perfectly
         if (definitiveDeclaredSalesDateStr) {
             console.log("📅 Staging chronology timeline advancement request to database for:", definitiveDeclaredSalesDateStr);
             updatePromises.push(
-                fetch(`${API_URL}system_settings?key=eq.last_sales_date_processed`, {
+                fetch(API_URL + "system_settings?key=eq.last_sales_date_processed", {
                     method: "PATCH",
                     headers: { 
                         "apikey": API_KEY, 
@@ -3903,7 +3903,7 @@ async function executeFinalInventoryProcurementCommit() {
         }
 
         var activeLinesSource = [];
-        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+        if (typeof TEMTEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
             console.log("📦 TEMPORARY_STAGED_PURCHASE_LINES loaded. Count:", TEMPORARY_STAGED_PURCHASE_LINES.length);
             activeLinesSource = TEMPORARY_STAGED_PURCHASE_LINES;
         } else if (typeof approvedLines !== "undefined" && approvedLines.length > 0) {
@@ -3937,7 +3937,9 @@ async function executeFinalInventoryProcurementCommit() {
             });
 
             try {
-                const checkUrl = `${API_URL}system_settings?key=eq.active_manager_order_staging`;
+                // 🎯 ALIGNED URL SYNTAX: Mapped exactly to match your working first block layout rules
+                const checkUrl = API_URL + "system_settings?key=eq.active_manager_order_staging";
+                
                 const checkRowRes = await fetch(checkUrl, {
                     method: "GET",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -3950,8 +3952,8 @@ async function executeFinalInventoryProcurementCommit() {
                 }
 
                 if (!rowExists) {
-                    console.log("➕ Executing standard POST for active_manager_order_staging...");
-                    await fetch(`${API_URL}system_settings`, {
+                    console.log("➕ Executing aligned POST for active_manager_order_staging...");
+                    await fetch(API_URL + "system_settings", {
                         method: "POST",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ 
@@ -3961,8 +3963,8 @@ async function executeFinalInventoryProcurementCommit() {
                         })
                     });
                 } else {
-                    console.log("🔄 Executing target PATCH for active_manager_order_staging...");
-                    await fetch(`${API_URL}system_settings?key=eq.active_manager_order_staging`, {
+                    console.log("🔄 Executing aligned PATCH for active_manager_order_staging...");
+                    await fetch(API_URL + "system_settings?key=eq.active_manager_order_staging", {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({ 
@@ -3979,7 +3981,7 @@ async function executeFinalInventoryProcurementCommit() {
             console.log("⚠️ WARNING: Staging broadcast cell write skipped because data row count is ZERO.");
         }
 
-        // 🚀 FIRE ALL STAGED QUEUE EVENTS: Execute date tracking changes and stock deductions simultaneously
+        // 🚀 FIRE QUEUE EVENTS: Execute date tracking changes and stock deductions simultaneously
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
             console.log("🚀 All database operations and timeline changes written to Supabase server disks successfully.");
@@ -4005,7 +4007,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (definitiveDeclaredSalesDateStr) CACHED_LAST_PROCESSED_DATE_STR = definitiveDeclaredSalesDateStr;
         if (feedback) feedback.innerHTML = `🎉 <b>¡Completado con éxito!</b> Fecha histórica actualizada a ${CACHED_LAST_PROCESSED_DATE_STR}.`;
         
-        // Clean runtime state objects safely
+        // Clear runtime state objects safely
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
@@ -4021,7 +4023,6 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar las de-ducciones de stock en el servidor.";
     }
 }
-
 
 // ⚡ RESTORED CONVEYOR: Purely transmits calculations without modifying master inventory
 async function broadcastActiveCalculationsToPurchaseApp() {
