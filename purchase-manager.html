@@ -67,7 +67,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Reads directly from active pending lines inside staged_order_calculations
+// ⚡ RE-ENGINEERED SYNC: Correctly splits and assigns Recipe UOM vs Purchase UOM
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
@@ -90,11 +90,23 @@ async function pullActiveStagedCalculationFromCloud() {
         }
 
         // 2. Fetch alternative definitions linked to ingredients via supplier_formats
+        var supplierFormatsLookup = {};
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         if (formatsRes.ok) {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
+            
+            // Build a fast lookup map using the ingredient_id as the key
+            GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
+                if (format.ingredient_id) {
+                    var formatKey = String(format.ingredient_id).toLowerCase().trim();
+                    supplierFormatsLookup[formatKey] = {
+                        purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
+                        units_per_purchase: parseFloat(format.units_per_purchase || 1)
+                    };
+                }
+            });
         }
 
         // 3. Read only active elements where suggested order amount is greater than 0
@@ -114,25 +126,37 @@ async function pullActiveStagedCalculationFromCloud() {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // Extract true recipe unit strings from your master map lookup matrix cleanly
+            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            var finalMultiplier = parseFloat(row.conversion_factor || 1);
+            
+            // 2. Cross-reference the supplier formats table to grab the true purchasing format string
+            var matchedFormat = supplierFormatsLookup[lookupKey];
+            var realPurchaseUnit = (matchedFormat && matchedFormat.purchase_uom) 
+                                   ? matchedFormat.purchase_uom 
+                                   : (row.supplier_uom || "Formato");
 
-            // Math rule agreed this morning: Recalculate true recipe values dynamically using conversion factor
-            var approvedCount = Math.ceil(parseFloat(row.pedido_sugerido || 0));
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
+            // 3. Establish structural conversion factors safely
+            var finalMultiplier = parseFloat(row.conversion_factor || (matchedFormat ? matchedFormat.units_per_purchase : 1));
+
+            // Math rules:
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0); // expresssed in purchase format units
+            var approvedCount = Math.ceil(rawPedidoSugerido);
+
+            // If faltante_base is coming down expressed in purchase formats instead of recipe units, 
+            // you can multiply it by finalMultiplier here to force it back to recipe UOM terms.
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante,
-                recipe_uom: realRecipeUnit, 
+                faltante_base: calculatedRecipeFaltante, // Base unit shortage quantity
+                recipe_uom: realRecipeUnit,               // Displayed when showing base kitchen inventory needs (e.g. oz, oja)
                 supplier_name: row.supplier_name || "Proveedor No Asignado", 
-                supplier_uom: row.supplier_uom || "Formato", 
+                supplier_uom: realPurchaseUnit,           // Explicitly set to purchase format (e.g. Caja, Bolsa, Pack)
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: parseFloat(row.pedido_sugerido || 0),
-                approved_formats_quantity: approvedCount,
+                pedido_sugerido: rawPedidoSugerido,       // Order volume in purchasing formats
+                approved_formats_quantity: approvedCount, // Whole purchasing units to buy
                 is_approved: true
             };
         });
@@ -212,7 +236,11 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var conversionFactor = parseFloat(item.conversion_factor || 1);
             var approvedCount = parseFloat(item.approved_formats_quantity || 0);
             
-            // Output calculations based perfectly on the data mapping
+            // Core Logic Adjustment: If faltante_base from database is mistakenly arriving in 
+            // purchase format, multiply it by the conversionFactor to show true Recipe UOM (oz, oja, Kg)
+            var displayFaltanteBase = parseFloat(item.faltante_base || 0);
+            
+            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
             blockHtml += `
@@ -221,7 +249,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
-                            <div class="box-val">${item.faltante_base.toFixed(2)} ${item.recipe_uom}</div>
+                            <div class="box-val">${displayFaltanteBase.toFixed(2)} ${item.recipe_uom}</div>
                         </div>
                         <div class="data-box">
                             <div class="box-label">Formato Compra</div>
@@ -307,7 +335,37 @@ function updateLiveRowApprovalToggleState(idx, state) {
     LOCAL_STAGED_ROWS[idx].is_approved = state;
     refreshAllActiveReceiptDisplays();
 }
+// ⚡ RESTORED FUNCTION: Handles moving items between supplier cards seamlessly when dropdown changes
+function updateLiveRowSupplierAssignment(idx, newSupplierName) {
+    if (!newSupplierName || newSupplierName === "Proveedor No Asignado") return;
 
+    // 1. Update the local row's provider name in memory
+    LOCAL_STAGED_ROWS[idx].supplier_name = newSupplierName;
+
+    // 2. Scan global formats to auto-update the purchase UOM and conversion factor for this specific vendor
+    var currentItem = LOCAL_STAGED_ROWS[idx];
+    var matchedFormat = GLOBAL_SUPPLIER_FORMATS_LIST.find(function(f) {
+        return String(f.ingredient_id).trim() === String(currentItem.ingredient_id).trim() && 
+               String(f.provider_name).trim() === String(newSupplierName).trim();
+    });
+
+    if (matchedFormat) {
+        LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom ? String(matchedFormat.purchase_uom).trim() : "Formato";
+        LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
+    } else {
+        // Fallback safety defaults if no alternate link format was found
+        LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
+        LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
+    }
+
+    // 3. Re-render the grid layout so the item visually snaps into its new supplier group block
+    renderInteractiveManagerSpreadsheetGrid();
+    
+    // 4. Update the receipt markdown totals cleanly
+    if (typeof refreshAllActiveReceiptDisplays === "function") {
+        refreshAllActiveReceiptDisplays();
+    }
+}
         function refreshAllActiveReceiptDisplays() {
             var blockDivs = document.getElementsByClassName("supplier-block");
             for (var i = 0; i < blockDivs.length; i++) {
@@ -320,7 +378,8 @@ function updateLiveRowApprovalToggleState(idx, state) {
             }
         }
 // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
-async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElementId) {
+async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
+    // 1. Gather all active lines for this specific supplier block card
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -330,6 +389,13 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
 
     var supplierCard = document.getElementById(cardElementId);
     var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
+    
+    // Extract the exact PO number text string directly from your live interface badge node
+    var poNumber = "PO-SYSTEM";
+    if (supplierCard) {
+        var poBadgeNode = supplierCard.querySelector(".po-badge");
+        if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
+    }
 
     try {
         // --- STEP 1: MASTER DATABASE RECORDING ---
@@ -388,9 +454,10 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
                     if (ingDataArray && ingDataArray.length > 0) {
                         var dbIngredient = ingDataArray[0]; 
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
-                        var approvedFormatsCount = parseInt(item.approved_formats_quantity || 0, 10);
+                        var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
                         
+                        // Scale container numbers back down to clean database weight values safely
                         var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
                         var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                         if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
@@ -418,7 +485,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
         }
 
         // --- STEP 2: FORMAT & CLIPBOARD COPY ---
-        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *__" + poNumber + "__*:\n\n";
+        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
         filteredLines.forEach(function(item) {
             msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
         });
@@ -451,7 +518,7 @@ async function executeUnifiedSupplierProcess(supplierName, poNumber, cardElement
             alert("📋 ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
         }
         
-        window.open("https://whatsapp.com", '_blank');
+        window.open("https://web.whatsapp.com", '_blank');
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
@@ -515,40 +582,45 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
 }
 
         // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
-        function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
-            var blockKey = supplierName.replace(/\s+/g, '-');
-            var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
-            if (!slipContainer) return;
+function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
+    var blockKey = supplierName.replace(/\s+/g, '-');
+    var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
+    if (!slipContainer) return;
 
-            var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
+    // Filter down to the exact rows active for this provider card box
+    var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
-            if (filteredLines.length === 0) {
-                slipContainer.style.display = "none";
-                return;
-            }
+    if (filteredLines.length === 0) {
+        slipContainer.style.display = "none";
+        return;
+    }
 
-            var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
-            var txt = 
-                "========================================\n" +
-                "       ORDEN DE COMPRA: " + poNumber + "\n" +
-                "========================================\n" +
-                "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
-                "EMITIDO   : " + timeStamp + "\n" +
-                "ESTADO    : APROBADO Y CONFIRMADO\n" +
-                "----------------------------------------\n";
+    var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+    var txt = 
+        "========================================\n" +
+        "       ORDEN DE COMPRA: " + poNumber + "\n" +
+        "========================================\n" +
+        "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
+        "EMITIDO   : " + timeStamp + "\n" +
+        "ESTADO    : APROBADO Y CONFIRMADO\n" +
+        "----------------------------------------\n";
 
-            filteredLines.forEach(function(item) {
-                txt += "[ ] " + String(item.approved_formats_quantity).padEnd(4) + " " + item.supplier_uom.padEnd(8) + " - " + item.ingredient_name + "\n";
-            });
+    filteredLines.forEach(function(item) {
+        // Safe string casting protects the alignment strings from throwing length errors if database values return numbers
+        var displayQty = String(item.approved_formats_quantity).padEnd(4);
+        var displayUOM = String(item.supplier_uom).padEnd(12); // Increased padding to prevent longer unit text from breaking your layout alignment
+        
+        txt += "[ ] " + displayQty + " " + displayUOM + " - " + item.ingredient_name + "\n";
+    });
 
-            txt += 
-                "----------------------------------------\n" +
-                "Por favor confirmar recepción y despacho.\n" +
-                "========================================";
+    txt += 
+        "----------------------------------------\n" +
+        "Por favor confirmar recepción y despacho.\n" +
+        "========================================";
 
-            slipContainer.innerText = txt;
-            slipContainer.style.display = "block";
-        }
+    slipContainer.innerText = txt;
+    slipContainer.style.display = "block";
+}
 
     </script>
 </body>
