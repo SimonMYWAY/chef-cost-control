@@ -3880,7 +3880,7 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-        // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
+                // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
 
             // A. PUSH OUT THE OLD SHIP: Clear staging table rows cleanly
@@ -3895,7 +3895,7 @@ async function executeFinalInventoryProcurementCommit() {
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
                     : [];
                 
-                // 🎯 FIXED PROVIDER ASSIGNMENT: Locate format rule checking both name and provider_id
+                // Track down matching format rules safely by both name and ID properties
                 const activeFormatRule = authorizedFormats.find(f => 
                     String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim() ||
                     String(f.provider_id).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
