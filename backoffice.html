@@ -3907,14 +3907,14 @@ async function executeFinalInventoryProcurementCommit() {
                 };
             });
 
-            // 🎯 UPSERT CORRECTION: Force Supabase to create the missing row dynamically if it doesn't exist
-            await fetch(`${API_URL}system_settings`, {
+                        // 🎯 FIXED UPSERT: Explicitly pass '?on_conflict=key' in the URL so Supabase knows how to handle the rule
+            await fetch(`${API_URL}system_settings?on_conflict=key`, {
                 method: "POST",
                 headers: { 
                     "apikey": API_KEY, 
                     "Authorization": "Bearer " + API_KEY, 
                     "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates" // Crucial header for native Upsert operation
+                    "Prefer": "resolution=merge-duplicates" 
                 },
                 body: JSON.stringify({ 
                     key: "active_manager_order_staging",
@@ -3922,6 +3922,7 @@ async function executeFinalInventoryProcurementCommit() {
                     updated_at: new Date().toISOString() 
                 })
             });
+
         }
 
         if (updatePromises.length > 0) {
