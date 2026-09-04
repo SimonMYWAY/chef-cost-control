@@ -305,11 +305,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var conversionFactor = parseFloat(item.conversion_factor || 1);
             var approvedCount = parseFloat(item.approved_formats_quantity || 0);
             
-            // Core Logic Adjustment: If faltante_base from database is mistakenly arriving in 
-            // purchase format, multiply it by the conversionFactor to show true Recipe UOM (oz, oja, Kg)
-            var displayFaltanteBase = parseFloat(item.faltante_base || 0);
-            
-            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly
+            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly (e.g. 4 cases * 50oz = 200 oz)
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
             blockHtml += `
@@ -318,7 +314,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
-                            <div class="box-val">${displayFaltanteBase.toFixed(2)} ${item.recipe_uom}</div>
+                            <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)} ${item.recipe_uom}</div>
                         </div>
                         <div class="data-box">
                             <div class="box-label">Formato Compra</div>
