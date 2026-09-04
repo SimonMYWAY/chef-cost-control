@@ -157,7 +157,7 @@ async function pullActiveStagedCalculationFromCloud() {
             // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // 🏢 RE-IMPLEMENTED PROVIDER OVERRIDES: Prevents "unassigned" dropdown failures
+            // 🏢 PROVIDER OVERRIDES: Prevents unassigned dropdown failures
             var realSupplierName = "Proveedor No Asignado";
             if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
@@ -176,28 +176,34 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- 🎯 THE ABSOLUTE RE-ALIGNMENT MAPPING ---
-            // 1. Faltante Base is the exact net kitchen recipe need. Never manipulate or divide it.
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
+            // --- 🎯 THE SYSTEM-ALIGNED PROPERTIES MAPPING ---
+            // 1. Faltante Base is your raw recipe requirement. Let's make sure it reads 
+            //    directly from your database metrics or the raw row target definition.
+            var calculatedRecipeFaltante = parseFloat(row.pedido_sugerido * finalMultiplier || row.faltante_base || 0);
+            if (calculatedRecipeFaltante < 5 && row.pedido_sugerido > 0) {
+                // If it's returning the fraction instead, we swap it safely
+                calculatedRecipeFaltante = parseFloat(row.pedido_sugerido || 0);
+            }
 
-            // 2. Pedido Sugerido comes down as recipe volume (e.g. 188). We must divide it by the 
-            //    multiplier to get the true whole purchase formats needed.
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
-            if (finalMultiplier > 0) {
+            // 2. Pedido Sugerido must show wholesale batch counts. If it's arriving scaled down (e.g. 0.03125),
+            //    we ceil it or display it cleanly. If it's arriving as a whole count, we read it directly.
+            var rawPedidoSugerido = parseFloat(row.faltante_base || row.pedido_sugerido || 0);
+            if (rawPedidoSugerido > 30 && finalMultiplier > 1) {
                 rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
             }
+            
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Keeps high-precision need (e.g. 188.00 oz)
+                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (100.00 oz)
                 recipe_uom: realRecipeUnit,               
                 supplier_name: realSupplierName,          
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Scaled down package containers count (e.g. 4)
+                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
                 approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
