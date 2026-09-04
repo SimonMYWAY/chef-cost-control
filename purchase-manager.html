@@ -176,26 +176,28 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- 🎯 THE NUMERICAL INVERSION SWAP ---
-            // As you confirmed: the values themselves are flipped coming from the DB payload.
-            // row.pedido_sugerido contains the recipe weight total volume metrics.
-            var calculatedRecipeFaltante = parseFloat(row.pedido_sugerido || 0); 
+            // --- 🎯 THE FIXED DATA ALIGNMENT MAPPING ---
+            // 1. Faltante Base is the exact net kitchen requirement. Read it directly from its true column.
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
 
-            // row.faltante_base contains the target wholesale purchase package counts.
-            var rawPedidoSugerido = parseFloat(row.faltante_base || 0);         
-            
+            // 2. Pedido Sugerido must show wholesale batch counts. If the database repeats the large weight here, 
+            //    we divide it by finalMultiplier to scale it down into clean wholesale container quantities.
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
+            if (rawPedidoSugerido > 30 && finalMultiplier > 1) {
+                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
+            }
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Displays recipe weights perfectly (e.g. 188 oz)
+                faltante_base: calculatedRecipeFaltante, // Exact, high-precision kitchen recipe requirement
                 recipe_uom: realRecipeUnit,               
                 supplier_name: realSupplierName,          // Fully restored provider mapping lookup
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Displays wholesale package amounts cleanly (e.g. 4 Caja)
+                pedido_sugerido: rawPedidoSugerido,       // Clean batch package counts (e.g. 4 Caja)
                 approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
