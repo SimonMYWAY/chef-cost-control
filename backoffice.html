@@ -3972,7 +3972,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
     shipBtn.innerText = "⏳ Enviando datos...";
 
     try {
-               // 1️⃣ Clear out yesterday's remaining calculations from the landing pad (WITH SAFE FILTER)
+        // 1️⃣ Clear out yesterday's remaining calculations from the landing pad (WITH SAFE FILTER)
         await fetch(API_URL + "staged_order_calculations?id=not.is.null", { 
             method: "DELETE", 
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
@@ -3989,31 +3989,32 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             const activeFormatRule = authorizedFormats.find(f => 
                 String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
             );
-
-                        // 🎯 METRIC BRIDGE SYNCHRONIZED: Re-calculating the exact gap matching your backoffice grid math
-            var baseInitialInventory = parseFloat(activeLine.last_std_inventory || 0);
-            var baseConsumption = parseFloat(activeLine.consumption || 0);
             
-            // Look up conversion multipliers to calculate the matching stock_max layer gap
             var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
-            var suggestedFormats = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0);
-            
-            // Re-aligning the true on-screen net gap metric accurately
-            var calculatedFaltanteBaseGap = suggestedFormats * conversionFactor;
+
+            // 🎯 ROOT FIX 1: Grab your exact, raw high-precision kitchen shortage requirement (e.g., 100 oz)
+            var trueKitchenNetNeed = parseFloat(activeLine.suggested_quantity || activeLine.approved_quantity || 0);
+
+            // 🎯 ROOT FIX 2: Calculate whole purchasing containers count by dividing net need by conversion factors
+            var calculatedPurchaseContainersCount = 0;
+            if (trueKitchenNetNeed > 0 && conversionFactor > 0) {
+                calculatedPurchaseContainersCount = trueKitchenNetNeed / conversionFactor;
+            }
 
             var payload = {
                 ingredient_id: String(activeLine.ingredient_id).trim(),
                 ingredient_name: String(activeLine.ingredient_name),
                 
-                // 🌟 DEFINITION FIXED: Capturing your true calculated net filling gap quantity here
-                faltante_base: parseFloat(calculatedFaltanteBaseGap || baseConsumption || 0), 
+                // 🌟 SCHEMA CORRECTED: Always records the high-precision recipe shortage target safely
+                faltante_base: parseFloat(trueKitchenNetNeed), 
                 
                 supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
-                pedido_sugerido: parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0),
+                
+                // 🌟 SCHEMA CORRECTED: Records clean, wholesale container batch values (e.g., 2 boxes instead of a large weight)
+                pedido_sugerido: parseFloat(calculatedPurchaseContainersCount),
                 conversion_factor: conversionFactor
             };
-
 
             await fetch(API_URL + "staged_order_calculations", {
                 method: "POST",

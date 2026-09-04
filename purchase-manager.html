@@ -147,17 +147,17 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
+            // 1. Extract true recipe unit strings from master map
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // 2. Cross-reference the supplier formats schema table to protect relational integrity
+            // 2. Cross-reference supplier formats table
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // 🏢 PROVIDER OVERRIDES: Prevents unassigned dropdown failures
+            // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
             var realSupplierName = "Proveedor No Asignado";
             if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
@@ -176,34 +176,22 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- 🎯 THE SYSTEM-ALIGNED PROPERTIES MAPPING ---
-            // 1. Faltante Base is your raw recipe requirement. Let's make sure it reads 
-            //    directly from your database metrics or the raw row target definition.
-            var calculatedRecipeFaltante = parseFloat(row.pedido_sugerido * finalMultiplier || row.faltante_base || 0);
-            if (calculatedRecipeFaltante < 5 && row.pedido_sugerido > 0) {
-                // If it's returning the fraction instead, we swap it safely
-                calculatedRecipeFaltante = parseFloat(row.pedido_sugerido || 0);
-            }
-
-            // 2. Pedido Sugerido must show wholesale batch counts. If it's arriving scaled down (e.g. 0.03125),
-            //    we ceil it or display it cleanly. If it's arriving as a whole count, we read it directly.
-            var rawPedidoSugerido = parseFloat(row.faltante_base || row.pedido_sugerido || 0);
-            if (rawPedidoSugerido > 30 && finalMultiplier > 1) {
-                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
-            }
-            
+            // --- ZERO-MATH LOGISTIC ALIGNMENT ---
+            // Read direct from the corrected database columns
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (100.00 oz)
+                faltante_base: calculatedRecipeFaltante, // Exact raw high-precision shortage requirement target
                 recipe_uom: realRecipeUnit,               
                 supplier_name: realSupplierName,          
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
+                pedido_sugerido: rawPedidoSugerido,       // Clean container package totals
                 approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
