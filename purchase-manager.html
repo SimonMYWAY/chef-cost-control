@@ -176,14 +176,14 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- 🎯 THE FIXED DATA ALIGNMENT MAPPING ---
-            // 1. Faltante Base is the exact net kitchen requirement. Read it directly from its true column.
+            // --- 🎯 THE ABSOLUTE RE-ALIGNMENT MAPPING ---
+            // 1. Faltante Base is the exact net kitchen recipe need. Never manipulate or divide it.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
 
-            // 2. Pedido Sugerido must show wholesale batch counts. If the database repeats the large weight here, 
-            //    we divide it by finalMultiplier to scale it down into clean wholesale container quantities.
+            // 2. Pedido Sugerido comes down as recipe volume (e.g. 188). We must divide it by the 
+            //    multiplier to get the true whole purchase formats needed.
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
-            if (rawPedidoSugerido > 30 && finalMultiplier > 1) {
+            if (finalMultiplier > 0) {
                 rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
             }
             var approvedCount = Math.ceil(rawPedidoSugerido);
@@ -192,12 +192,12 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Exact, high-precision kitchen recipe requirement
+                faltante_base: calculatedRecipeFaltante, // Keeps high-precision need (e.g. 188.00 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          // Fully restored provider mapping lookup
+                supplier_name: realSupplierName,          
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Clean batch package counts (e.g. 4 Caja)
+                pedido_sugerido: rawPedidoSugerido,       // Scaled down package containers count (e.g. 4)
                 approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
