@@ -60,6 +60,10 @@
         <div class="loader-text">Haga clic en el botón superior para descargar la matriz de cálculo activa de hoy.</div>
     </main>
     <script>
+        // 🔒 TERMINAL CARGO STATE METRICS
+        var ACTIVE_SHIPMENT_TIMESTAMP = null;
+        var LOCAL_STAGED_ROWS = [];
+
         // 💾 SERVER VARIABLE CONFIGURATIONS
         var API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
         var API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x"; // Put your actual anon key here
@@ -67,9 +71,18 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Explicitly forces local formats matching over broken database entries
+// ⚡ RE-ENGINEERED SYNC: State-Locked Cargo Terminal Core
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
+    // NOTE: Ensure this matches the exact 'id' attribute of your load button element
+    var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
+
+    // 🛑 RULE 1: Guard rail to prevent double-loading or mid-process data contamination
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+        alert("⚠️ El cargamento actual ya está activo en la terminal. Debe procesar o finalizar todas las líneas actuales antes de poder solicitar un nuevo cargamento.");
+        return;
+    }
+
     workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
 
     try {
@@ -96,8 +109,6 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         if (formatsRes.ok) {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
-            
-            // Build a fast lookup map using the ingredient_id as the key
             GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
                 if (format.ingredient_id) {
                     var formatKey = String(format.ingredient_id).toLowerCase().trim();
@@ -120,20 +131,31 @@ async function pullActiveStagedCalculationFromCloud() {
 
         if (!cloudRows || cloudRows.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
+            ACTIVE_SHIPMENT_TIMESTAMP = null;
+            if (loadButton) {
+                loadButton.disabled = false;
+                loadButton.style.opacity = "1";
+                loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
+            }
             return;
         }
               
+        // 🛑 RULE 2: Lock terminal state directly onto the unique timestamp signature of row 0
+        var rawDateString = cloudRows[0].created_at || new Date().toISOString();
+        var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
+            timeZone: "America/Santiago",
+            day: "2-digit", month: "2-digit", year: "numeric",
+            hour: "2-digit", minute: "2-digit"
+        });
+        ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
+
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master table
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            
-            // Cross-reference our supplier formats table
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // --- FIX 1: OVERRIDE LITERAL "unassigned" STRING FROM DATABASE ---
             var realSupplierName = "Proveedor No Asignado";
             if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
@@ -141,7 +163,6 @@ async function pullActiveStagedCalculationFromCloud() {
                 realSupplierName = matchedFormat.provider_name;
             }
             
-            // --- FIX 2: OVERRIDE INCORRECT RECIPE UOM FALLBACKS IN SUPPLIER FIELDS ---
             var realPurchaseUnit = "Formato";
             if (matchedFormat && matchedFormat.purchase_uom) {
                 realPurchaseUnit = matchedFormat.purchase_uom;
@@ -149,15 +170,9 @@ async function pullActiveStagedCalculationFromCloud() {
                 realPurchaseUnit = String(row.supplier_uom).trim();
             }
 
-            // --- FIX 3: FORCE TRUE SYSTEM MULTIPLIERS OVER BROKEN OVERWRITES ---
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
-
-            // --- FIX 4: CONVERT RAW RECIPE QUANTITIES BACK TO PURCHASE CONTAINER FIGURES ---
-            // Database is sending raw recipe shortages (e.g. 188 oz). 
-            // Faltante Base stays as the raw recipe requirement.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
 
-            // Convert the suggested purchase order quantity by dividing recipe units by the multiplier
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
             if (finalMultiplier > 0 && (row.supplier_uom === realRecipeUnit || row.supplier_name === "unassigned")) {
                 rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
@@ -168,16 +183,36 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Stays clean raw recipe requirement (e.g. 188.00 oz)
+                faltante_base: calculatedRecipeFaltante, 
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          // Overrode literal "unassigned" label string
-                supplier_uom: realPurchaseUnit,           // Pulled your box/package unit rules cleanly
+                supplier_name: realSupplierName,          
+                supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Converted down from recipe weight to containers
-                approved_formats_quantity: approvedCount, // Whole container units to order
+                pedido_sugerido: rawPedidoSugerido,       
+                approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
         });
+
+        // 🛑 RULE 3: Visually freeze the interface pull control button
+        if (loadButton) {
+            loadButton.disabled = true;
+            loadButton.style.opacity = "0.5";
+            loadButton.style.cursor = "not-allowed";
+            loadButton.innerText = "🔒 Terminal Bloqueado con Éxito";
+        }
+
+        // --- STEP 4: PRINT CURRENT SALES BATCH REFERENCE HEADER ---
+        var headerBannerNode = document.createElement("div");
+        headerBannerNode.id = "terminal-cargo-meta-header";
+        headerBannerNode.style = "background:#0f172a; color:#38bdf8; padding:12px; margin-bottom:15px; border-radius:6px; font-family:monospace; font-size:14px; font-weight:bold; border-left:4px solid #38bdf8; display:flex; justify-content:space-between; align-items:center;";
+        headerBannerNode.innerHTML = `
+            <span>📦 CARGAMENTO LOGÍSTICO ACTIVO</span>
+            <span>📅 REF INTERACCIÓN VENTAS: ${formattedDateSignature}</span>
+        `;
+        
+        // Append banner directly above our workspace content grids
+        workspace.parentNode.insertBefore(headerBannerNode, workspace);
 
         renderInteractiveManagerSpreadsheetGrid();
 
@@ -186,7 +221,6 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
-
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
@@ -544,6 +578,34 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase: " + err.message);
     }
 }
+// ⚡ LIFE-CYCLE RECOVERY: Checks if terminal queue is empty and releases button states cleanly
+function verifyAndReleaseShipmentLock() {
+    // 1. If lines are still left to process, keep terminal locked down
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) return;
+
+    // 2. All items clear! Destroy the sales reference meta banner
+    var existingHeader = document.getElementById("terminal-cargo-meta-header");
+    if (existingHeader) {
+        existingHeader.remove();
+    }
+
+    // 3. Clear global tracking values
+    ACTIVE_SHIPMENT_TIMESTAMP = null;
+
+    // 4. Restore the core sync load button back to active status
+    var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
+    if (loadButton) {
+        loadButton.disabled = false;
+        loadButton.style.opacity = "1";
+        loadButton.style.cursor = "pointer";
+        loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
+    }
+
+    var workspace = document.getElementById("manager-grid-workspace");
+    if (workspace) {
+        workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
+    }
+}
 
 // 🎯 STEP D: Finalize, dim card, and mark rows as dispatched by dropping pedido_sugerido to 0
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
@@ -590,15 +652,45 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
         
         // Remove matching lines locally from memory array layout view
         LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(r => r.supplier_name !== supplierName);
-        if (LOCAL_STAGED_ROWS.length === 0) {
-            document.getElementById("manager-grid-workspace").innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido despachadas con éxito! Bodega vacía.</div>';
-        }
+        
+        // 🔒 ADDED GUARD RAIL: Check if terminal queue is completely clear to release locks cleanly
+        verifyAndReleaseShipmentLock();
         
     } catch (err) {
         console.error(err);
         alert("❌ Error actualizando el estado de descarga de la bodega: " + err.message);
     }
 }
+
+// ⚡ LIFE-CYCLE RECOVERY HELPER: Checks if terminal queue is empty and releases button states cleanly
+function verifyAndReleaseShipmentLock() {
+    // 1. If lines are still left to process, keep terminal locked down
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) return;
+
+    // 2. All items clear! Destroy the sales reference metadata header banner completely
+    var existingHeader = document.getElementById("terminal-cargo-meta-header");
+    if (existingHeader) {
+        existingHeader.remove();
+    }
+
+    // 3. Clear global tracking values completely
+    ACTIVE_SHIPMENT_TIMESTAMP = null;
+
+    // 4. Restore the core sync load button back to active status
+    var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
+    if (loadButton) {
+        loadButton.disabled = false;
+        loadButton.style.opacity = "1";
+        loadButton.style.cursor = "pointer";
+        loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
+    }
+
+    var workspace = document.getElementById("manager-grid-workspace");
+    if (workspace) {
+        workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
+    }
+}
+
 
         // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
 function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
