@@ -147,14 +147,14 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // 1. Extract true recipe unit strings from master map
+            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // 2. Cross-reference supplier formats table
+            // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
             // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
@@ -176,8 +176,8 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- ZERO-MATH LOGISTIC ALIGNMENT ---
-            // Read direct from the corrected database columns
+            // --- 🎯 ZERO-MATH DIRECT COLUMNS PASS-THROUGH ---
+            // Read direct from the clean columns. No extra division or adjustments allowed.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
@@ -186,12 +186,12 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Exact raw high-precision shortage requirement target
+                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (e.g. 100.00 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          
+                supplier_name: realSupplierName,          // Aligned with verified provider entries
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Clean container package totals
+                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
                 approved_formats_quantity: approvedCount, 
                 is_approved: true
             };

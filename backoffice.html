@@ -3990,32 +3990,30 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
             );
             
+// 🎯 METRIC BRIDGE SYNCHRONIZED: Transmit direct raw matrix numbers cleanly
             var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
-
-            // 🎯 ROOT FIX 1: Grab your exact, raw high-precision kitchen shortage requirement (e.g., 100 oz)
+            
+            // Extract the absolute, raw numbers directly from your spreadsheet calculation matrix fields
             var trueKitchenNetNeed = parseFloat(activeLine.suggested_quantity || activeLine.approved_quantity || 0);
+            var trueWholesaleSuggestedCount = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || trueWholesaleSuggestedCount || 0);
 
-            // 🎯 ROOT FIX 2: Calculate whole purchasing containers count by dividing net need by conversion factors
-            var calculatedPurchaseContainersCount = 0;
-            if (trueKitchenNetNeed > 0 && conversionFactor > 0) {
-                calculatedPurchaseContainersCount = trueKitchenNetNeed / conversionFactor;
+            // Safety net: If wholesale count arrived empty but net need exists, fallback safely
+            if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
+                trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
 
             var payload = {
                 ingredient_id: String(activeLine.ingredient_id).trim(),
                 ingredient_name: String(activeLine.ingredient_name),
                 
-                // 🌟 SCHEMA CORRECTED: Always records the high-precision recipe shortage target safely
+                // 🌟 CORES SYNCHRONIZED: Direct mapping prevents text or math scrambling
                 faltante_base: parseFloat(trueKitchenNetNeed), 
+                pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
                 
                 supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
-                
-                // 🌟 SCHEMA CORRECTED: Records clean, wholesale container batch values (e.g., 2 boxes instead of a large weight)
-                pedido_sugerido: parseFloat(calculatedPurchaseContainersCount),
                 conversion_factor: conversionFactor
             };
-
             await fetch(API_URL + "staged_order_calculations", {
                 method: "POST",
                 headers: { 
