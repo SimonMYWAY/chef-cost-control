@@ -147,45 +147,56 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-                LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
+            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // Cross-reference the supplier formats table to grab the container packaging name
+            // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
-            var realPurchaseUnit = (matchedFormat && matchedFormat.purchase_uom) 
-                                   ? matchedFormat.purchase_uom 
-                                   : "Formato";
-
-            // Establish structural conversion factors safely
-            var finalMultiplier = parseFloat(row.conversion_factor || (matchedFormat ? matchedFormat.units_per_purchase : 1));
-
-            // --- THE QUANTITY FIX ---
-            // 1. Faltante Base is already the raw kitchen weight (e.g. 188 oz). Keep it exactly as is.
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
-
-            // 2. Pedido Sugerido is arriving as a recipe weight (188). We MUST divide it by the multiplier
-            //    to convert it into wholesale container packages (e.g. 188 oz / 48 oz per package = 4 Packages)
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
-            if (finalMultiplier > 0) {
-                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
+            
+            // 🏢 RE-IMPLEMENTED PROVIDER OVERRIDES: Prevents "unassigned" dropdown failures
+            var realSupplierName = "Proveedor No Asignado";
+            if (row.supplier_name && row.supplier_name !== "unassigned") {
+                realSupplierName = String(row.supplier_name).trim();
+            } else if (row.provider_name) {
+                realSupplierName = String(row.provider_name).trim();
+            } else if (matchedFormat && matchedFormat.provider_name) {
+                realSupplierName = matchedFormat.provider_name;
             }
+            
+            var realPurchaseUnit = "Formato";
+            if (matchedFormat && matchedFormat.purchase_uom) {
+                realPurchaseUnit = matchedFormat.purchase_uom;
+            } else if (row.supplier_uom && row.supplier_uom !== realRecipeUnit) {
+                realPurchaseUnit = String(row.supplier_uom).trim();
+            }
+
+            var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
+
+            // --- 🎯 THE NUMERICAL INVERSION SWAP ---
+            // As you confirmed: the values themselves are flipped coming from the DB payload.
+            // row.pedido_sugerido contains the recipe weight total volume metrics.
+            var calculatedRecipeFaltante = parseFloat(row.pedido_sugerido || 0); 
+
+            // row.faltante_base contains the target wholesale purchase package counts.
+            var rawPedidoSugerido = parseFloat(row.faltante_base || 0);         
+            
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Displays clean raw recipe requirement (e.g. 188.00 oz)
+                faltante_base: calculatedRecipeFaltante, // Displays recipe weights perfectly (e.g. 188 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: row.supplier_name || "Proveedor No Asignado", 
-                supplier_uom: realPurchaseUnit,           // Displays container format text label (e.g. Caja, Bolsa)
+                supplier_name: realSupplierName,          // Fully restored provider mapping lookup
+                supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Converted from recipe units down to wholesale container count
-                approved_formats_quantity: approvedCount, // Whole container units to buy
+                pedido_sugerido: rawPedidoSugerido,       // Displays wholesale package amounts cleanly (e.g. 4 Caja)
+                approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
         });
