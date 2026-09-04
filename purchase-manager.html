@@ -117,6 +117,15 @@ async function pullActiveStagedCalculationFromCloud() {
         
         if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
         const cloudRows = await dataTableRes.json();
+// 🛑 TEMP DEBUG LOGS: Let's read the raw schema keys directly from your database
+        console.warn("--- RAW CLOUD ROWS SAMPLE ---");
+        if (cloudRows && cloudRows.length > 0) {
+            console.warn("Keys found in row 0:", Object.keys(cloudRows[0]));
+            console.warn("Full contents of row 0:", JSON.stringify(cloudRows[0], null, 2));
+        } else {
+            console.warn("No rows returned or cloudRows is empty!");
+        }
+        console.warn("-----------------------------");
 
         if (!cloudRows || cloudRows.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
