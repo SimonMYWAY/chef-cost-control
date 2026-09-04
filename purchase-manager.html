@@ -71,13 +71,11 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: State-Locked Cargo Terminal Core
+// ⚡ RE-ENGINEERED SYNC: Corrects reversed math conversions for recipe uom vs purchase uom
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
-    // NOTE: Ensure this matches the exact 'id' attribute of your load button element
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
 
-    // 🛑 RULE 1: Guard rail to prevent double-loading or mid-process data contamination
     if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
         alert("⚠️ El cargamento actual ya está activo en la terminal. Debe procesar o finalizar todas las líneas actuales antes de poder solicitar un nuevo cargamento.");
         return;
@@ -140,8 +138,8 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
               
-        // 🛑 RULE 2: Lock terminal state directly onto the unique timestamp signature of row 0
-        var rawDateString = cloudRows[0].created_at || new Date().toISOString();
+        var firstRow = cloudRows[0];
+        var rawDateString = firstRow.created_at || new Date().toISOString();
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
             day: "2-digit", month: "2-digit", year: "numeric",
@@ -171,11 +169,26 @@ async function pullActiveStagedCalculationFromCloud() {
             }
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
 
+            // --- ALIGNED QUANTITY CONVERSION RULES ---
+            // 1. Faltante Base: If it's already in recipe units (like 188 oz), display it directly.
+            //    If it arrives scaled as purchase format, we multiply it by finalMultiplier.
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
+            if (row.supplier_uom !== realRecipeUnit && row.supplier_name !== "unassigned") {
+                // If the db field says "Caja" but the number is 188, it's already recipe units.
+                // We only convert if the value is explicitly a fraction or small container count.
+                if (calculatedRecipeFaltante < 20) { 
+                    calculatedRecipeFaltante = calculatedRecipeFaltante * finalMultiplier;
+                }
+            }
+
+            // 2. Pedido Sugerido: Must express the count in wholes of purchasing containers (e.g. 4 cases)
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
-            if (finalMultiplier > 0 && (row.supplier_uom === realRecipeUnit || row.supplier_name === "unassigned")) {
-                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
+            if (rawPedidoSugerido > 0 && finalMultiplier > 0) {
+                // If raw database figure is a large weight (e.g. 188) matching recipe terms, divide it down into containers
+                if (row.supplier_uom === realRecipeUnit || row.supplier_name === "unassigned" || rawPedidoSugerido > 30) {
+                    rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
+                }
             }
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
@@ -194,7 +207,6 @@ async function pullActiveStagedCalculationFromCloud() {
             };
         });
 
-        // 🛑 RULE 3: Visually freeze the interface pull control button
         if (loadButton) {
             loadButton.disabled = true;
             loadButton.style.opacity = "0.5";
@@ -202,17 +214,21 @@ async function pullActiveStagedCalculationFromCloud() {
             loadButton.innerText = "🔒 Terminal Bloqueado con Éxito";
         }
 
-        // --- STEP 4: PRINT CURRENT SALES BATCH REFERENCE HEADER ---
-        var headerBannerNode = document.createElement("div");
-        headerBannerNode.id = "terminal-cargo-meta-header";
+        var headerBannerNode = document.getElementById("terminal-cargo-meta-header");
+        if (!headerBannerNode) {
+            headerBannerNode = document.createElement("div");
+            headerBannerNode.id = "terminal-cargo-meta-header";
+            workspace.parentNode.insertBefore(headerBannerNode, workspace);
+        }
+        
         headerBannerNode.style = "background:#0f172a; color:#38bdf8; padding:12px; margin-bottom:15px; border-radius:6px; font-family:monospace; font-size:14px; font-weight:bold; border-left:4px solid #38bdf8; display:flex; justify-content:space-between; align-items:center;";
         headerBannerNode.innerHTML = `
-            <span>📦 CARGAMENTO LOGÍSTICO ACTIVO</span>
-            <span>📅 REF INTERACCIÓN VENTAS: ${formattedDateSignature}</span>
+            <div>📦 CARGAMENTO LOGÍSTICO ACTIVO</div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span>📅 REF INTERACCIÓN VENTAS: ${formattedDateSignature}</span>
+                <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold; font-family:sans-serif;">⚠️ Forzar Reinicio</button>
+            </div>
         `;
-        
-        // Append banner directly above our workspace content grids
-        workspace.parentNode.insertBefore(headerBannerNode, workspace);
 
         renderInteractiveManagerSpreadsheetGrid();
 
@@ -432,7 +448,6 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         }
 // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
-    // 1. Gather all active lines for this specific supplier block card
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -443,7 +458,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
     var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
     
-    // Extract the exact PO number text string directly from your live interface badge node
     var poNumber = "PO-SYSTEM";
     if (supplierCard) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
@@ -452,28 +466,47 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
     try {
         // --- STEP 1: MASTER DATABASE RECORDING ---
+        var generatedPoUuid = null;
+
         if (!isAlreadySaved) {
-            var parentPayload = {
-                po_number: poNumber,
-                supplier_name: supplierName,
-                status: 'saved_pending_whatsapp', 
-                total_items: filteredLines.length
-            };
-
-            const resParent = await fetch(API_URL + "purchase_orders", {
-                method: "POST",
-                headers: {
-                    "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=representation"
-                },
-                body: JSON.stringify(parentPayload)
+            // 🔍 CHECK IF PO NUMBER ALREADY EXISTS IN DATABASE (Prevents server unique constraint crash)
+            const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
+                method: "GET",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
+            
+            if (checkPoRes.ok) {
+                const existingPoData = await checkPoRes.json();
+                if (existingPoData && existingPoData.length > 0) {
+                    generatedPoUuid = existingPoData[0].id;
+                    console.log("🔄 Document header found in Supabase. Appending items to existing ID: " + generatedPoUuid);
+                }
+            }
 
-            if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
-            const parentRowResultData = await resParent.json();
-            var generatedPoUuid = parentRowResultData.id;
+            // If it doesn't exist, create a clean new document header row
+            if (!generatedPoUuid) {
+                var parentPayload = {
+                    po_number: poNumber,
+                    supplier_name: supplierName,
+                    status: 'saved_pending_whatsapp', 
+                    total_items: filteredLines.length
+                };
+
+                const resParent = await fetch(API_URL + "purchase_orders", {
+                    method: "POST",
+                    headers: {
+                        "apikey": API_KEY,
+                        "Authorization": "Bearer " + API_KEY,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify(parentPayload)
+                });
+
+                if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
+                const parentRowResultData = await resParent.json();
+                generatedPoUuid = parentRowResultData[0].id;
+            }
 
             // Loop through lines to save itemization rows AND update stock levels
             for (var i = 0; i < filteredLines.length; i++) {
@@ -510,7 +543,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                         var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
                         
-                        // Scale container numbers back down to clean database weight values safely
                         var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
                         var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                         if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
@@ -571,13 +603,14 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             alert("📋 ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
         }
         
-        window.open("https://web.whatsapp.com", '_blank');
+        window.open("https://whatsapp.com", '_blank');
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
         alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase: " + err.message);
     }
 }
+
 // ⚡ LIFE-CYCLE RECOVERY: Checks if terminal queue is empty and releases button states cleanly
 function verifyAndReleaseShipmentLock() {
     // 1. If lines are still left to process, keep terminal locked down
