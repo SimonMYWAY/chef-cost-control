@@ -761,7 +761,35 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.innerText = txt;
     slipContainer.style.display = "block";
 }
-
+// ⚡ EMERGENCY OVERRIDE: Wipes stale local queue memory and restores terminal receiver state
+function forceTerminalEmergencyReset() {
+    if (confirm("¿Está seguro que desea liberar el terminal? Esto borrará la vista actual para permitirle descargar el nuevo cargamento del Backoffice.")) {
+        
+        // 1. Wipe the memory grid clean
+        LOCAL_STAGED_ROWS = [];
+        ACTIVE_SHIPMENT_TIMESTAMP = null;
+        
+        // 2. Remove the header banner on screen
+        var banner = document.getElementById("terminal-cargo-meta-header");
+        if (banner) banner.remove();
+        
+        // 3. Forcefully unlock and restore the core download button
+        var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
+        if (loadButton) {
+            loadButton.disabled = false;
+            loadButton.style.opacity = "1";
+            loadButton.style.cursor = "pointer";
+            loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
+        }
+        
+        var workspace = document.getElementById("manager-grid-workspace");
+        if (workspace) {
+            workspace.innerHTML = '<div class="loader-text" style="color:#cbd5e1; font-style:italic; text-align:center; padding:20px;">Terminal restablecido con éxito. Listo para descargar nuevo cargamento.</div>';
+        }
+        
+        alert("🔄 Terminal desbloqueado de manera segura. Ya puede hacer clic en 'Cargar Ventas Procesadas del Día' para descargar la nueva interacción.");
+    }
+}
     </script>
 </body>
 </html>
