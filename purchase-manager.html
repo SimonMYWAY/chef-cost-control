@@ -67,7 +67,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Aligned with Supabase column definitions (provider_name)
+// ⚡ RE-ENGINEERED SYNC: Explicitly forces local formats matching over broken database entries
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
@@ -117,15 +117,6 @@ async function pullActiveStagedCalculationFromCloud() {
         
         if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
         const cloudRows = await dataTableRes.json();
-// 🛑 TEMP DEBUG LOGS: Let's read the raw schema keys directly from your database
-        console.warn("--- RAW CLOUD ROWS SAMPLE ---");
-        if (cloudRows && cloudRows.length > 0) {
-            console.warn("Keys found in row 0:", Object.keys(cloudRows[0]));
-            console.warn("Full contents of row 0:", JSON.stringify(cloudRows[0], null, 2));
-        } else {
-            console.warn("No rows returned or cloudRows is empty!");
-        }
-        console.warn("-----------------------------");
 
         if (!cloudRows || cloudRows.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
@@ -136,42 +127,54 @@ async function pullActiveStagedCalculationFromCloud() {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
+            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master table
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // Cross-reference our newly verified schema formats lookup map
+            // Cross-reference our supplier formats table
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // --- FIX 1: RESOLVE SUPPLIER ASSIGNMENT ---
-            // Fall back across all possible database fields to grab the correct provider name
-            var realSupplierName = row.provider_name || row.supplier_name || (matchedFormat ? matchedFormat.provider_name : "Proveedor No Asignado");
+            // --- FIX 1: OVERRIDE LITERAL "unassigned" STRING FROM DATABASE ---
+            var realSupplierName = "Proveedor No Asignado";
+            if (row.supplier_name && row.supplier_name !== "unassigned") {
+                realSupplierName = String(row.supplier_name).trim();
+            } else if (matchedFormat && matchedFormat.provider_name) {
+                realSupplierName = matchedFormat.provider_name;
+            }
             
-            // Fall back across all possible database fields to grab the correct purchase format unit
-            var realPurchaseUnit = row.purchase_uom || row.supplier_uom || (matchedFormat && matchedFormat.purchase_uom ? matchedFormat.purchase_uom : "Formato");
+            // --- FIX 2: OVERRIDE INCORRECT RECIPE UOM FALLBACKS IN SUPPLIER FIELDS ---
+            var realPurchaseUnit = "Formato";
+            if (matchedFormat && matchedFormat.purchase_uom) {
+                realPurchaseUnit = matchedFormat.purchase_uom;
+            } else if (row.supplier_uom && row.supplier_uom !== realRecipeUnit) {
+                realPurchaseUnit = String(row.supplier_uom).trim();
+            }
 
-            // Establish the structural conversion factor safely
-            var finalMultiplier = parseFloat(row.conversion_factor || (matchedFormat ? matchedFormat.units_per_purchase : 1));
+            // --- FIX 3: FORCE TRUE SYSTEM MULTIPLIERS OVER BROKEN OVERWRITES ---
+            var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- FIX 2: QUANTITY CONVERSION MATH ---
-            // If the raw database figures are coming down expressed in purchase formats, 
-            // we multiply them by our conversion factor to get clean recipe-level values (e.g., total ounces/leaves)
-            var rawFaltante = parseFloat(row.faltante_base || 0);
-            var calculatedRecipeFaltante = rawFaltante * finalMultiplier;
+            // --- FIX 4: CONVERT RAW RECIPE QUANTITIES BACK TO PURCHASE CONTAINER FIGURES ---
+            // Database is sending raw recipe shortages (e.g. 188 oz). 
+            // Faltante Base stays as the raw recipe requirement.
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
 
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0); // Purchasing-level units
+            // Convert the suggested purchase order quantity by dividing recipe units by the multiplier
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
+            if (finalMultiplier > 0 && (row.supplier_uom === realRecipeUnit || row.supplier_name === "unassigned")) {
+                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
+            }
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Converted to recipe UOM terms (oz, oja)
+                faltante_base: calculatedRecipeFaltante, // Stays clean raw recipe requirement (e.g. 188.00 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          // Aligned with verified schema field properties
-                supplier_uom: realPurchaseUnit,           
+                supplier_name: realSupplierName,          // Overrode literal "unassigned" label string
+                supplier_uom: realPurchaseUnit,           // Pulled your box/package unit rules cleanly
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       
-                approved_formats_quantity: approvedCount, 
+                pedido_sugerido: rawPedidoSugerido,       // Converted down from recipe weight to containers
+                approved_formats_quantity: approvedCount, // Whole container units to order
                 is_approved: true
             };
         });
@@ -183,6 +186,7 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
+
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
