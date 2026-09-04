@@ -67,7 +67,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Correctly splits and assigns Recipe UOM vs Purchase UOM
+// ⚡ RE-ENGINEERED SYNC: Aligned with Supabase column definitions (provider_name)
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
@@ -102,6 +102,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 if (format.ingredient_id) {
                     var formatKey = String(format.ingredient_id).toLowerCase().trim();
                     supplierFormatsLookup[formatKey] = {
+                        provider_name: format.provider_name ? String(format.provider_name).trim() : null,
                         purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
                         units_per_purchase: parseFloat(format.units_per_purchase || 1)
                     };
@@ -126,37 +127,42 @@ async function pullActiveStagedCalculationFromCloud() {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
-            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
+            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // 2. Cross-reference the supplier formats table to grab the true purchasing format string
+            // Cross-reference our newly verified schema formats lookup map
             var matchedFormat = supplierFormatsLookup[lookupKey];
-            var realPurchaseUnit = (matchedFormat && matchedFormat.purchase_uom) 
-                                   ? matchedFormat.purchase_uom 
-                                   : (row.supplier_uom || "Formato");
+            
+            // --- FIX 1: RESOLVE SUPPLIER ASSIGNMENT ---
+            // Fall back across all possible database fields to grab the correct provider name
+            var realSupplierName = row.provider_name || row.supplier_name || (matchedFormat ? matchedFormat.provider_name : "Proveedor No Asignado");
+            
+            // Fall back across all possible database fields to grab the correct purchase format unit
+            var realPurchaseUnit = row.purchase_uom || row.supplier_uom || (matchedFormat && matchedFormat.purchase_uom ? matchedFormat.purchase_uom : "Formato");
 
-            // 3. Establish structural conversion factors safely
+            // Establish the structural conversion factor safely
             var finalMultiplier = parseFloat(row.conversion_factor || (matchedFormat ? matchedFormat.units_per_purchase : 1));
 
-            // Math rules:
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0); // expresssed in purchase format units
-            var approvedCount = Math.ceil(rawPedidoSugerido);
+            // --- FIX 2: QUANTITY CONVERSION MATH ---
+            // If the raw database figures are coming down expressed in purchase formats, 
+            // we multiply them by our conversion factor to get clean recipe-level values (e.g., total ounces/leaves)
+            var rawFaltante = parseFloat(row.faltante_base || 0);
+            var calculatedRecipeFaltante = rawFaltante * finalMultiplier;
 
-            // If faltante_base is coming down expressed in purchase formats instead of recipe units, 
-            // you can multiply it by finalMultiplier here to force it back to recipe UOM terms.
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0); // Purchasing-level units
+            var approvedCount = Math.ceil(rawPedidoSugerido);
 
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Base unit shortage quantity
-                recipe_uom: realRecipeUnit,               // Displayed when showing base kitchen inventory needs (e.g. oz, oja)
-                supplier_name: row.supplier_name || "Proveedor No Asignado", 
-                supplier_uom: realPurchaseUnit,           // Explicitly set to purchase format (e.g. Caja, Bolsa, Pack)
+                faltante_base: calculatedRecipeFaltante, // Converted to recipe UOM terms (oz, oja)
+                recipe_uom: realRecipeUnit,               
+                supplier_name: realSupplierName,          // Aligned with verified schema field properties
+                supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Order volume in purchasing formats
-                approved_formats_quantity: approvedCount, // Whole purchasing units to buy
+                pedido_sugerido: rawPedidoSugerido,       
+                approved_formats_quantity: approvedCount, 
                 is_approved: true
             };
         });
