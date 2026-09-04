@@ -147,48 +147,31 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+                LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             
+            // Extract true recipe unit strings (e.g., "oz", "oja", "Kg")
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
+            
+            // Cross-reference the supplier formats table to grab the container packaging name
             var matchedFormat = supplierFormatsLookup[lookupKey];
-            
-            var realSupplierName = "Proveedor No Asignado";
-            if (row.supplier_name && row.supplier_name !== "unassigned") {
-                realSupplierName = String(row.supplier_name).trim();
-            } else if (matchedFormat && matchedFormat.provider_name) {
-                realSupplierName = matchedFormat.provider_name;
-            }
-            
-            var realPurchaseUnit = "Formato";
-            if (matchedFormat && matchedFormat.purchase_uom) {
-                realPurchaseUnit = matchedFormat.purchase_uom;
-            } else if (row.supplier_uom && row.supplier_uom !== realRecipeUnit) {
-                realPurchaseUnit = String(row.supplier_uom).trim();
-            }
+            var realPurchaseUnit = (matchedFormat && matchedFormat.purchase_uom) 
+                                   ? matchedFormat.purchase_uom 
+                                   : "Formato";
 
-            var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
+            // Establish structural conversion factors safely
+            var finalMultiplier = parseFloat(row.conversion_factor || (matchedFormat ? matchedFormat.units_per_purchase : 1));
 
-            // --- ALIGNED QUANTITY CONVERSION RULES ---
-            // 1. Faltante Base: If it's already in recipe units (like 188 oz), display it directly.
-            //    If it arrives scaled as purchase format, we multiply it by finalMultiplier.
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0);
-            if (row.supplier_uom !== realRecipeUnit && row.supplier_name !== "unassigned") {
-                // If the db field says "Caja" but the number is 188, it's already recipe units.
-                // We only convert if the value is explicitly a fraction or small container count.
-                if (calculatedRecipeFaltante < 20) { 
-                    calculatedRecipeFaltante = calculatedRecipeFaltante * finalMultiplier;
-                }
-            }
+            // --- THE QUANTITY FIX ---
+            // 1. Faltante Base is already the raw kitchen weight (e.g. 188 oz). Keep it exactly as is.
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
 
-            // 2. Pedido Sugerido: Must express the count in wholes of purchasing containers (e.g. 4 cases)
+            // 2. Pedido Sugerido is arriving as a recipe weight (188). We MUST divide it by the multiplier
+            //    to convert it into wholesale container packages (e.g. 188 oz / 48 oz per package = 4 Packages)
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);
-            if (rawPedidoSugerido > 0 && finalMultiplier > 0) {
-                // If raw database figure is a large weight (e.g. 188) matching recipe terms, divide it down into containers
-                if (row.supplier_uom === realRecipeUnit || row.supplier_name === "unassigned" || rawPedidoSugerido > 30) {
-                    rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
-                }
+            if (finalMultiplier > 0) {
+                rawPedidoSugerido = rawPedidoSugerido / finalMultiplier;
             }
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
@@ -196,13 +179,13 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, 
+                faltante_base: calculatedRecipeFaltante, // Displays clean raw recipe requirement (e.g. 188.00 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          
-                supplier_uom: realPurchaseUnit,           
+                supplier_name: row.supplier_name || "Proveedor No Asignado", 
+                supplier_uom: realPurchaseUnit,           // Displays container format text label (e.g. Caja, Bolsa)
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       
-                approved_formats_quantity: approvedCount, 
+                pedido_sugerido: rawPedidoSugerido,       // Converted from recipe units down to wholesale container count
+                approved_formats_quantity: approvedCount, // Whole container units to buy
                 is_approved: true
             };
         });
