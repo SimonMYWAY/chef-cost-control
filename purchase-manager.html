@@ -271,200 +271,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
     var groupedData = {};
     var poCounter = 1;
-// ⚡ RE-ENGINEERED SYNC: Reload-Safe Two-Stage Transaction Engine [Part 1 of 2]
-async function pullActiveStagedCalculationFromCloud() {
-    var workspace = document.getElementById("manager-grid-workspace");
-    var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
-
-    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        alert("⚠️ El cargamento actual ya está activo en la terminal. Debe procesar o finalizar todas las líneas actuales antes de poder solicitar un nuevo cargamento.");
-        return;
-    }
-
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando bodega y resolviendo transacciones relacionales de POs...</div>';
-
-    try {
-        LOCAL_STAGED_ROWS = [];
-
-        // 1. Fetch raw ingredients master schema matrix units
-        const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        var recipeUnitsLookup = {};
-        if (ingRes.ok) {
-            const ings = await ingRes.json();
-            ings.forEach(function(i) {
-                if (i.id) recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
-            });
-        }
-
-        // 2. Fetch alternative definitions linked to supplier_formats
-        var supplierFormatsLookup = {};
-        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        if (formatsRes.ok) {
-            GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
-            GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
-                if (format.ingredient_id) {
-                    var formatKey = String(format.ingredient_id).toLowerCase().trim();
-                    supplierFormatsLookup[formatKey] = {
-                        provider_name: format.provider_name ? String(format.provider_name).trim() : null,
-                        purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
-                        units_per_purchase: parseFloat(format.units_per_purchase || 1)
-                    };
-                }
-            });
-        }
-
-        // 3. 🔍 LIVE RELATIONAL TRANSACTION LOOKUP: Maps supplier headers to prevent blanket card freezing
-        var databaseCommittedItemsMap = {}; 
-        const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        
-        if (dbItemsRes.ok) {
-            const itemsList = await dbItemsRes.json();
-            const dbOrdersRes = await fetch(API_URL + "purchase_orders?select=id,po_number,status,supplier_name", {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            if (dbOrdersRes.ok) {
-                const ordersList = await dbOrdersRes.json();
-                var ordersLookup = {};
-                ordersList.forEach(o => { ordersLookup[o.id] = o; });
-
-                itemsList.forEach(item => {
-                    if (item.ingredient_name && item.po_id && ordersLookup[item.po_id]) {
-                        var parentOrder = ordersLookup[item.po_id];
-                        var nameKey = String(item.ingredient_name).toLowerCase().trim();
-                        var vendorKey = String(parentOrder.supplier_name).toLowerCase().trim();
-                        
-                        // Map items precisely using a compound key to prevent cross-card interface bleeding
-                        var mapCompoundKey = vendorKey + "_" + nameKey;
-                        databaseCommittedItemsMap[mapCompoundKey] = {
-                            po_number: parentOrder.po_number,
-                            status: parentOrder.status,
-                            saved_supplier: parentOrder.supplier_name
-                        };
-                    }
-                });
-            }
-        }
-        // 4. Read only active elements where suggested order amount is greater than 0
-        const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        
-        if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
-        const cloudRows = await dataTableRes.json();
-
-        if (!cloudRows || cloudRows.length === 0) {
-            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
-            ACTIVE_SHIPMENT_TIMESTAMP = null;
-            if (loadButton) {
-                loadButton.disabled = false;
-                loadButton.style.opacity = "1";
-                loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
-            }
-            return;
-        }
-              
-        var firstRow = cloudRows;
-        var rawDateString = firstRow.created_at || new Date().toISOString();
-        var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
-            timeZone: "America/Santiago",
-            day: "2-digit", month: "2-digit", year: "numeric",
-            hour: "2-digit", minute: "2-digit"
-        });
-        ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
-
-        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
-            var cleanIngId = String(row.ingredient_id).trim();
-            var lookupKey = cleanIngId.toLowerCase();
-            var nameKey = String(row.ingredient_name).toLowerCase().trim();
-            
-            var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            var matchedFormat = supplierFormatsLookup[lookupKey];
-            
-            // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
-            var realSupplierName = "Proveedor No Asignado";
-            if (row.supplier_name && row.supplier_name !== "unassigned") {
-                realSupplierName = String(row.supplier_name).trim();
-            } else if (row.provider_name) {
-                realSupplierName = String(row.provider_name).trim();
-            } else if (matchedFormat && matchedFormat.provider_name) {
-                realSupplierName = matchedFormat.provider_name;
-            }
-
-            // 🔍 PRECISION STATE RESOLUTION: Use compound keys to prevent cross-card interface bleeding
-            var vendorKey = realSupplierName.toLowerCase().trim();
-            var mapCompoundKey = vendorKey + "_" + nameKey;
-            var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
-
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
-            
-            var realPurchaseUnit = "Formato";
-            if (matchedFormat && matchedFormat.purchase_uom) {
-                realPurchaseUnit = matchedFormat.purchase_uom;
-            } else if (row.supplier_uom && row.supplier_uom !== realRecipeUnit) {
-                realPurchaseUnit = String(row.supplier_uom).trim();
-            }
-
-            var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
-            var approvedCount = Math.ceil(rawPedidoSugerido);
-
-            return {
-                id: row.id,
-                ingredient_id: cleanIngId,
-                ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, 
-                recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          
-                supplier_uom: realPurchaseUnit,           
-                conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       
-                approved_formats_quantity: approvedCount, 
-                is_approved: true, // Always checked by default as requested
-                
-                // 🔒 INJECT RESTORE STATES ON TARGETED COMPOUND ENTRIES ONLY
-                forced_po_number: isLineCompleted ? dbRecord.po_number : null,
-                db_saved_status: isLineCompleted ? dbRecord.status : null
-            };
-        });
-
-        if (loadButton) {
-            loadButton.disabled = true;
-            loadButton.style.opacity = "0.5";
-            loadButton.style.cursor = "not-allowed";
-            loadButton.innerText = "🔒 Terminal Bloqueado con Éxito";
-        }
-
-        var headerBannerNode = document.getElementById("terminal-cargo-meta-header");
-        if (!headerBannerNode) {
-            headerBannerNode = document.createElement("div");
-            headerBannerNode.id = "terminal-cargo-meta-header";
-            workspace.parentNode.insertBefore(headerBannerNode, workspace);
-        }
-        
-        headerBannerNode.style = "background:#0f172a; color:#38bdf8; padding:12px; margin-bottom:15px; border-radius:6px; font-family:monospace; font-size:14px; font-weight:bold; border-left:4px solid #38bdf8; display:flex; justify-content:space-between; align-items:center;";
-        headerBannerNode.innerHTML = `
-            <div>📦 CARGAMENTO LOGÍSTICO ACTIVO</div>
-            <div style="display:flex; align-items:center; gap:15px;">
-                <span>📅 REF INTERACCIÓN VENTAS: ${formattedDateSignature}</span>
-                <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold; font-family:sans-serif;">⚠️ Forzar Reinicio</button>
-            </div>
-        `;
-
-        renderInteractiveManagerSpreadsheetGrid();
-
-    } catch (err) {
-        console.error(err);
-        workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
-    }
-}
 
     var today = new Date();
     var yyyy = today.getFullYear();
@@ -472,56 +278,58 @@ async function pullActiveStagedCalculationFromCloud() {
     var dd = String(today.getDate()).padStart(2, '0');
     var todayString = yyyy + mm + dd; 
 
-        // REPLACE IT WITH THIS PERSISTENT VERSION:
-LOCAL_STAGED_ROWS.forEach(function(row) {
-    var sup = row.supplier_name || "Proveedor No Asignado";
-    if (!groupedData[sup]) {
-        // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
-        var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
+    // 📋 PERSISTENT INITIAL DATA GROUPING
+    LOCAL_STAGED_ROWS.forEach(function(row) {
+        var sup = row.supplier_name || "Proveedor No Asignado";
+        if (!groupedData[sup]) {
+            // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
+            var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
+            
+            groupedData[sup] = {
+                poNumber: activePoString,
+                dbStatus: row.db_saved_status || null, // Capture the committed status flag safely
+                items: []
+            };
+            if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
+        }
+        groupedData[sup].items.push(row);
+    });
+
+    // 📋 APPLICATION OF SAVED STATES ON RELOAD:
+    Object.keys(groupedData).forEach(function(supplierName) {
+        var group = groupedData[supplierName];
+        var blockKey = supplierName.replace(/\s+/g, '-');
+        var escapedSupplierName = supplierName.replace(/'/g, "\\'");
+
+        var blockDiv = document.createElement("div");
+        blockDiv.id = "supplier-card-" + blockKey;
         
-        groupedData[sup] = {
-            poNumber: activePoString,
-            dbStatus: row.db_saved_status || null, // Capture the committed status flag safely
-            items: []
-        };
-        if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
-    }
-    groupedData[sup].items.push(row);
-});
+        // 🔄 Restore Card Class State and Freeze Controls if Saved:
+        var isCardFrozen = false;
+        if (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched') {
+            blockDiv.className = "supplier-block status-saved-pending";
+            isCardFrozen = true;
+        } else {
+            blockDiv.className = "supplier-block";
+        }
 
-    // 📋 REPLACE IT WITH THIS TO APPLY SAVED STATES ON RELOAD:
-Object.keys(groupedData).forEach(function(supplierName) {
-    var group = groupedData[supplierName];
-    var blockKey = supplierName.replace(/\s+/g, '-');
-    var escapedSupplierName = supplierName.replace(/'/g, "\\'");
+        // 🔄 Restore Yellow Status Banner Text:
+        var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
+        if (group.dbStatus === 'saved_pending_whatsapp') {
+            statusPlaceholderHtml += `
+                <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                    📝 Guardado - Pendiente de enviar en WhatsApp
+                </div>`;
+        }
+        statusPlaceholderHtml += '</div>';
 
-    var blockDiv = document.createElement("div");
-    blockDiv.id = "supplier-card-" + blockKey;
-    
-    // 🔄 Restore Card Class State:
-    if (group.dbStatus === 'saved_pending_whatsapp') {
-        blockDiv.className = "supplier-block status-saved-pending";
-    } else {
-        blockDiv.className = "supplier-block";
-    }
-
-    // 🔄 Restore Yellow Status Banner Text:
-    var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
-    if (group.dbStatus === 'saved_pending_whatsapp') {
-        statusPlaceholderHtml += `
-            <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                📝 Guardado - Pendiente de enviar en WhatsApp
-            </div>`;
-    }
-    statusPlaceholderHtml += '</div>';
-
-    var blockHtml = 
-        statusPlaceholderHtml + 
-        '<div class="supplier-title-bar">' +
-            '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
-            '<div class="po-badge">' + group.poNumber + '</div>' +
-        '</div>' +
-        '<div class="rows-container">';
+        var blockHtml = 
+            statusPlaceholderHtml + 
+            '<div class="supplier-title-bar">' +
+                '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
+                '<div class="po-badge">' + group.poNumber + '</div>' +
+            '</div>' +
+            '<div class="rows-container">';
 
         group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
@@ -529,6 +337,9 @@ Object.keys(groupedData).forEach(function(supplierName) {
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
                 return String(f.ingredient_id).trim() === String(item.ingredient_id).trim();
             });
+
+            // If the card is frozen, lock the dropdown entirely
+            var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
 
             var supplierDropdownOptions = '';
             if (item.supplier_name && item.supplier_name !== "Proveedor No Asignado") {
@@ -547,7 +358,7 @@ Object.keys(groupedData).forEach(function(supplierName) {
             var conversionFactor = parseFloat(item.conversion_factor || 1);
             var approvedCount = parseFloat(item.approved_formats_quantity || 0);
             
-            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly (e.g. 4 cases * 50oz = 200 oz)
+            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
             blockHtml += `
