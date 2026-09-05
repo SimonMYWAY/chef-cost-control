@@ -331,14 +331,14 @@ function renderInteractiveManagerSpreadsheetGrid() {
             '</div>' +
             '<div class="rows-container">';
 
-        group.items.forEach(function(item) {
+                group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
                 return String(f.ingredient_id).trim() === String(item.ingredient_id).trim();
             });
 
-            // If the card is frozen, lock the dropdown entirely
+            // 🔒 Step 1: Detect if this element belongs to an already executed or dispatched card
             var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
 
             var supplierDropdownOptions = '';
@@ -361,6 +361,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             // Math Rule: Calculate true Recipe UOM weight equivalent cleanly
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
+            // 🔒 Step 2: Inject ${isDisabledAttr} inside select, input, and checkbox elements to freeze them
             blockHtml += `
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
                     <div class="item-title">${item.ingredient_name}</div>
@@ -376,7 +377,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         <div class="data-box" style="grid-column: span 2;">
                             <div class="box-label">Proveedor Asignado</div>
                             <div class="box-val" style="margin-top:3px;">
-                                <select class="select-dropdown" onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                <select class="select-dropdown" ${isDisabledAttr} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
                                     ${supplierDropdownOptions}
                                 </select>
                             </div>
@@ -388,7 +389,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
                             <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
                             <div class="box-val" style="margin-top:2px;">
-                                <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                                <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
                             </div>
                         </div>
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
@@ -400,13 +401,14 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     </div>
                     <div class="row-footer">
                         <label class="approve-toggle">
-                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} ${isDisabledAttr} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
                             <span>Línea Aprobada</span>
                         </label>
                     </div>
                 </div>
             `;
         });
+
 
         blockHtml += `
             </div>
@@ -815,9 +817,10 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
         await navigator.clipboard.writeText(msg);
 
-        // --- STEP 3: INTERFACE STATE UPDATES ---
+        // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
+            supplierCard.style.borderLeft = "5px solid #f1c40f"; // Distinct yellow border anchor
             
             var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
             if (targetContainer) {
@@ -830,8 +833,22 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
             var confirmationCheckboxNode = supplierCard.querySelector(".final-dispatch-gate");
             if (confirmationCheckboxNode) {
-                confirmationCheckboxNode.style.display = "block";
+                confirmationCheckboxNode.style.display = "flex"; // Match layout structural type
             }
+
+            // 🔒 CRITICAL FIX: Freeze all dropdown menus, input fields, and approval checkboxes
+            supplierCard.querySelectorAll("select, input[type='number'], input[type='checkbox']:not([onchange*='markSupplierOrderAsDispatched'])").forEach(function(input) {
+                input.disabled = true;
+                input.style.background = "#f1f5f9";
+                input.style.color = "#64748b";
+            });
+
+            // 🔒 CRITICAL FIX: Disable both action buttons to prevent accidental duplicate execution submissions
+            supplierCard.querySelectorAll(".main-actions button").forEach(function(btn) {
+                btn.disabled = true;
+                btn.style.opacity = "0.4";
+                btn.style.cursor = "not-allowed";
+            });
         }
 
         if (!isAlreadySaved) {
