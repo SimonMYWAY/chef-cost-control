@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Corrects reversed math conversions for recipe uom vs purchase uom [Reload-Safe Part 1]
+// ⚡ RE-ENGINEERED SYNC: Corrects reversed math conversions for recipe uom vs purchase uom
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -81,7 +81,7 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa y sincronizando órdenes...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
@@ -119,42 +119,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 LIVE RELATIONAL SYNC: Cross-reference existing purchase orders in database
-        var databaseCommittedItemsMap = {}; 
-        
-        // Fetch items saved across orders
-        const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        
-        if (dbItemsRes.ok) {
-            const itemsList = await dbItemsRes.json();
-            
-            // Fetch order parent metadata headers to verify numbers and statuses
-            const dbOrdersRes = await fetch(API_URL + "purchase_orders?select=id,po_number,status,supplier_name", {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            if (dbOrdersRes.ok) {
-                const ordersList = await dbOrdersRes.json();
-                var ordersLookup = {};
-                ordersList.forEach(o => { ordersLookup[o.id] = o; });
-
-                // Map individual items to their active database statuses
-                itemsList.forEach(item => {
-                    if (item.ingredient_name && item.po_id && ordersLookup[item.po_id]) {
-                        var parentOrder = ordersLookup[item.po_id];
-                        var nameKey = String(item.ingredient_name).toLowerCase().trim();
-                        databaseCommittedItemsMap[nameKey] = {
-                            po_number: parentOrder.po_number,
-                            status: parentOrder.status,
-                            saved_supplier: parentOrder.supplier_name
-                        };
-                    }
-                });
-            }
-        }
-        // 4. Read only active elements where suggested order amount is greater than 0
+        // 3. Read only active elements where suggested order amount is greater than 0
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -185,23 +150,16 @@ async function pullActiveStagedCalculationFromCloud() {
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
-            var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // 🔄 Check if database tracking logs show this line has a recorded PO status history
-            var dbRecord = databaseCommittedItemsMap[nameKey];
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
-            
-            // 1. Extract true recipe unit strings from master map
+            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             
-            // 2. Cross-reference the supplier formats schema table
+            // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // PROVIDER OVERRIDES: Use saved database re-assignments if available, otherwise default to layouts
+            // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
             var realSupplierName = "Proveedor No Asignado";
-            if (isLineCompleted && dbRecord.saved_supplier) {
-                realSupplierName = dbRecord.saved_supplier;
-            } else if (row.supplier_name && row.supplier_name !== "unassigned") {
+            if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
             } else if (row.provider_name) {
                 realSupplierName = String(row.provider_name).trim();
@@ -218,6 +176,8 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
+            // --- 🎯 ZERO-MATH DIRECT COLUMNS PASS-THROUGH ---
+            // Read direct from the clean columns. No extra division or adjustments allowed.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
@@ -226,21 +186,14 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, 
+                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (e.g. 100.00 oz)
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          
+                supplier_name: realSupplierName,          // Aligned with verified provider entries
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       
+                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
                 approved_formats_quantity: approvedCount, 
-                
-                // 🔒 INJECT RESTORE STATES:
-                // Completed entries uncheck themselves, assume their logged supplier names,
-                // and trigger your blurry UI engine layout immediately upon browser reload.
-                is_approved: isLineCompleted ? false : true,
-                processed: isLineCompleted ? true : false,
-                estado_completado: isLineCompleted ? true : false,
-                assigned_po_number: isLineCompleted ? dbRecord.po_number : null
+                is_approved: true
             };
         });
 
@@ -274,7 +227,6 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
-
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
