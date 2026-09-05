@@ -232,14 +232,7 @@ async function pullActiveStagedCalculationFromCloud() {
 function renderInteractiveManagerSpreadsheetGrid() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = "";
-    // 🛑 EMERGENCY DISPLAY LOG: Shows us the raw database entries instantly on screen
-    var debugDiv = document.createElement("pre");
-    debugDiv.style = "background:#fee2e2; color:#991b1b; padding:15px; border-radius:6px; font-size:12px; margin-bottom:20px; border:1px solid #fca5a5; overflow-x:auto;";
-    debugDiv.innerText = "🔍 RAW ROWS IN MEMORY:\n" + JSON.stringify(LOCAL_STAGED_ROWS.slice(0, 2), null, 2);
-    workspace.appendChild(debugDiv);
-    var groupedData = {};
-    var poCounter = 1;
-    
+   
     var today = new Date();
     var yyyy = today.getFullYear();
     var mm = String(today.getMonth() + 1).padStart(2, '0');
