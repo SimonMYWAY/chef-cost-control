@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Corrects reversed math conversions for recipe uom vs purchase uom
+// 🔒 STATE-RESTORE TERMINAL ENGINE: Reload-safe with persistence injection
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -81,12 +81,12 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice y restaurando estado...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
+        // 1. Fetch raw ingredients base matrix units
         const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -94,9 +94,7 @@ async function pullActiveStagedCalculationFromCloud() {
         if (ingRes.ok) {
             const ings = await ingRes.json();
             ings.forEach(function(i) {
-                if (i.id) {
-                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
-                }
+                if (i.id) recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
             });
         }
 
@@ -119,7 +117,21 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. Read only active elements where suggested order amount is greater than 0
+        // 3. 🔍 FETCH TODAY'S COMMITTED ITEMS TO RESTORE REFRESHED STATES
+        var committedIngredientNames = new Set();
+        const committedItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+        if (committedItemsRes.ok) {
+            const items = await committedItemsRes.json();
+            items.forEach(item => {
+                if (item.ingredient_name) {
+                    committedIngredientNames.add(String(item.ingredient_name).toLowerCase().trim());
+                }
+            });
+        }
+
+        // 4. Read only active elements where suggested order amount is greater than 0
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -127,19 +139,12 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
         const cloudRows = await dataTableRes.json();
 
-        if (!cloudRows || cloudRows.length === 0) {
-            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
-            ACTIVE_SHIPMENT_TIMESTAMP = null;
-            if (loadButton) {
-                loadButton.disabled = false;
-                loadButton.style.opacity = "1";
-                loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
-            }
+        if (cloudRows.length === 0) {
+            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡No hay órdenes pendientes en este cargamento! Bodega vacía.</div>';
             return;
         }
               
-        var firstRow = cloudRows[0];
-        var rawDateString = firstRow.created_at || new Date().toISOString();
+        var rawDateString = cloudRows.created_at || new Date().toISOString();
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
             day: "2-digit", month: "2-digit", year: "numeric",
@@ -147,17 +152,18 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+        // 5. Map rows and inject states so your existing blurry/sorting code works immediately
+        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
+            var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
+            // Check if this item matches today's submitted database history
+            var alreadyDone = committedIngredientNames.has(nameKey);
+            
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            
-            // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
             var realSupplierName = "Proveedor No Asignado";
             if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
@@ -175,25 +181,27 @@ LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             }
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
-
-            // --- 🎯 ZERO-MATH DIRECT COLUMNS PASS-THROUGH ---
-            // Read direct from the clean columns. No extra division or adjustments allowed.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
+            // Return properties aligning directly with your application's current layout keys
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (e.g. 100.00 oz)
+                faltante_base: calculatedRecipeFaltante, 
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          // Aligned with verified provider entries
+                supplier_name: realSupplierName,          
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
+                pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
-                is_approved: true
+                
+                // 🔄 Injects the precise property names your system already uses to make rows blurry/send them to the bottom
+                is_approved: alreadyDone ? false : true,
+                estado_completado: alreadyDone ? true : false, 
+                processed: alreadyDone ? true : false
             };
         });
 
