@@ -450,22 +450,39 @@ LOCAL_STAGED_ROWS.forEach(function(row) {
     groupedData[sup].items.push(row);
 });
 
-    Object.keys(groupedData).forEach(function(supplierName) {
-        var group = groupedData[supplierName];
-        var blockKey = supplierName.replace(/\s+/g, '-');
-        var escapedSupplierName = supplierName.replace(/'/g, "\\'");
+    // 📋 REPLACE IT WITH THIS TO APPLY SAVED STATES ON RELOAD:
+Object.keys(groupedData).forEach(function(supplierName) {
+    var group = groupedData[supplierName];
+    var blockKey = supplierName.replace(/\s+/g, '-');
+    var escapedSupplierName = supplierName.replace(/'/g, "\\'");
 
-        var blockDiv = document.createElement("div");
-        blockDiv.id = "supplier-card-" + blockKey;
+    var blockDiv = document.createElement("div");
+    blockDiv.id = "supplier-card-" + blockKey;
+    
+    // 🔄 Restore Card Class State:
+    if (group.dbStatus === 'saved_pending_whatsapp') {
+        blockDiv.className = "supplier-block status-saved-pending";
+    } else {
         blockDiv.className = "supplier-block";
+    }
 
-        var blockHtml = 
-            '<div class="status-indicator-placeholder"></div>' + 
-            '<div class="supplier-title-bar">' +
-                '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
-                '<div class="po-badge">' + group.poNumber + '</div>' +
-            '</div>' +
-            '<div class="rows-container">';
+    // 🔄 Restore Yellow Status Banner Text:
+    var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
+    if (group.dbStatus === 'saved_pending_whatsapp') {
+        statusPlaceholderHtml += `
+            <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                📝 Guardado - Pendiente de enviar en WhatsApp
+            </div>`;
+    }
+    statusPlaceholderHtml += '</div>';
+
+    var blockHtml = 
+        statusPlaceholderHtml + 
+        '<div class="supplier-title-bar">' +
+            '<div class="supplier-name">🏢 ' + supplierName + '</div>' +
+            '<div class="po-badge">' + group.poNumber + '</div>' +
+        '</div>' +
+        '<div class="rows-container">';
 
         group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
@@ -560,7 +577,12 @@ LOCAL_STAGED_ROWS.forEach(function(row) {
 
         blockDiv.innerHTML = blockHtml;
         workspace.appendChild(blockDiv);
-        
+        // ⚡ Safe UI state restoration hook
+if (group.dbStatus === 'saved_pending_whatsapp') {
+    var gateNode = blockDiv.querySelector(".final-dispatch-gate");
+    if (gateNode) gateNode.style.display = "flex";
+}
+
         if (typeof updateVisualReceiptReceiptSlipMarkdown === "function") {
             updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
         }
