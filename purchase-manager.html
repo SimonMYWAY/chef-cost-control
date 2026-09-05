@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Corrects reversed math conversions for recipe uom vs purchase uom
+// ⚡ RE-ENGINEERED SYNC: Reload-safe PO Persistence Engine [Part 1 of 2]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -81,12 +81,12 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando bodega y sincronizando historial de POs relacionales...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
+        // 1. Fetch raw ingredients master table data
         const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -94,13 +94,11 @@ async function pullActiveStagedCalculationFromCloud() {
         if (ingRes.ok) {
             const ings = await ingRes.json();
             ings.forEach(function(i) {
-                if (i.id) {
-                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
-                }
+                if (i.id) recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
             });
         }
 
-        // 2. Fetch alternative definitions linked to ingredients via supplier_formats
+        // 2. Fetch alternative definitions linked to supplier_formats
         var supplierFormatsLookup = {};
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -119,7 +117,37 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. Read only active elements where suggested order amount is greater than 0
+        // 3. 🔍 LIVE INVENTORY HISTORY LOOKUP: Fetch committed lines to prevent reset on refresh
+        var databaseCommittedItemsMap = {}; 
+        const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+        
+        if (dbItemsRes.ok) {
+            const itemsList = await dbItemsRes.json();
+            const dbOrdersRes = await fetch(API_URL + "purchase_orders?select=id,po_number,status,supplier_name", {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
+            
+            if (dbOrdersRes.ok) {
+                const ordersList = await dbOrdersRes.json();
+                var ordersLookup = {};
+                ordersList.forEach(o => { ordersLookup[o.id] = o; });
+
+                itemsList.forEach(item => {
+                    if (item.ingredient_name && item.po_id && ordersLookup[item.po_id]) {
+                        var parentOrder = ordersLookup[item.po_id];
+                        var nameKey = String(item.ingredient_name).toLowerCase().trim();
+                        databaseCommittedItemsMap[nameKey] = {
+                            po_number: parentOrder.po_number,
+                            status: parentOrder.status,
+                            saved_supplier: parentOrder.supplier_name
+                        };
+                    }
+                });
+            }
+        }
+        // 4. Read only active elements where suggested order amount is greater than 0
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -150,16 +178,20 @@ async function pullActiveStagedCalculationFromCloud() {
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
+            var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // 1. Extract true recipe unit strings (e.g., "oz", "oja", "Kg") from master map
+            // Check if database records show this item was already committed
+            var dbRecord = databaseCommittedItemsMap[nameKey];
+            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
+            
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            
-            // 2. Cross-reference the supplier formats schema table to protect relational integrity
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // PROVIDER OVERRIDES: Prevents unassigned dropdown lockouts
+            // PROVIDER OVERRIDES: Restore explicit user selection from DB if it was committed previously
             var realSupplierName = "Proveedor No Asignado";
-            if (row.supplier_name && row.supplier_name !== "unassigned") {
+            if (isLineCompleted && dbRecord.saved_supplier) {
+                realSupplierName = dbRecord.saved_supplier;
+            } else if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
             } else if (row.provider_name) {
                 realSupplierName = String(row.provider_name).trim();
@@ -176,25 +208,32 @@ async function pullActiveStagedCalculationFromCloud() {
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
 
-            // --- 🎯 ZERO-MATH DIRECT COLUMNS PASS-THROUGH ---
-            // Read direct from the clean columns. No extra division or adjustments allowed.
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
-            return {
+            // 💎 PRESERVES ALL THE EXACT OBJECT KEYS FOR YOUR RENDERING SCRIPT
+            var rowObject = {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, // Displays your true recipe requirement (e.g. 100.00 oz)
+                faltante_base: calculatedRecipeFaltante, 
                 recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          // Aligned with verified provider entries
+                supplier_name: realSupplierName,          
                 supplier_uom: realPurchaseUnit,           
                 conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       // Displays your clean package totals
+                pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
-                is_approved: true
+                is_approved: isLineCompleted ? false : true // Remains checked by default unless it is already saved
             };
+
+            // Inject the PO Tracking attachment parameters if found in history
+            if (isLineCompleted && dbRecord.po_number) {
+                rowObject.forced_po_number = dbRecord.po_number;
+                rowObject.db_saved_status = dbRecord.status;
+            }
+
+            return rowObject;
         });
 
         if (loadButton) {
@@ -227,6 +266,7 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
+
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
@@ -397,17 +437,21 @@ async function pullActiveStagedCalculationFromCloud() {
     var dd = String(today.getDate()).padStart(2, '0');
     var todayString = yyyy + mm + dd; 
 
-    LOCAL_STAGED_ROWS.forEach(function(row) {
+        LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
+            // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
+            var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
+            
             groupedData[sup] = {
-                poNumber: "PO-" + todayString + "-" + String(poCounter).padStart(3, '0'),
+                poNumber: activePoString,
                 items: []
             };
-            poCounter++;
+            if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
         }
         groupedData[sup].items.push(row);
     });
+
 
     Object.keys(groupedData).forEach(function(supplierName) {
         var group = groupedData[supplierName];
