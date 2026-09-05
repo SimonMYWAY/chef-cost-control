@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// 🔒 STATE-RESTORE TERMINAL ENGINE: Reload-safe with persistence injection
+// 🔒 LOADER: Reload-safe architecture that preserves text boxes & default approved statuses
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -81,7 +81,7 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice y restaurando estado...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa y sincronizando historial...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
@@ -98,7 +98,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 2. Fetch alternative definitions linked to ingredients via supplier_formats
+        // 2. Fetch supplier formats
         var supplierFormatsLookup = {};
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -117,7 +117,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 FETCH TODAY'S COMMITTED ITEMS TO RESTORE REFRESHED STATES
+        // 3. 🔍 FETCH TODAY'S SUBMITTED ITEMS TO SECURE SEAMLESS RELOADS
         var committedIngredientNames = new Set();
         const committedItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -131,7 +131,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 4. Read only active elements where suggested order amount is greater than 0
+        // 4. Read active staging table calculations
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -144,7 +144,7 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
               
-        var rawDateString = cloudRows.created_at || new Date().toISOString();
+        var rawDateString = cloudRows[0]?.created_at || new Date().toISOString();
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
             day: "2-digit", month: "2-digit", year: "numeric",
@@ -152,13 +152,13 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-        // 5. Map rows and inject states so your existing blurry/sorting code works immediately
+        // 5. Re-map array using your exact native structural keys
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // Check if this item matches today's submitted database history
+            // Check if database records show this item was already committed
             var alreadyDone = committedIngredientNames.has(nameKey);
             
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
@@ -185,7 +185,7 @@ async function pullActiveStagedCalculationFromCloud() {
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
-            // Return properties aligning directly with your application's current layout keys
+            // ⚠️ Crucial Fix: Keeps your exact original object structure intact so render handles text areas perfectly
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
@@ -198,10 +198,10 @@ async function pullActiveStagedCalculationFromCloud() {
                 pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
                 
-                // 🔄 Injects the precise property names your system already uses to make rows blurry/send them to the bottom
-                is_approved: alreadyDone ? false : true,
-                estado_completado: alreadyDone ? true : false, 
-                processed: alreadyDone ? true : false
+                // State flag synchronization
+                is_approved: alreadyDone ? false : true,  // Checked by default unless committed
+                processed: alreadyDone ? true : false,     // Toggles your blur engine
+                estado_completado: alreadyDone ? true : false 
             };
         });
 
@@ -240,11 +240,7 @@ async function pullActiveStagedCalculationFromCloud() {
 function renderInteractiveManagerSpreadsheetGrid() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = "";
-    // 🛑 EMERGENCY DISPLAY LOG: Shows us the raw database entries instantly on screen
-    var debugDiv = document.createElement("pre");
-    debugDiv.style = "background:#fee2e2; color:#991b1b; padding:15px; border-radius:6px; font-size:12px; margin-bottom:20px; border:1px solid #fca5a5; overflow-x:auto;";
-    debugDiv.innerText = "🔍 RAW ROWS IN MEMORY:\n" + JSON.stringify(LOCAL_STAGED_ROWS.slice(0, 2), null, 2);
-    workspace.appendChild(debugDiv);
+
     var groupedData = {};
     var poCounter = 1;
     
