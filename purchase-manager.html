@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Reload-safe PO Persistence Engine [Part 1 of 2]
+// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Assignment Engine [Part 1 of 2]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -81,12 +81,12 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando bodega y sincronizando historial de POs relacionales...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients master table data
+        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
         const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -94,11 +94,13 @@ async function pullActiveStagedCalculationFromCloud() {
         if (ingRes.ok) {
             const ings = await ingRes.json();
             ings.forEach(function(i) {
-                if (i.id) recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
+                if (i.id) {
+                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
+                }
             });
         }
 
-        // 2. Fetch alternative definitions linked to supplier_formats
+        // 2. Fetch alternative definitions linked to ingredients via supplier_formats
         var supplierFormatsLookup = {};
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -117,7 +119,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 LIVE INVENTORY HISTORY LOOKUP: Fetch committed lines to prevent reset on refresh
+        // 3. 🔍 LIVE RELATIONAL SYNC: Look up existing purchase orders in database to recover tracking states on refresh
         var databaseCommittedItemsMap = {}; 
         const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -166,7 +168,7 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
               
-        var firstRow = cloudRows[0];
+        var firstRow = cloudRows;
         var rawDateString = firstRow.created_at || new Date().toISOString();
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
@@ -180,7 +182,7 @@ async function pullActiveStagedCalculationFromCloud() {
             var lookupKey = cleanIngId.toLowerCase();
             var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // Check if database records show this item was already committed
+            // Check if database tracking logs show this line has a recorded PO status history
             var dbRecord = databaseCommittedItemsMap[nameKey];
             var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
             
@@ -212,8 +214,7 @@ async function pullActiveStagedCalculationFromCloud() {
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
-            // 💎 PRESERVES ALL THE EXACT OBJECT KEYS FOR YOUR RENDERING SCRIPT
-            var rowObject = {
+            return {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
@@ -224,16 +225,12 @@ async function pullActiveStagedCalculationFromCloud() {
                 conversion_factor: finalMultiplier, 
                 pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
-                is_approved: isLineCompleted ? false : true // Remains checked by default unless it is already saved
+                is_approved: true, // Safeguarded checkbox state integrity as required
+                
+                // 🔒 INJECT RESTORE STATES
+                forced_po_number: isLineCompleted ? dbRecord.po_number : null,
+                db_saved_status: isLineCompleted ? dbRecord.status : null
             };
-
-            // Inject the PO Tracking attachment parameters if found in history
-            if (isLineCompleted && dbRecord.po_number) {
-                rowObject.forced_po_number = dbRecord.po_number;
-                rowObject.db_saved_status = dbRecord.status;
-            }
-
-            return rowObject;
         });
 
         if (loadButton) {
@@ -266,7 +263,6 @@ async function pullActiveStagedCalculationFromCloud() {
         workspace.innerHTML = '<div class="loader-text" style="color:#ef4444;">❌ Error al descargar el cargamento: ' + err.message + '</div>';
     }
 }
-
 
 // ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
 function renderInteractiveManagerSpreadsheetGrid() {
@@ -437,21 +433,22 @@ async function pullActiveStagedCalculationFromCloud() {
     var dd = String(today.getDate()).padStart(2, '0');
     var todayString = yyyy + mm + dd; 
 
-        LOCAL_STAGED_ROWS.forEach(function(row) {
-        var sup = row.supplier_name || "Proveedor No Asignado";
-        if (!groupedData[sup]) {
-            // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
-            var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
-            
-            groupedData[sup] = {
-                poNumber: activePoString,
-                items: []
-            };
-            if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
-        }
-        groupedData[sup].items.push(row);
-    });
-
+        // REPLACE IT WITH THIS PERSISTENT VERSION:
+LOCAL_STAGED_ROWS.forEach(function(row) {
+    var sup = row.supplier_name || "Proveedor No Asignado";
+    if (!groupedData[sup]) {
+        // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
+        var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
+        
+        groupedData[sup] = {
+            poNumber: activePoString,
+            dbStatus: row.db_saved_status || null, // Capture the committed status flag safely
+            items: []
+        };
+        if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
+    }
+    groupedData[sup].items.push(row);
+});
 
     Object.keys(groupedData).forEach(function(supplierName) {
         var group = groupedData[supplierName];
