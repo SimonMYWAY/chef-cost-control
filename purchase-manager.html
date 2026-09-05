@@ -587,6 +587,63 @@ if (group.dbStatus === 'saved_pending_whatsapp') {
             updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
         }
     });
+    // ==========================================
+    // 🔒 RELOAD PERSISTENCE LIFECYCLE ENGINE
+    // ==========================================
+    Object.keys(groupedData).forEach(function(supplierName) {
+        var group = groupedData[supplierName];
+        var blockKey = supplierName.replace(/\s+/g, '-');
+        var cardId = "supplier-card-" + blockKey;
+        var cardEl = document.getElementById(cardId);
+
+        if (!cardEl) return;
+
+        // 🟡 STATE 2: EXECUTED ("saved_pending_whatsapp") -> FREEZE & LOCK CARD IN PLACE
+        if (group.dbStatus === 'saved_pending_whatsapp') {
+            cardEl.style.borderLeft = "5px solid #f1c40f"; // Distinct yellow border anchor
+            
+            // Render the yellow "Guardado" badge inside its placeholder container node
+            var statusPlaceholder = cardEl.querySelector(".status-indicator-placeholder");
+            if (statusPlaceholder) {
+                statusPlaceholder.innerHTML = `
+                    <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                        📝 Guardado - Pendiente de enviar en WhatsApp
+                    </div>`;
+            }
+
+            // Reveal the final dispatch gate checkbox element
+            var gateNode = cardEl.querySelector(".final-dispatch-gate");
+            if (gateNode) gateNode.style.display = "flex";
+
+            // Freeze every dropdown menu, input number box, and checkbox inside this specific supplier card element
+            cardEl.querySelectorAll("select, input[type='number'], input[type='checkbox']:not([onchange*='markSupplierOrderAsDispatched'])").forEach(function(input) {
+                input.disabled = true;
+                input.style.background = "#f1f5f9";
+                input.style.color = "#64748b";
+            });
+        }
+
+        // ⚫ STATE 3: DISPATCHED ("dispatched") -> GRAY BLURRY QUEUE -> DROP TO THE VERY BOTTOM
+        if (group.dbStatus === 'dispatched') {
+            cardEl.style.opacity = "0.35";
+            cardEl.style.filter = "grayscale(100%) blur(0.5px)";
+            cardEl.style.pointerEvents = "none";
+
+            var statusPlaceholder = cardEl.querySelector(".status-indicator-placeholder");
+            if (statusPlaceholder) {
+                statusPlaceholder.innerHTML = `
+                    <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                        ✅ Despachado y Removido de Puerto
+                    </div>`;
+            }
+
+            // Push this container node to the very bottom child index layout of the workspace container row
+            if (cardEl.parentNode) {
+                cardEl.parentNode.appendChild(cardEl);
+            }
+        }
+    });
+
 }
 
 // Helper block function to sync layout field modifications live
