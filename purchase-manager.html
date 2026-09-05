@@ -232,7 +232,10 @@ async function pullActiveStagedCalculationFromCloud() {
 function renderInteractiveManagerSpreadsheetGrid() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = "";
-   
+
+    var groupedData = {};
+    var poCounter = 1;
+    
     var today = new Date();
     var yyyy = today.getFullYear();
     var mm = String(today.getMonth() + 1).padStart(2, '0');
