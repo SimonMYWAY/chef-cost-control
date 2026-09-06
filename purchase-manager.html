@@ -846,58 +846,55 @@ function verifyAndReleaseShipmentLock() {
     }
 }
 
-// 🎯 STEP D: Finalize, dim card, and mark rows as dispatched by dropping pedido_sugerido to 0
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
+    var supplierCard = document.getElementById(cardElementId);
+    var poNumber = "PO-SYSTEM";
+    if (supplierCard) {
+        var poBadgeNode = supplierCard.querySelector(".po-badge");
+        if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
+    }
+
     try {
-        var matchedItems = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName);
+        // 🔒 RELATIONAL TRANSITION: Update the row state inside Supabase directly using the PO identity signature
+        const patchRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
+            method: "PATCH",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                status: 'dispatched'
+            })
+        });
 
-        for (var i = 0; i < matchedItems.length; i++) {
-            var item = matchedItems[i];
-            
-            // 🚢 FLIP THE FLAG IN STAGING TABLE DIRECTLY BY OVERWRITING VALUE METRIC TO 0
-            await fetch(API_URL + "staged_order_calculations?id=eq." + item.id, {
-                method: "PATCH",
-                headers: {
-                    "apikey": API_KEY,
-                    "Authorization": "Bearer " + API_KEY,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ pedido_sugerido: 0 })
-            });
-        }
+        if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho.");
 
-        var supplierCard = document.getElementById(cardElementId);
+        // Apply visual updates locally to sink the card
         if (supplierCard) {
-            supplierCard.style.opacity = "0.2";
-            supplierCard.style.filter = "grayscale(100%)";
+            supplierCard.style.opacity = "0.35";
+            supplierCard.style.filter = "grayscale(100%) blur(0.5px)";
             supplierCard.style.pointerEvents = "none";
-            
-            var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
-            if (targetContainer) {
-                targetContainer.innerHTML = `
+
+            var placeholder = supplierCard.querySelector(".status-indicator-placeholder");
+            if (placeholder) {
+                placeholder.innerHTML = `
                     <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
                         ✅ Despachado y Removido de Puerto
-                    </div>
-                `;
+                    </div>`;
             }
-            
-            var containerParent = supplierCard.parentNode;
-            if (containerParent) {
-                containerParent.appendChild(supplierCard);
+
+            // Sink card to the bottom of the workspace
+            if (supplierCard.parentNode) {
+                supplierCard.parentNode.appendChild(supplierCard);
             }
         }
         
-        alert("🏁 ¡Orden finalizada! El cargamento de " + supplierName + " ha sido despachado.");
-        
-        // Remove matching lines locally from memory array layout view
-        LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(r => r.supplier_name !== supplierName);
-        
-        // 🔒 ADDED GUARD RAIL: Check if terminal queue is completely clear to release locks cleanly
-        verifyAndReleaseShipmentLock();
-        
+        alert("⚫ ¡Orden marcada como DESPACHADA con éxito en la base de datos!");
+
     } catch (err) {
-        console.error(err);
-        alert("❌ Error actualizando el estado de descarga de la bodega: " + err.message);
+        console.error("Dispatch Error:", err);
+        alert("❌ Error al registrar despacho en la nube: " + err.message);
     }
 }
 
