@@ -692,12 +692,13 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
                 const parentRowResultData = await resParent.json();
                 
-                // 🔒 CRITICAL CORRECTION: Extract id out of index zero of the array response payload
+                // 🔒 CRITICAL CORRECTION: Extract id out of index zero of the array response payload cleanly
                 if (parentRowResultData && parentRowResultData.length > 0) {
-                    generatedPoUuid = parentRowResultData[0].id;
+                generatedPoUuid = parentRowResultData[0].id;
                 } else if (parentRowResultData && parentRowResultData.id) {
-                    generatedPoUuid = parentRowResultData.id;
+                generatedPoUuid = parentRowResultData.id;
                 }
+
             }
 
             // Loop through lines to save itemization rows AND update stock levels
