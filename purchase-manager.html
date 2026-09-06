@@ -275,17 +275,24 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var groupedData = {};
     var poCounter = 1;
 
-    var today = new Date();
-    var yyyy = today.getFullYear();
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var dd = String(today.getDate()).padStart(2, '0');
-    var todayString = yyyy + mm + dd; 
+    // 🔒 DYNAMIC TIMESTAMPA ALIGNMENT ENGINE:
+    // Extract date signature directly from the downloaded batch instead of the client machine clock
+    var targetBatchDate = new Date();
+    if (typeof ACTIVE_SHIPMENT_TIMESTAMP !== "undefined" && ACTIVE_SHIPMENT_TIMESTAMP) {
+        targetBatchDate = new Date(ACTIVE_SHIPMENT_TIMESTAMP);
+    }
+    
+    var yyyy = targetBatchDate.getFullYear();
+    var mm = String(targetBatchDate.getMonth() + 1).padStart(2, '0');
+    var dd = String(targetBatchDate.getDate()).padStart(2, '0');
+    var batchDateString = yyyy + mm + dd; 
 
     // Loop 1: Group raw rows into structural suppliers
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
-            var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
+            // 🔒 Build structural PO sequence using the true batch date string signature
+            var activePoString = row.forced_po_number || ("PO-" + batchDateString + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
                 supplierName: sup,
@@ -298,7 +305,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
         groupedData[sup].items.push(row);
     });
 
-    // 🔒 CHRONOLOGICAL LIFECYCLE SORTING: Sort array so 'dispatched' statuses are processed dead last
+    // Chronological lifecycle sorting: Sort array so 'dispatched' statuses are processed dead last
     var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
         var statusA = groupedData[a].dbStatus === 'dispatched' ? 1 : 0;
         var statusB = groupedData[b].dbStatus === 'dispatched' ? 1 : 0;
@@ -422,6 +429,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 </div>
             `;
         });
+
         // Resolve structural actions panel configurations [Part 2 of 2]
         var dispatchGateDisplay = (group.dbStatus === 'saved_pending_whatsapp') ? 'flex' : 'none';
         var buttonDisabledAttr = isCardFrozen ? ' disabled style="opacity:0.4; cursor:not-allowed; background:#64748b; color:white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px;" ' : '';
