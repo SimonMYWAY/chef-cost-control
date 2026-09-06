@@ -153,8 +153,8 @@ async function pullActiveStagedCalculationFromCloud() {
                 });
             }
         }
-        // 4. Read only active elements where suggested order amount is greater than 0 [Part 2 of 2]
-        const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
+        // 4. Download active calculations ordered strictly desc to read the newest row's creation day first
+        const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0&order=created_at.desc", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         
@@ -164,16 +164,13 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!cloudRows || cloudRows.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
             ACTIVE_SHIPMENT_TIMESTAMP = null;
-            if (loadButton) {
-                loadButton.disabled = false;
-                loadButton.style.opacity = "1";
-                loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
-            }
             return;
         }
               
-        var firstRow = cloudRows[0] || cloudRows;
-        var rawDateString = firstRow.created_at || new Date().toISOString();
+        // Grab the true creation date from the first object inside the descending ordered data response array
+        var absoluteNewestRow = cloudRows[0];
+        var rawDateString = absoluteNewestRow.created_at || new Date().toISOString();
+        
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
             day: "2-digit", month: "2-digit", year: "numeric",

@@ -3150,7 +3150,7 @@ let CACHED_SUPPLIER_MAP = {};
 let CACHED_CONVERSION_MAPPINGS = [];
 
 // =======================================================================
-// 📅 CHRONOLOGICAL REGISTRY TIMELINE MANAGER & TIMESTAMPS
+// 📅 CHRONOLOGICAL REGISTRY TIMELINE MANAGER & TIMESTAMPS [Part 1 of 2]
 // =======================================================================
 
 let CACHED_LAST_PROCESSED_DATE_STR = "";
@@ -3169,11 +3169,11 @@ async function initializePurchasingSystemDependencies() {
         }
         CACHED_CONVERSION_MAPPINGS = Array.isArray(resMaps) ? resMaps : [];
         
-        // 🌟 CHRONOLOGICAL SEED LOCK: Parse your last processed date milestone safely
+        // 🌟 CHRONOLOGICAL SEED LOCK: Parse last processed date milestone safely
         if (Array.isArray(resSettings) && resSettings.length > 0) {
             CACHED_LAST_PROCESSED_DATE_STR = String(resSettings[0].value_text || "2026-08-25").trim();
         } else {
-            CACHED_LAST_PROCESSED_DATE_STR = "2026-08-25"; // Fallback safety seed row default
+            CACHED_LAST_PROCESSED_DATE_STR = "2026-08-25"; 
         }
         
         console.log("✅ Purchasing dependencies and timeline locks mapped: " + CACHED_LAST_PROCESSED_DATE_STR);
@@ -3188,10 +3188,8 @@ function syncChronologicalDateDOMFields() {
     
     if (!lblLast || !inputCurrent) return;
     
-    // Render the text string label cleanly on screen monitor canvas
     lblLast.innerText = CACHED_LAST_PROCESSED_DATE_STR;
     
-    // 🧠 AUTOMATIC CALENDAR LEAP: Advance the date entry field by exactly +1 day from your last save record
     try {
         const parts = CACHED_LAST_PROCESSED_DATE_STR.split("-");
         const lastDateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
@@ -3209,36 +3207,52 @@ function syncChronologicalDateDOMFields() {
         console.log("📅 Timeline advanced cleanly to target date frame: " + autoAdvancedDateString);
     } catch (err) { console.error("Calendar date leap calculation anomaly:", err); }
 }
-
 function validateTargetSalesProcessingDate() {
     const inputCurrent = document.getElementById("input-current-sales-date");
     if (!inputCurrent || !CACHED_LAST_PROCESSED_DATE_STR) return true;
     
     const targetVal = inputCurrent.value;
-    
-    // Convert text string rows into comparable numeric primitives (YYYYMMDD values)
     const numTarget = parseInt(targetVal.replace(/-/g, ""), 10) || 0;
     const numLastProcessed = parseInt(CACHED_LAST_PROCESSED_DATE_STR.replace(/-/g, ""), 10) || 0;
     
-    // 🛡️ CONTINUITY LOCK GUARD: Block any dates prior to or equal to your milestone seed track
     if (numTarget <= numLastProcessed) {
-        // 🌟 FIX COMPLETED: Standardized bilingual notification bypasses the missing currentLang crash!
         alert(
             `⚠️ Violación de Continuidad / Chronological Continuity Alert:\n\n` +
             `ES: No puede declarar una fecha anterior o igual al último día procesado registrado (${CACHED_LAST_PROCESSED_DATE_STR}).\n` +
             `EN: You cannot process a date prior to or equal to your last processed date (${CACHED_LAST_PROCESSED_DATE_STR}).`
         );
-        syncChronologicalDateDOMFields(); // Revert back to correct advanced day automatically
+        syncChronologicalDateDOMFields(); 
         return false;
     }
     return true;
 }
 
-
 function triggerSalesFileSelectionGuard() {
-    // Run the date guard check before letting the file selection overlay box unroll on screen
     if (validateTargetSalesProcessingDate()) {
         document.getElementById('sales-excel-upload').click();
+    }
+}
+
+// ⚡ AUTO-TIMELINE LEAP PERSISTENCE: Save the new processing checkpoint milestone back into Supabase
+async function commitProcessedDateToSystemSettings(newDateString) {
+    try {
+        const patchRes = await fetch(API_URL + "system_settings?key=eq.last_sales_date_processed", {
+            method: "PATCH",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                value_text: newDateString.trim()
+            })
+        });
+        if (patchRes.ok) {
+            console.log("🔒 Supabase system milestones updated cleanly to: " + newDateString);
+            CACHED_LAST_PROCESSED_DATE_STR = newDateString;
+        }
+    } catch (err) {
+        console.error("Failed to commit milestone checkpoint sync:", err);
     }
 }
 
@@ -3944,7 +3958,8 @@ async function executeFinalInventoryProcurementCommit() {
         } else {
             alert("✅ Consumos del día procesados correctamente.");
         }
-
+        // 🌟 DROP THE NEW SYNC LINE RIGHT HERE, RIGHT BEFORE WIPING ARRAYS:
+        await commitProcessedDateToSystemSettings(document.getElementById("input-current-sales-date").value);
         TEMPORARY_STAGED_PURCHASE_LINES = [];
         MASTER_INVENTORY_ITEMS = []; 
         GLOBAL_DAILY_CONSUMPTION_LEDGER = {}; 
