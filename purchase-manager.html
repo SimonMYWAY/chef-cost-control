@@ -179,7 +179,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 });
             }
         }
-        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2]
+        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - REPAIRED]
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
@@ -201,6 +201,7 @@ async function pullActiveStagedCalculationFromCloud() {
             var mapCompoundKey = vendorKey + "_" + nameKey;
             var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
 
+            // Safely locate database historical execution flags
             var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
             
             if (isLineCompleted && dbRecord.saved_supplier) {
@@ -222,6 +223,10 @@ async function pullActiveStagedCalculationFromCloud() {
             var dynamicShipmentId = row.shipment_id || row.Shipment_id || row.shipmentId || row.SHIPMENT_ID || "00";
             var dynamicRefDate = row.sales_reference_date || row.Sales_reference_date || row.salesReferenceDate || row.SALES_REFERENCE_DATE || "Fecha No Definida";
 
+            // Determine historical parameters or resolve clean defaults
+            var resolvedPoNumber = isLineCompleted ? dbRecord.po_number : (row.po_number || row.poNumber || null);
+            var resolvedDbStatus = isLineCompleted ? dbRecord.status : (row.db_status || row.status || null);
+
             return {
                 id: row.id,
                 ingredient_id: cleanIngId,
@@ -238,8 +243,13 @@ async function pullActiveStagedCalculationFromCloud() {
                 shipment_id: dynamicShipmentId,
                 sales_reference_date: dynamicRefDate,
                 
-                forced_po_number: isLineCompleted ? dbRecord.po_number : null,
-                db_saved_status: isLineCompleted ? dbRecord.status : null
+                // 🔒 CRITICAL SYNCHRONIZATION BINDING: Map exactly to keys read by the rendering loop
+                poNumber: resolvedPoNumber,
+                dbStatus: resolvedDbStatus,
+                
+                // Keep structural legacy fallbacks safely isolated
+                forced_po_number: resolvedPoNumber,
+                db_saved_status: resolvedDbStatus
             };
         });
 
