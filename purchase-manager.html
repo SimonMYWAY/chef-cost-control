@@ -272,24 +272,22 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var groupedData = {};
     var poCounter = 1;
 
-    // 🔒 DYNAMIC TIMESTAMPA ALIGNMENT ENGINE:
-    // Extract date signature directly from the downloaded batch instead of the client machine clock
-    var targetBatchDate = new Date();
-    if (typeof ACTIVE_SHIPMENT_TIMESTAMP !== "undefined" && ACTIVE_SHIPMENT_TIMESTAMP) {
-        targetBatchDate = new Date(ACTIVE_SHIPMENT_TIMESTAMP);
-    }
-    
-    var yyyy = targetBatchDate.getFullYear();
-    var mm = String(targetBatchDate.getMonth() + 1).padStart(2, '0');
-    var dd = String(targetBatchDate.getDate()).padStart(2, '0');
-    var batchDateString = yyyy + mm + dd; 
+    // 🔒 EMBEDDED LIFECYCLE RECOVERY
+    var activeShipmentSequenceId = "00";
+    var informativeDisplayDateSignature = "Fecha No Definida";
 
-    // Loop 1: Group raw rows into structural suppliers
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+        var baseRow = LOCAL_STAGED_ROWS[0];
+        activeShipmentSequenceId = baseRow.shipment_id || "00";
+        informativeDisplayDateSignature = baseRow.sales_reference_date || "Fecha No Definida";
+    }
+
+    // Loop 1: Group items under their assigned suppliers
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
-            // 🔒 Build structural PO sequence using the true batch date string signature
-            var activePoString = row.forced_po_number || ("PO-" + batchDateString + "-" + String(poCounter).padStart(3, '0'));
+            // 🔒 ZERO MACHINE DATE CODES: Generate the tracking sequence using only the shipment ID block
+            var activePoString = row.forced_po_number || ("PO-SHIP-" + activeShipmentSequenceId + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
                 supplierName: sup,
@@ -302,14 +300,26 @@ function renderInteractiveManagerSpreadsheetGrid() {
         groupedData[sup].items.push(row);
     });
 
-    // Chronological lifecycle sorting: Sort array so 'dispatched' statuses are processed dead last
+    // Chronological sorting to keep dispatched elements stacked at the bottom edge indexes
     var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
         var statusA = groupedData[a].dbStatus === 'dispatched' ? 1 : 0;
         var statusB = groupedData[b].dbStatus === 'dispatched' ? 1 : 0;
         return statusA - statusB; 
     });
 
-    // Loop 2: Draw elements in their sorted physical arrangement order
+    // Update the visual top master interface banner safely
+    var banner = document.getElementById("terminal-cargo-meta-header");
+    if (banner) {
+        banner.innerHTML = `
+            <div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${activeShipmentSequenceId}</strong></div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span>📅 REF CONSUMO VENTAS: ${informativeDisplayDateSignature}</span>
+                <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">⚠️ Reiniciar</button>
+            </div>
+        `;
+    }
+
+    // Loop 2: Mount layout blocks
     sortedSupplierKeys.forEach(function(supplierName) {
         var group = groupedData[supplierName];
         var blockKey = supplierName.replace(/\s+/g, '-');
@@ -357,7 +367,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
         group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
-            
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
                 return String(f.ingredient_id).trim() === String(item.ingredient_id).trim();
             });
@@ -371,9 +380,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
             validLinkedFormats.forEach(function(fmt) {
                 var optName = String(fmt.provider_name).trim();
-                if (optName !== item.supplier_name) {
-                    supplierDropdownOptions += '<option value="' + optName + '">' + optName + '</option>';
-                }
+                if (optName !== item.supplier_name) supplierDropdownOptions += '<option value="' + optName + '">' + optName + '</option>';
             });
 
             var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -426,7 +433,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 </div>
             `;
         });
-
         // Resolve structural actions panel configurations [Part 2 of 2]
         var dispatchGateDisplay = (group.dbStatus === 'saved_pending_whatsapp') ? 'flex' : 'none';
         var buttonDisabledAttr = isCardFrozen ? ' disabled style="opacity:0.4; cursor:not-allowed; background:#64748b; color:white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px;" ' : '';
