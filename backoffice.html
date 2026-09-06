@@ -4023,7 +4023,7 @@ async function executeFinalInventoryProcurementCommit() {
     }
 }
 
-// ⚡ RESTORED CONVEYOR: Purely transmits calculations without modifying master inventory
+// ⚡ RESTORED CONVEYOR: Purely transmits calculations with robust Sequence Tracking IDs
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
     
@@ -4032,18 +4032,37 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         return;
     }
 
+    console.log("🚀 CORRECT GATEWAY: Entering broadcastActiveCalculationsToPurchaseApp...");
     shipBtn.disabled = true;
     shipBtn.style.background = "#64748b";
     shipBtn.innerText = "⏳ Enviando datos...";
 
     try {
-        // 1️⃣ Clear out yesterday's remaining calculations from the landing pad (WITH SAFE FILTER)
-        await fetch(API_URL + "staged_order_calculations?id=not.is.null", { 
+        // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE
+        const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+            method: "GET", headers: { "apikey": API_KEY }
+        });
+        
+        var nextShipmentIdNumber = 1; 
+        if (seedRes.ok) {
+            const seedData = await seedRes.json();
+            if (seedData && seedData.length > 0) {
+                var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
+                nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
+            }
+        }
+        
+        // Capture the date from the text input field strictly as an informative label string
+        const informativeRefDate = document.getElementById("input-current-sales-date")?.value || "Sin Fecha";
+        console.log("⚙️ BROADCAST SEQUENCE ENGAGED - ASSIGNING SHIPMENT ID:", nextShipmentIdNumber);
+
+        // 2️⃣ Wipe out yesterday's remaining calculations from the landing pad completely
+        await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", { 
             method: "DELETE", 
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
         });
 
-        // 2️⃣ Push today's calculation rows directly to your landing table for the Purchase Manager
+        // 3️⃣ Push today's calculation rows one by one to your landing table for the Purchase Manager
         for (var k = 0; k < TEMPORARY_STAGED_PURCHASE_LINES.length; k++) {
             var activeLine = TEMPORARY_STAGED_PURCHASE_LINES[k];
             
@@ -4055,32 +4074,26 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
             );
             
-// 🎯 METRIC BRIDGE SYNCHRONIZED: Transmit direct raw matrix numbers cleanly
             var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
-            
-            // Extract the absolute, raw numbers directly from your spreadsheet calculation matrix fields
             var trueKitchenNetNeed = parseFloat(activeLine.suggested_quantity || activeLine.approved_quantity || 0);
-            var trueWholesaleSuggestedCount = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || trueWholesaleSuggestedCount || 0);
+            var trueWholesaleSuggestedCount = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0);
 
-            // Safety net: If wholesale count arrived empty but net need exists, fallback safely
             if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
 
-                        var payload = {
+            var payload = {
                 ingredient_id: String(activeLine.ingredient_id).trim(),
                 ingredient_name: String(activeLine.ingredient_name),
-                
-                // 🌟 CORES SYNCHRONIZED: Direct mapping prevents text or math scrambling
                 faltante_base: parseFloat(trueKitchenNetNeed), 
                 pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
-                
                 supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
                 conversion_factor: conversionFactor,
                 
-                // 🔒 CRITICAL FIX: Force sync precision alignment on individual loop transitions
-                created_at: new Date().toISOString()
+                // 🔒 TIMEZONE IMMUNITY INTEGRITY: Map new structural tracking keys explicitly here
+                shipment_id: nextShipmentIdNumber,
+                sales_reference_date: informativeRefDate
             };
 
             await fetch(API_URL + "staged_order_calculations", {
@@ -4094,22 +4107,22 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             });
         }
 
-        shipBtn.style.background = "#22c55e";
-        shipBtn.innerText = "✅ ¡Enviado Exitosamente!";
-        alert("📢 ¡Matriz de compras enviada al Administrador de Compras con éxito!");
+        // 4️⃣ UPDATE COUNTER IN SYSTEM SETTINGS SO THE SEQUENCE STEPS FORWARD FOR TOMORROW
+        await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+            method: "PATCH",
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ value_numeric: nextShipmentIdNumber })
+        });
 
-        setTimeout(function() {
-            shipBtn.disabled = false;
-            shipBtn.style.background = "#007afb";
-            shipBtn.innerText = "📡 Enviar a Gte. de Compras";
-        }, 3000);
+        shipBtn.innerText = "✅ Dispatch Complete";
+        alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " despachado con éxito al Portal de Compras!");
 
     } catch (err) {
-        console.error("Transmission error:", err);
-        alert("❌ Error al enviar datos al gestor: " + err.message);
+        console.error("Broadcast transmission halted error:", err);
+        alert("❌ Error crítico en transmisión: " + err.message);
         shipBtn.disabled = false;
         shipBtn.style.background = "#ef4444";
-        shipBtn.innerText = "Error";
+        shipBtn.innerText = "❌ Reintentar";
     }
 }
 
