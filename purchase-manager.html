@@ -71,7 +71,7 @@
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
 
-// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Assignment Engine [Part 1 of 2]
+// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Sequence Isolation Engine [Part 1 of 2]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -119,43 +119,16 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 LIVE RELATIONAL SYNC: Look up committed items by ingredient name to extract operational states
-        var databaseCommittedItemsMap = {}; 
-        const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        
-        if (dbItemsRes.ok) {
-            const itemsList = await dbItemsRes.json();
-            const dbOrdersRes = await fetch(API_URL + "purchase_orders?select=id,po_number,status,supplier_name", {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            if (dbOrdersRes.ok) {
-                const ordersList = await dbOrdersRes.json();
-                var ordersLookup = {};
-                ordersList.forEach(o => { 
-                    if (o.id) ordersLookup[String(o.id)] = o; 
-                });
-
-                itemsList.forEach(item => {
-                    if (item.ingredient_name && item.po_id && ordersLookup[String(item.po_id)]) {
-                        var parentOrder = ordersLookup[String(item.po_id)];
-                        var nameKey = String(item.ingredient_name).toLowerCase().trim();
-                        
-                        // 🔒 ROBUST INDEXING: Index solely by ingredient name to match rows independently of local naming states
-                        databaseCommittedItemsMap[nameKey] = {
-                            po_number: parentOrder.po_number,
-                            status: parentOrder.status,
-                            saved_supplier: parentOrder.supplier_name
-                        };
-                    }
-                });
+        // 3. 🔍 DOWNLOAD LIVE ACTIVE STAGING CALCULATION PRIMES FIRST
+        const targetFetchUrl = API_URL + "staged_order_calculations?select=id,ingredient_id,ingredient_name,faltante_base,supplier_uom,conversion_factor,supplier_name,pedido_sugerido,created_at,shipment_id,sales_reference_date&pedido_sugerido=gt.0&order=created_at.desc";
+        const dataTableRes = await fetch(targetFetchUrl, {
+            method: "GET", 
+            headers: { 
+                "apikey": API_KEY, 
+                "Authorization": "Bearer " + API_KEY,
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache"
             }
-        }
-        // 4. Download active calculations ordered strictly desc to read the newest row's creation day first
-        const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0&order=created_at.desc", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         
         if (!dataTableRes.ok) throw new Error("Fallo al descargar la tabla staged_order_calculations.");
@@ -166,38 +139,72 @@ async function pullActiveStagedCalculationFromCloud() {
             ACTIVE_SHIPMENT_TIMESTAMP = null;
             return;
         }
-              
-        // Grab the true creation date from the first object inside the descending ordered data response array
+
+        // Extract active shipment sequence identity securely out of index zero
         var absoluteNewestRow = cloudRows[0];
+        var activeShipmentId = absoluteNewestRow.shipment_id || "00";
         var rawDateString = absoluteNewestRow.created_at || new Date().toISOString();
-        
-        var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
-            timeZone: "America/Santiago",
-            day: "2-digit", month: "2-digit", year: "numeric",
-            hour: "2-digit", minute: "2-digit"
-        });
         ACTIVE_SHIPMENT_TIMESTAMP = rawDateString;
 
-                LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+        // 4. 🔍 SEQUENCE-ISOLATED HISTORICAL SYNC LOOKUP
+        var databaseCommittedItemsMap = {}; 
+        const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+        
+        if (dbItemsRes.ok) {
+            const itemsList = await dbItemsRes.json();
+            const dbOrdersRes = await fetch(API_URL + "purchase_orders?po_number=ilike.PO-SHIP-" + activeShipmentId + "-*", {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
+            
+            if (dbOrdersRes.ok) {
+                const ordersList = await dbOrdersRes.json();
+                var ordersLookup = {};
+                ordersList.forEach(o => { if (o.id) ordersLookup[String(o.id)] = o; });
+
+                itemsList.forEach(item => {
+                    if (item.ingredient_name && item.po_id && ordersLookup[String(item.po_id)]) {
+                        var parentOrder = ordersLookup[String(item.po_id)];
+                        var nameKey = String(item.ingredient_name).toLowerCase().trim();
+                        var vendorKey = String(parentOrder.supplier_name).toLowerCase().trim();
+                        
+                        var mapCompoundKey = vendorKey + "_" + nameKey;
+                        databaseCommittedItemsMap[mapCompoundKey] = {
+                            po_number: parentOrder.po_number,
+                            status: parentOrder.status,
+                            saved_supplier: parentOrder.supplier_name
+                        };
+                    }
+                });
+            }
+        }
+        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2]
+        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
             var nameKey = String(row.ingredient_name).toLowerCase().trim();
-            
-            var dbRecord = databaseCommittedItemsMap[nameKey];
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
             
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
             var realSupplierName = "Proveedor No Asignado";
-            if (isLineCompleted && dbRecord.saved_supplier) {
-                realSupplierName = String(dbRecord.saved_supplier).trim();
-            } else if (row.supplier_name && row.supplier_name !== "unassigned") {
+            if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
             } else if (row.provider_name) {
                 realSupplierName = String(row.provider_name).trim();
             } else if (matchedFormat && matchedFormat.provider_name) {
                 realSupplierName = matchedFormat.provider_name;
+            }
+
+            var vendorKey = realSupplierName.toLowerCase().trim();
+            var mapCompoundKey = vendorKey + "_" + nameKey;
+            var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
+
+            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
+            
+            if (isLineCompleted && dbRecord.saved_supplier) {
+                realSupplierName = dbRecord.saved_supplier;
             }
 
             var realPurchaseUnit = "Formato";
@@ -212,8 +219,6 @@ async function pullActiveStagedCalculationFromCloud() {
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
 
-            // 🔒 ROBUST CASE-INSENSITIVE EXTRACTION ENGINE:
-            // This safely catches whatever capitalization Supabase/PostgREST uses for the payload fields
             var dynamicShipmentId = row.shipment_id || row.Shipment_id || row.shipmentId || row.SHIPMENT_ID || "00";
             var dynamicRefDate = row.sales_reference_date || row.Sales_reference_date || row.salesReferenceDate || row.SALES_REFERENCE_DATE || "Fecha No Definida";
 
@@ -230,7 +235,6 @@ async function pullActiveStagedCalculationFromCloud() {
                 approved_formats_quantity: approvedCount, 
                 is_approved: true, 
                 
-                // 🔒 INJECT RESOLVED KEYS SAFELY INTO MEMORY CELLS
                 shipment_id: dynamicShipmentId,
                 sales_reference_date: dynamicRefDate,
                 
@@ -252,15 +256,6 @@ async function pullActiveStagedCalculationFromCloud() {
             headerBannerNode.id = "terminal-cargo-meta-header";
             workspace.parentNode.insertBefore(headerBannerNode, workspace);
         }
-        
-        headerBannerNode.style = "background:#0f172a; color:#38bdf8; padding:12px; margin-bottom:15px; border-radius:6px; font-family:monospace; font-size:14px; font-weight:bold; border-left:4px solid #38bdf8; display:flex; justify-content:space-between; align-items:center;";
-        headerBannerNode.innerHTML = `
-            <div>📦 CARGAMENTO LOGÍSTICO ACTIVO</div>
-            <div style="display:flex; align-items:center; gap:15px;">
-                <span>📅 REF INTERACCIÓN VENTAS: ${formattedDateSignature}</span>
-                <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold; font-family:sans-serif;">⚠️ Forzar Reinicio</button>
-            </div>
-        `;
 
         renderInteractiveManagerSpreadsheetGrid();
 
