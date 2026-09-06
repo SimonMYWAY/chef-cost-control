@@ -276,8 +276,9 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var activeShipmentSequenceId = "00";
     var informativeDisplayDateSignature = "Fecha No Definida";
 
+    // 🔒 ARRAY-INDEX SAFETY ENGINE: Read fields from the first object inside the downloaded collection array
     if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        var baseRow = LOCAL_STAGED_ROWS[0];
+        var baseRow = LOCAL_STAGED_ROWS[0]; 
         activeShipmentSequenceId = baseRow.shipment_id || "00";
         informativeDisplayDateSignature = baseRow.sales_reference_date || "Fecha No Definida";
     }
@@ -286,7 +287,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
-            // 🔒 ZERO MACHINE DATE CODES: Generate the tracking sequence using only the shipment ID block
+            // 🔒 Build structural PO sequence using the true batch sequence ID instead of machine dates
             var activePoString = row.forced_po_number || ("PO-SHIP-" + activeShipmentSequenceId + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
@@ -299,6 +300,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
         }
         groupedData[sup].items.push(row);
     });
+
 
     // Chronological sorting to keep dispatched elements stacked at the bottom edge indexes
     var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
