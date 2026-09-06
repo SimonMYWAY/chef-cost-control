@@ -278,13 +278,13 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var groupedData = {};
     var poCounter = 1;
 
-    // 🔒 EMBEDDED LIFECYCLE RECOVERY
+    // 🔒 INITIALIZE LIFE-CYCLE RECOVERY CONSTANTS
     var activeShipmentSequenceId = "00";
     var informativeDisplayDateSignature = "Fecha No Definida";
 
-    // 🔒 ARRAY-INDEX SAFETY ENGINE: Read fields from the first object inside the downloaded collection array
+    // 🔒 CRITICAL CORRECTION: Extract properties from INDEX ZERO ([0]) of the row matrix collection array
     if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        var baseRow = LOCAL_STAGED_ROWS[0]; 
+        var baseRow = LOCAL_STAGED_ROWS[0]; // 🌟 Zero index breaks out of the array layer safely!
         activeShipmentSequenceId = baseRow.shipment_id || "00";
         informativeDisplayDateSignature = baseRow.sales_reference_date || "Fecha No Definida";
     }
@@ -293,7 +293,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
-            // 🔒 Build structural PO sequence using the true batch sequence ID instead of machine dates
+            // 🔒 TIMEZONE DEFIANT STRING: Generates tracking number using the newly extracted sequence id number
             var activePoString = row.forced_po_number || ("PO-SHIP-" + activeShipmentSequenceId + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
@@ -306,7 +306,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
         }
         groupedData[sup].items.push(row);
     });
-
 
     // Chronological sorting to keep dispatched elements stacked at the bottom edge indexes
     var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
