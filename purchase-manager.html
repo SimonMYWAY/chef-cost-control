@@ -288,6 +288,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
+                supplierName: sup,
                 poNumber: activePoString,
                 dbStatus: row.db_saved_status || null, 
                 items: []
@@ -297,8 +298,15 @@ function renderInteractiveManagerSpreadsheetGrid() {
         groupedData[sup].items.push(row);
     });
 
-    // Loop 2: Draw AND lock elements simultaneously to prevent lifecycle bleeding
-    Object.keys(groupedData).forEach(function(supplierName) {
+    // 🔒 CHRONOLOGICAL LIFECYCLE SORTING: Sort array so 'dispatched' statuses are processed dead last
+    var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
+        var statusA = groupedData[a].dbStatus === 'dispatched' ? 1 : 0;
+        var statusB = groupedData[b].dbStatus === 'dispatched' ? 1 : 0;
+        return statusA - statusB; 
+    });
+
+    // Loop 2: Draw elements in their sorted physical arrangement order
+    sortedSupplierKeys.forEach(function(supplierName) {
         var group = groupedData[supplierName];
         var blockKey = supplierName.replace(/\s+/g, '-');
         var escapedSupplierName = supplierName.replace(/'/g, "\\'");
@@ -306,11 +314,9 @@ function renderInteractiveManagerSpreadsheetGrid() {
         var blockDiv = document.createElement("div");
         blockDiv.id = "supplier-card-" + blockKey;
         
-        // 🔒 DETERMINISTIC STATE SELECTION BEFORE DOM GENERATION
         var isCardFrozen = (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched');
         var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
 
-        // Assign CSS Class and Border Styles immediately
         if (group.dbStatus === 'saved_pending_whatsapp') {
             blockDiv.className = "supplier-block status-saved-pending";
             blockDiv.style.borderLeft = "5px solid #f1c40f";
@@ -323,7 +329,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
             blockDiv.className = "supplier-block";
         }
 
-        // Generate Status Banner HTML inline
         var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
         if (group.dbStatus === 'saved_pending_whatsapp') {
             statusPlaceholderHtml += `
@@ -371,7 +376,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var approvedCount = parseFloat(item.approved_formats_quantity || 0);
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
-            // Inject structural disabled flags directly into rows
             blockHtml += `
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
                     <div class="item-title">${item.ingredient_name}</div>
@@ -444,11 +448,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
         blockDiv.innerHTML = blockHtml;
         workspace.appendChild(blockDiv);
-
-        // Dispatched cards sink straight to the bottom edge indexes natively
-        if (group.dbStatus === 'dispatched' && blockDiv.parentNode) {
-            blockDiv.parentNode.appendChild(blockDiv);
-        }
 
         if (typeof updateVisualReceiptReceiptSlipMarkdown === "function") {
             updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
@@ -670,7 +669,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 }
             }
 
-            // If it doesn't exist, create a clean new document header row
+                        // If it doesn't exist, create a clean new document header row
             if (!generatedPoUuid) {
                 var parentPayload = {
                     po_number: poNumber,
@@ -693,7 +692,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
                 const parentRowResultData = await resParent.json();
                 
-                // Robust extraction handling for array vs object database wrapper styles
+                // 🔒 CRITICAL CORRECTION: Extract id out of index zero of the array response payload
                 if (parentRowResultData && parentRowResultData.length > 0) {
                     generatedPoUuid = parentRowResultData[0].id;
                 } else if (parentRowResultData && parentRowResultData.id) {
