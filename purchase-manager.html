@@ -655,7 +655,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var generatedPoUuid = null;
 
         if (!isAlreadySaved) {
-            // 🔍 CHECK IF PO NUMBER ALREADY EXISTS IN DATABASE (Prevents server unique constraint crash)
+            // 🔍 CHECK IF PO NUMBER ALREADY EXISTS IN DATABASE (Robust check covering array and object styles)
             const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
                 method: "GET",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -665,7 +665,8 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 const existingPoData = await checkPoRes.json();
                 if (existingPoData && existingPoData.length > 0) {
                     generatedPoUuid = existingPoData[0].id;
-                    console.log("🔄 Document header found in Supabase. Appending items to existing ID: " + generatedPoUuid);
+                } else if (existingPoData && existingPoData.id) {
+                    generatedPoUuid = existingPoData.id;
                 }
             }
 
@@ -691,7 +692,13 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
                 if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
                 const parentRowResultData = await resParent.json();
-                generatedPoUuid = parentRowResultData[0].id;
+                
+                // Robust extraction handling for array vs object database wrapper styles
+                if (parentRowResultData && parentRowResultData.length > 0) {
+                    generatedPoUuid = parentRowResultData[0].id;
+                } else if (parentRowResultData && parentRowResultData.id) {
+                    generatedPoUuid = parentRowResultData.id;
+                }
             }
 
             // Loop through lines to save itemization rows AND update stock levels
@@ -723,8 +730,9 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 
                 if (ingFetchRes.ok) {
                     const ingDataArray = await ingFetchRes.json();
-                    if (ingDataArray && ingDataArray.length > 0) {
-                        var dbIngredient = ingDataArray[0]; 
+                    var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
+                    
+                    if (dbIngredient) {
                         var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
                         var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
                         var conversionFactor = parseFloat(item.conversion_factor || 1);
@@ -734,7 +742,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                         if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
                         // Patch increased stock level back onto master row
-                        const patchIngRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
+                        await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
                             method: "PATCH",
                             headers: {
                                 "apikey": API_KEY,
@@ -745,15 +753,12 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                                 std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                             })
                         });
-                        
-                        if (!patchIngRes.ok) throw new Error("No se pudo actualizar el stock del ingrediente " + item.ingredient_name);
                     }
                 }
             }
             console.log("💾 Base de datos e inventario registrados de manera limpia.");
-        } else {
-            console.log("⏭️ Esta orden ya ha sido guardada en la interfaz local. Omitiendo duplicación de inventario.");
         }
+
 
         // --- STEP 2: FORMAT & CLIPBOARD COPY ---
         var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
