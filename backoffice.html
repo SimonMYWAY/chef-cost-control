@@ -3923,6 +3923,9 @@ async function executeFinalInventoryProcurementCommit() {
             });
 
             // B. LOAD THE NEW SHIP: Build structures matching ONLY your confirmed database fields
+            // 🔍 DEBUG TRACER: Open your browser dev tools (F12) console to see this printout
+            console.log("🚀 NEXT SEGMENT ID DETECTED:", nextShipmentIdNumber, "REF DATE:", informativeRefDate);
+
             const targetCargoPayloadArray = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
