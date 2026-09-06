@@ -267,7 +267,7 @@ async function pullActiveStagedCalculationFromCloud() {
     }
 }
 
-// ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables
+// ⚡ RUN TIME CORE 2: Render grid layouts grouped strictly by Supplier name variables [Part 1 of 2]
 function renderInteractiveManagerSpreadsheetGrid() {
     var workspace = document.getElementById("manager-grid-workspace");
     workspace.innerHTML = "";
@@ -281,24 +281,23 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var dd = String(today.getDate()).padStart(2, '0');
     var todayString = yyyy + mm + dd; 
 
-    // 📋 PERSISTENT INITIAL DATA GROUPING
+    // Loop 1: Group raw rows into structural suppliers
     LOCAL_STAGED_ROWS.forEach(function(row) {
         var sup = row.supplier_name || "Proveedor No Asignado";
         if (!groupedData[sup]) {
-            // Use the verified database PO number if this group contains a reloaded row, otherwise generate the auto-fallback string
             var activePoString = row.forced_po_number || ("PO-" + todayString + "-" + String(poCounter).padStart(3, '0'));
             
             groupedData[sup] = {
                 poNumber: activePoString,
-                dbStatus: row.db_saved_status || null, // Capture the committed status flag safely
+                dbStatus: row.db_saved_status || null, 
                 items: []
             };
-            if (!row.forced_po_number) poCounter++; // Only increment the local counter for fresh uncommitted suppliers
+            if (!row.forced_po_number) poCounter++; 
         }
         groupedData[sup].items.push(row);
     });
 
-    // 📋 APPLICATION OF SAVED STATES ON RELOAD:
+    // Loop 2: Draw AND lock elements simultaneously to prevent lifecycle bleeding
     Object.keys(groupedData).forEach(function(supplierName) {
         var group = groupedData[supplierName];
         var blockKey = supplierName.replace(/\s+/g, '-');
@@ -307,21 +306,34 @@ function renderInteractiveManagerSpreadsheetGrid() {
         var blockDiv = document.createElement("div");
         blockDiv.id = "supplier-card-" + blockKey;
         
-        // 🔄 Restore Card Class State and Freeze Controls if Saved:
-        var isCardFrozen = false;
-        if (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched') {
+        // 🔒 DETERMINISTIC STATE SELECTION BEFORE DOM GENERATION
+        var isCardFrozen = (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched');
+        var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
+
+        // Assign CSS Class and Border Styles immediately
+        if (group.dbStatus === 'saved_pending_whatsapp') {
             blockDiv.className = "supplier-block status-saved-pending";
-            isCardFrozen = true;
+            blockDiv.style.borderLeft = "5px solid #f1c40f";
+        } else if (group.dbStatus === 'dispatched') {
+            blockDiv.className = "supplier-block status-dispatched";
+            blockDiv.style.opacity = "0.35";
+            blockDiv.style.filter = "grayscale(100%) blur(0.5px)";
+            blockDiv.style.pointerEvents = "none";
         } else {
             blockDiv.className = "supplier-block";
         }
 
-        // 🔄 Restore Yellow Status Banner Text:
+        // Generate Status Banner HTML inline
         var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
         if (group.dbStatus === 'saved_pending_whatsapp') {
             statusPlaceholderHtml += `
                 <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
                     📝 Guardado - Pendiente de enviar en WhatsApp
+                </div>`;
+        } else if (group.dbStatus === 'dispatched') {
+            statusPlaceholderHtml += `
+                <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                    ✅ Despachado y Removido de Puerto
                 </div>`;
         }
         statusPlaceholderHtml += '</div>';
@@ -334,15 +346,12 @@ function renderInteractiveManagerSpreadsheetGrid() {
             '</div>' +
             '<div class="rows-container">';
 
-                group.items.forEach(function(item) {
+        group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
                 return String(f.ingredient_id).trim() === String(item.ingredient_id).trim();
             });
-
-            // 🔒 Step 1: Detect if this element belongs to an already executed or dispatched card
-            var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
 
             var supplierDropdownOptions = '';
             if (item.supplier_name && item.supplier_name !== "Proveedor No Asignado") {
@@ -360,11 +369,9 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
             var conversionFactor = parseFloat(item.conversion_factor || 1);
             var approvedCount = parseFloat(item.approved_formats_quantity || 0);
-            
-            // Math Rule: Calculate true Recipe UOM weight equivalent cleanly
             var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
 
-            // 🔒 Step 2: Inject ${isDisabledAttr} inside select, input, and checkbox elements to freeze them
+            // Inject structural disabled flags directly into rows
             blockHtml += `
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
                     <div class="item-title">${item.ingredient_name}</div>
@@ -411,27 +418,21 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 </div>
             `;
         });
-
+        // Resolve structural actions panel configurations [Part 2 of 2]
+        var dispatchGateDisplay = (group.dbStatus === 'saved_pending_whatsapp') ? 'flex' : 'none';
+        var buttonDisabledAttr = isCardFrozen ? ' disabled style="opacity:0.4; cursor:not-allowed; background:#64748b; color:white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px;" ' : '';
+        
+        var btnDraftStyle = isCardFrozen ? buttonDisabledAttr : ' style="background:#3b82f6; color: white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px; cursor:pointer;" ';
+        var btnExecStyle = isCardFrozen ? buttonDisabledAttr : ' style="background:#2ecc71; color: white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px; cursor:pointer;" ';
 
         blockHtml += `
             </div>
-<div class="action-cluster" style="display: flex; flex-direction: column; gap: 8px;">
-    <div class="main-actions" style="display: flex; gap: 10px;">
-        <!-- 💾 BUTTON 1: Save Draft only (No Stock updates, status sets to 'Pending') -->
-        <button class="mini-btn" style="background:#3b82f6; color: white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px; cursor:pointer;" 
-                onclick="saveSupplierOrderAsDraft('${escapedSupplierName}', 'supplier-card-${blockKey}')">
-            💾 Guardar Borrador
-        </button>
-        
-        <!-- 🚀 BUTTON 2: Execute & Commit (Increments Stock, copies to Clipboard, status sets to 'saved_pending_whatsapp') -->
-        <button class="mini-btn" style="background:#2ecc71; color: white; width: 50%; font-weight: bold; padding: 10px; border:none; border-radius:4px; cursor:pointer;" 
-                onclick="executeUnifiedSupplierProcess('${escapedSupplierName}', 'supplier-card-${blockKey}')">
-            🚀 Ejecutar y Copiar Orden
-        </button>
-    </div>
-
-                
-                <div class="final-dispatch-gate" style="display: none; align-items: center; background: #e8f8f5; padding: 8px; border-radius: 4px; border: 1px dashed #2ecc71; margin-top: 4px;">
+            <div class="action-cluster" style="display: flex; flex-direction: column; gap: 8px;">
+                <div class="main-actions" style="display: flex; gap: 10px;">
+                    <button class="mini-btn" ${btnDraftStyle} onclick="saveSupplierOrderAsDraft('${escapedSupplierName}', 'supplier-card-${blockKey}')">💾 Guardar Borrador</button>
+                    <button class="mini-btn" ${btnExecStyle} onclick="executeUnifiedSupplierProcess('${escapedSupplierName}', 'supplier-card-${blockKey}')">🚀 Ejecutar y Copiar Orden</button>
+                </div>
+                <div class="final-dispatch-gate" style="display: ${dispatchGateDisplay}; align-items: center; background: #e8f8f5; padding: 8px; border-radius: 4px; border: 1px dashed #2ecc71; margin-top: 4px;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #27ae60; font-weight: bold; width: 100%;">
                         <input type="checkbox" onchange="if(this.checked) { markSupplierOrderAsDispatched('${escapedSupplierName}', 'supplier-card-${blockKey}') }" />
                         <span>¿Confirmar envío realizado en chat? Marcar Finalizado</span>
@@ -443,73 +444,16 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
         blockDiv.innerHTML = blockHtml;
         workspace.appendChild(blockDiv);
-        // ⚡ Safe UI state restoration hook
-if (group.dbStatus === 'saved_pending_whatsapp') {
-    var gateNode = blockDiv.querySelector(".final-dispatch-gate");
-    if (gateNode) gateNode.style.display = "flex";
-}
+
+        // Dispatched cards sink straight to the bottom edge indexes natively
+        if (group.dbStatus === 'dispatched' && blockDiv.parentNode) {
+            blockDiv.parentNode.appendChild(blockDiv);
+        }
 
         if (typeof updateVisualReceiptReceiptSlipMarkdown === "function") {
             updateVisualReceiptReceiptSlipMarkdown(supplierName, group.poNumber);
         }
     });
-    // ==========================================
-    // 🔒 RELOAD PERSISTENCE LIFECYCLE ENGINE
-    // ==========================================
-    Object.keys(groupedData).forEach(function(supplierName) {
-        var group = groupedData[supplierName];
-        var blockKey = supplierName.replace(/\s+/g, '-');
-        var cardId = "supplier-card-" + blockKey;
-        var cardEl = document.getElementById(cardId);
-
-        if (!cardEl) return;
-
-        // 🟡 STATE 2: EXECUTED ("saved_pending_whatsapp") -> FREEZE & LOCK CARD IN PLACE
-        if (group.dbStatus === 'saved_pending_whatsapp') {
-            cardEl.style.borderLeft = "5px solid #f1c40f"; // Distinct yellow border anchor
-            
-            // Render the yellow "Guardado" badge inside its placeholder container node
-            var statusPlaceholder = cardEl.querySelector(".status-indicator-placeholder");
-            if (statusPlaceholder) {
-                statusPlaceholder.innerHTML = `
-                    <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        📝 Guardado - Pendiente de enviar en WhatsApp
-                    </div>`;
-            }
-
-            // Reveal the final dispatch gate checkbox element
-            var gateNode = cardEl.querySelector(".final-dispatch-gate");
-            if (gateNode) gateNode.style.display = "flex";
-
-            // Freeze every dropdown menu, input number box, and checkbox inside this specific supplier card element
-            cardEl.querySelectorAll("select, input[type='number'], input[type='checkbox']:not([onchange*='markSupplierOrderAsDispatched'])").forEach(function(input) {
-                input.disabled = true;
-                input.style.background = "#f1f5f9";
-                input.style.color = "#64748b";
-            });
-        }
-
-        // ⚫ STATE 3: DISPATCHED ("dispatched") -> GRAY BLURRY QUEUE -> DROP TO THE VERY BOTTOM
-        if (group.dbStatus === 'dispatched') {
-            cardEl.style.opacity = "0.35";
-            cardEl.style.filter = "grayscale(100%) blur(0.5px)";
-            cardEl.style.pointerEvents = "none";
-
-            var statusPlaceholder = cardEl.querySelector(".status-indicator-placeholder");
-            if (statusPlaceholder) {
-                statusPlaceholder.innerHTML = `
-                    <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        ✅ Despachado y Removido de Puerto
-                    </div>`;
-            }
-
-            // Push this container node to the very bottom child index layout of the workspace container row
-            if (cardEl.parentNode) {
-                cardEl.parentNode.appendChild(cardEl);
-            }
-        }
-    });
-
 }
 
 // Helper block function to sync layout field modifications live
