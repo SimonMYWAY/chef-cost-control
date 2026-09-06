@@ -3894,38 +3894,50 @@ async function executeFinalInventoryProcurementCommit() {
                 })
             );
         }
-        // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
+                // 🚀 VESSEL SHIP SYSTEM: Wipe out yesterday's leftovers and write today's new cargo hold!
         if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
 
-            // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE
-            const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
-                method: "GET", 
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
+            console.log("🚩 1. Entering Staging Sequence Loop Wrapper...");
             var nextShipmentIdNumber = 1; 
-            if (seedRes.ok) {
-                const seedData = await seedRes.json();
-                if (seedData && seedData.length > 0) {
-                    // Extract numerical value from database row properties seamlessly
-                    var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
-                    nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
+
+            try {
+                // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE
+                console.log("🚩 2. Fetching sequence from table: " + API_URL + "system_settings");
+                const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+                    method: "GET", 
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                
+                if (seedRes.ok) {
+                    const seedData = await seedRes.json();
+                    console.log("🚩 3. Raw Database Seed Array Data Recieved:", seedData);
+                    if (seedData && seedData.length > 0) {
+                        var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
+                        nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
+                    }
+                } else {
+                    console.error("🚩 ERROR: Supabase rejected the system_settings lookup. Status:", seedRes.status);
                 }
+            } catch (innerCounterErr) {
+                console.error("🚩 CRITICAL: Inner loop sequence resolution crashed, falling back to 1. Error:", innerCounterErr.message);
+                nextShipmentIdNumber = 1; // Secure fallback to keep app processing moving forward
             }
 
-            // Capture the custom user date from the UI text entry calendar input box purely as an informative reference label
-            const informativeRefDate = document.getElementById("input-current-sales-date").value || "Sin Fecha";
+            const informativeRefDate = document.getElementById("input-current-sales-date")?.value || "Sin Fecha";
+            console.log("🚀 TESTING GATEWAYS - TARGET ID IS:", nextShipmentIdNumber, "DATE RECORD:", informativeRefDate);
 
-            // A. PUSH OUT THE OLD SHIP: Clear staging table rows cleanly using correct PostgREST operators
-            await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", {
-                method: "DELETE",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
+            // A. PUSH OUT THE OLD SHIP: Clear staging table rows cleanly
+            try {
+                await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", {
+                    method: "DELETE",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                console.log("🚩 4. Table staged_order_calculations wiped successfully.");
+            } catch(deleteErr) {
+                console.error("🚩 WARNING: Delete transition failed. Error:", deleteErr.message);
+            }
 
             // B. LOAD THE NEW SHIP: Build structures matching ONLY your confirmed database fields
-            // 🔍 DEBUG TRACER: Open your browser dev tools (F12) console to see this printout
-            console.log("🚀 NEXT SEGMENT ID DETECTED:", nextShipmentIdNumber, "REF DATE:", informativeRefDate);
-
             const targetCargoPayloadArray = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
@@ -3945,13 +3957,14 @@ async function executeFinalInventoryProcurementCommit() {
                     supplier_name: activeFormatRule ? activeFormatRule.provider_name : (line.supplier_id || "Proveedor No Asignado"),
                     pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1),
                     
-                    // 🔒 TIMEZONE IMMUNITY: Embed the incrementing sequence identifier and reference text label
+                    // 🔒 TIMEZONE IMMUNITY INTEGRITY:
                     shipment_id: nextShipmentIdNumber,
                     sales_reference_date: informativeRefDate
                 };
             });
 
             // Post the fresh unified batch block down to Supabase tables at once
+            console.log("🚩 5. Submitting payload array to Supabase...", targetCargoPayloadArray);
             const pushCargoRes = await fetch(API_URL + "staged_order_calculations", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -3959,23 +3972,19 @@ async function executeFinalInventoryProcurementCommit() {
             });
 
             if (pushCargoRes.ok) {
-                // 🔒 UPDATE SEQUENCE COUNTER IN SYSTEM SETTINGS FOR NEXT SUBMISSION
+                console.log("🚩 6. Staged lines uploaded successfully. Updating sequence counter...");
                 await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
                     method: "PATCH",
-                    headers: { 
-                        "apikey": API_KEY, 
-                        "Authorization": "Bearer " + API_KEY, 
-                        "Content-Type": "application/json" 
-                    },
-                    body: JSON.stringify({
-                        value_numeric: nextShipmentIdNumber
-                    })
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ value_numeric: nextShipmentIdNumber })
                 });
-                console.log("🔒 Sequence counter successfully stepped forward to: " + nextShipmentIdNumber);
+                console.log("🔒 Sequence counter stepped forward cleanly to: " + nextShipmentIdNumber);
             } else {
-                console.error("⚠️ Failed to load calculations staging container.");
+                const errorPayload = await pushCargoRes.text();
+                console.error("⚠️ Server rejected staging upload. Response:", errorPayload);
             }
         }
+
 
         if (updatePromises.length > 0) {
             await Promise.all(updatePromises);
