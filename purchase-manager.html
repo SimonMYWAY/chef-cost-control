@@ -119,7 +119,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 LIVE RELATIONAL SYNC: Look up existing purchase orders in database to recover tracking states on refresh
+        // 3. 🔍 LIVE RELATIONAL SYNC: Look up existing purchase orders to recover tracking states on refresh
         var databaseCommittedItemsMap = {}; 
         const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -134,13 +134,19 @@ async function pullActiveStagedCalculationFromCloud() {
             if (dbOrdersRes.ok) {
                 const ordersList = await dbOrdersRes.json();
                 var ordersLookup = {};
-                ordersList.forEach(o => { ordersLookup[o.id] = o; });
+                ordersList.forEach(o => { 
+                    if (o.id) ordersLookup[String(o.id)] = o; 
+                });
 
                 itemsList.forEach(item => {
-                    if (item.ingredient_name && item.po_id && ordersLookup[item.po_id]) {
-                        var parentOrder = ordersLookup[item.po_id];
+                    if (item.ingredient_name && item.po_id && ordersLookup[String(item.po_id)]) {
+                        var parentOrder = ordersLookup[String(item.po_id)];
                         var nameKey = String(item.ingredient_name).toLowerCase().trim();
-                        databaseCommittedItemsMap[nameKey] = {
+                        var vendorKey = String(parentOrder.supplier_name).toLowerCase().trim();
+                        
+                        // 🔒 CRITICAL FIX: Build matched compound tracking key
+                        var mapCompoundKey = vendorKey + "_" + nameKey;
+                        databaseCommittedItemsMap[mapCompoundKey] = {
                             po_number: parentOrder.po_number,
                             status: parentOrder.status,
                             saved_supplier: parentOrder.supplier_name
@@ -149,7 +155,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 });
             }
         }
-        // 4. Read only active elements where suggested order amount is greater than 0
+        // 4. Read only active elements where suggested order amount is greater than 0 [Part 2 of 2]
         const dataTableRes = await fetch(API_URL + "staged_order_calculations?pedido_sugerido=gt.0", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -168,7 +174,7 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
               
-        var firstRow = cloudRows;
+        var firstRow = cloudRows[0] || cloudRows;
         var rawDateString = firstRow.created_at || new Date().toISOString();
         var formattedDateSignature = new Date(rawDateString).toLocaleString("es-ES", {
             timeZone: "America/Santiago",
@@ -182,18 +188,12 @@ async function pullActiveStagedCalculationFromCloud() {
             var lookupKey = cleanIngId.toLowerCase();
             var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            // Check if database tracking logs show this line has a recorded PO status history
-            var dbRecord = databaseCommittedItemsMap[nameKey];
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
-            
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // PROVIDER OVERRIDES: Restore explicit user selection from DB if it was committed previously
+            // PROVIDER OVERRIDES: Restore explicit user selection from master tables
             var realSupplierName = "Proveedor No Asignado";
-            if (isLineCompleted && dbRecord.saved_supplier) {
-                realSupplierName = dbRecord.saved_supplier;
-            } else if (row.supplier_name && row.supplier_name !== "unassigned") {
+            if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
             } else if (row.provider_name) {
                 realSupplierName = String(row.provider_name).trim();
@@ -201,6 +201,18 @@ async function pullActiveStagedCalculationFromCloud() {
                 realSupplierName = matchedFormat.provider_name;
             }
             
+            // 🔍 PRECISION STATE RESOLUTION: Compare against the relational database sync map
+            var vendorKey = realSupplierName.toLowerCase().trim();
+            var mapCompoundKey = vendorKey + "_" + nameKey;
+            var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
+
+            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
+            
+            // If database logs show this line has historical PO state info, restore its structural context
+            if (isLineCompleted && dbRecord.saved_supplier) {
+                realSupplierName = dbRecord.saved_supplier;
+            }
+
             var realPurchaseUnit = "Formato";
             if (matchedFormat && matchedFormat.purchase_uom) {
                 realPurchaseUnit = matchedFormat.purchase_uom;
@@ -209,7 +221,6 @@ async function pullActiveStagedCalculationFromCloud() {
             }
 
             var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
-
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
             var approvedCount = Math.ceil(rawPedidoSugerido);
@@ -225,7 +236,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 conversion_factor: finalMultiplier, 
                 pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
-                is_approved: true, // Safeguarded checkbox state integrity as required
+                is_approved: true, 
                 
                 // 🔒 INJECT RESTORE STATES
                 forced_po_number: isLineCompleted ? dbRecord.po_number : null,
