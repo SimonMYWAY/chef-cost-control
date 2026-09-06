@@ -119,7 +119,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 LIVE RELATIONAL SYNC: Look up existing purchase orders to recover tracking states on refresh
+        // 3. 🔍 LIVE RELATIONAL SYNC: Look up committed items by ingredient name to extract operational states
         var databaseCommittedItemsMap = {}; 
         const dbItemsRes = await fetch(API_URL + "purchase_order_items?select=ingredient_name,po_id", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -142,11 +142,9 @@ async function pullActiveStagedCalculationFromCloud() {
                     if (item.ingredient_name && item.po_id && ordersLookup[String(item.po_id)]) {
                         var parentOrder = ordersLookup[String(item.po_id)];
                         var nameKey = String(item.ingredient_name).toLowerCase().trim();
-                        var vendorKey = String(parentOrder.supplier_name).toLowerCase().trim();
                         
-                        // 🔒 CRITICAL FIX: Build matched compound tracking key
-                        var mapCompoundKey = vendorKey + "_" + nameKey;
-                        databaseCommittedItemsMap[mapCompoundKey] = {
+                        // 🔒 ROBUST INDEXING: Index solely by ingredient name to match rows independently of local naming states
+                        databaseCommittedItemsMap[nameKey] = {
                             po_number: parentOrder.po_number,
                             status: parentOrder.status,
                             saved_supplier: parentOrder.supplier_name
@@ -191,26 +189,20 @@ async function pullActiveStagedCalculationFromCloud() {
             var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
             var matchedFormat = supplierFormatsLookup[lookupKey];
             
-            // PROVIDER OVERRIDES: Restore explicit user selection from master tables
+            // 🔍 CHECK INGREDIENT HISTORY FIRST: Extract state indicators out of database records
+            var dbRecord = databaseCommittedItemsMap[nameKey];
+            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
+            
             var realSupplierName = "Proveedor No Asignado";
-            if (row.supplier_name && row.supplier_name !== "unassigned") {
+            if (isLineCompleted && dbRecord.saved_supplier) {
+                // 🔒 INJECT HIGHEST PRIORITY DOMAIN: If saved in DB, force card grouping matching values
+                realSupplierName = String(dbRecord.saved_supplier).trim();
+            } else if (row.supplier_name && row.supplier_name !== "unassigned") {
                 realSupplierName = String(row.supplier_name).trim();
             } else if (row.provider_name) {
                 realSupplierName = String(row.provider_name).trim();
             } else if (matchedFormat && matchedFormat.provider_name) {
                 realSupplierName = matchedFormat.provider_name;
-            }
-            
-            // 🔍 PRECISION STATE RESOLUTION: Compare against the relational database sync map
-            var vendorKey = realSupplierName.toLowerCase().trim();
-            var mapCompoundKey = vendorKey + "_" + nameKey;
-            var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
-
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
-            
-            // If database logs show this line has historical PO state info, restore its structural context
-            if (isLineCompleted && dbRecord.saved_supplier) {
-                realSupplierName = dbRecord.saved_supplier;
             }
 
             var realPurchaseUnit = "Formato";
