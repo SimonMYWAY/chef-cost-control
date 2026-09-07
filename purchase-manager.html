@@ -177,65 +177,27 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         });
 
-        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [REPAIRED FOR PO DUPLICATION]
-        
-        // Track unique suppliers encountered in this batch to build distinct sequential POs
-        var discoveredSuppliers = [];
-
+        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - REPAIRED]
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
-            var nameKey = String(row.ingredient_name).toLowerCase().trim();
             
-            var realRecipeUnit = recipeUnitsLookup[lookupKey] || "Kg";
-            var matchedFormat = supplierFormatsLookup[lookupKey];
+            // Look up alternative definitions linked to ingredients via supplier_formats if available
+            var realRecipeUnit = (typeof recipeUnitsLookup !== "undefined" && recipeUnitsLookup[lookupKey]) || "Kg";
+            var matchedFormat = (typeof supplierFormatsLookup !== "undefined") ? supplierFormatsLookup[lookupKey] : null;
             
-            var realSupplierName = "Proveedor No Asignado";
-            if (row.supplier_name && row.supplier_name !== "unassigned") {
-                realSupplierName = String(row.supplier_name).trim();
-            } else if (row.provider_name) {
-                realSupplierName = String(row.provider_name).trim();
-            } else if (matchedFormat && matchedFormat.provider_name) {
-                realSupplierName = matchedFormat.provider_name;
-            }
+            // Extract the supplier name directly out of our pre-joined cloud object row
+            var realSupplierName = row.supplier_name || "Proveedor No Asignado";
 
-            var vendorKey = realSupplierName.toLowerCase().trim();
-            var mapCompoundKey = vendorKey + "_" + nameKey;
-            var dbRecord = databaseCommittedItemsMap[mapCompoundKey];
-
-            var isLineCompleted = (dbRecord && (dbRecord.status === 'saved_pending_whatsapp' || dbRecord.status === 'dispatched' || dbRecord.status === 'Pending'));
-            
-            if (isLineCompleted && dbRecord.saved_supplier) {
-                realSupplierName = dbRecord.saved_supplier;
-            }
-
-            // Track supplier order to generate sequential numbers (001, 002, etc.)
-            if (discoveredSuppliers.indexOf(realSupplierName) === -1) {
-                discoveredSuppliers.push(realSupplierName);
-            }
-            var supplierSequenceIndex = discoveredSuppliers.indexOf(realSupplierName) + 1;
-            // Pad index number to match your three-digit layout (e.g., 001, 002)
-            var paddedIndex = String(supplierSequenceIndex).padStart(3, '0');
-
-            var realPurchaseUnit = "Formato";
-            if (matchedFormat && matchedFormat.purchase_uom) {
-                realPurchaseUnit = matchedFormat.purchase_uom;
-            } else if (row.supplier_uom && row.supplier_uom !== realRecipeUnit) {
-                realPurchaseUnit = String(row.supplier_uom).trim();
-            }
-
-            var finalMultiplier = (matchedFormat) ? parseFloat(matchedFormat.units_per_purchase || 1) : parseFloat(row.conversion_factor || 1);
+            var realPurchaseUnit = row.supplier_uom || "Formato";
+            var finalMultiplier = parseFloat(row.conversion_factor || 1);
             var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
             var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
-            var approvedCount = Math.ceil(rawPedidoSugerido);
+            var approvedCount = parseFloat(row.approved_formats_quantity || rawPedidoSugerido);
 
-            var dynamicShipmentId = row.shipment_id || row.Shipment_id || row.shipmentId || row.SHIPMENT_ID || "00";
-            var dynamicRefDate = row.sales_reference_date || row.Sales_reference_date || row.salesReferenceDate || row.SALES_REFERENCE_DATE || "Fecha No Definida";
-
-            // 🔒 GENERATE OR RETRIEVE UNIQUE PO
-            // If the database has a record, use it. Otherwise, assign an isolated sequence number.
-            var resolvedPoNumber = isLineCompleted ? dbRecord.po_number : ("PO-SHIP-" + dynamicShipmentId + "-" + paddedIndex);
-            var resolvedDbStatus = isLineCompleted ? dbRecord.status : null;
+            // Read the real state parameters directly out of the database row properties
+            var resolvedPoNumber = row.po_number || "PO-PENDING";
+            var resolvedDbStatus = row.db_status || "draft";
 
             return {
                 id: row.id,
@@ -248,12 +210,12 @@ async function pullActiveStagedCalculationFromCloud() {
                 conversion_factor: finalMultiplier, 
                 pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
-                is_approved: true, 
+                is_approved: row.is_approved !== undefined ? row.is_approved : true, 
                 
-                shipment_id: dynamicShipmentId,
-                sales_reference_date: dynamicRefDate,
+                shipment_id: row.shipment_id || "00",
+                sales_reference_date: row.created_at || "Fecha No Definida",
                 
-                // Fields bound directly to layout variables
+                // 🔒 CRITICAL SYNCHRONIZATION BINDING: Feeds straight to grid render loops
                 poNumber: resolvedPoNumber,
                 dbStatus: resolvedDbStatus,
                 
@@ -276,8 +238,8 @@ async function pullActiveStagedCalculationFromCloud() {
             workspace.parentNode.insertBefore(headerBannerNode, workspace);
         }
 
+        // Re-draw screen layout using the securely mapped variables
         renderInteractiveManagerSpreadsheetGrid();
-
 
     } catch (err) {
         console.error(err);
