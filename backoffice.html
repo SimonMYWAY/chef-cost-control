@@ -4023,7 +4023,7 @@ async function executeFinalInventoryProcurementCommit() {
     }
 }
 
-// ⚡ RESTORED CONVEYOR: Purely transmits calculations with robust Sequence Tracking IDs
+// ⚡ RESTORED CONVEYOR: Directly generates Stateful Draft POs and Items
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
     
@@ -4035,7 +4035,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
     console.log("🚀 CORRECT GATEWAY: Entering broadcastActiveCalculationsToPurchaseApp...");
     shipBtn.disabled = true;
     shipBtn.style.background = "#64748b";
-    shipBtn.innerText = "⏳ Enviando datos...";
+    shipBtn.innerText = "⏳ Generando Órdenes...";
 
     try {
         // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE
@@ -4052,62 +4052,94 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             }
         }
         
-        // Capture the date from the text input field strictly as an informative label string
         const informativeRefDate = document.getElementById("input-current-sales-date")?.value || "Sin Fecha";
         console.log("⚙️ BROADCAST SEQUENCE ENGAGED - ASSIGNING SHIPMENT ID:", nextShipmentIdNumber);
 
-        // 2️⃣ Wipe out yesterday's remaining calculations from the landing pad completely
+        // 2️⃣ WIPE TEMPORARY TABLES (Optional cleanup if you still read old stager rows anywhere)
         await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", { 
-            method: "DELETE", 
-            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
+            method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
         });
 
-        // 3️⃣ Push today's calculation rows one by one to your landing table for the Purchase Manager
-        for (var k = 0; k < TEMPORARY_STAGED_PURCHASE_LINES.length; k++) {
-            var activeLine = TEMPORARY_STAGED_PURCHASE_LINES[k];
-            
+        // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER
+        var supplierGroups = {};
+        TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
-                ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(activeLine.ingredient_id).toLowerCase().trim()) 
+                ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                 : [];
                 
             const activeFormatRule = authorizedFormats.find(f => 
-                String(f.provider_name).toLowerCase().trim() === String(activeLine.supplier_id).toLowerCase().trim()
+                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
             );
+
+            var resolvedSupplier = activeFormatRule ? activeFormatRule.provider_name : (line.supplier_id || "Proveedor No Asignado");
+            if (!supplierGroups[resolvedSupplier]) {
+                supplierGroups[resolvedSupplier] = [];
+            }
             
             var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
-            var trueKitchenNetNeed = parseFloat(activeLine.suggested_quantity || activeLine.approved_quantity || 0);
-            var trueWholesaleSuggestedCount = parseFloat(activeLine.suggested_formats_quantity || activeLine.approved_formats_quantity || 0);
+            var trueKitchenNetNeed = parseFloat(line.suggested_quantity || line.approved_quantity || 0);
+            var trueWholesaleSuggestedCount = parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0);
 
             if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
 
-            var payload = {
-                ingredient_id: String(activeLine.ingredient_id).trim(),
-                ingredient_name: String(activeLine.ingredient_name),
-                faltante_base: parseFloat(trueKitchenNetNeed), 
+            supplierGroups[resolvedSupplier].push({
+                ingredient_id: String(line.ingredient_id).trim(),
+                ingredient_name: String(line.ingredient_name),
+                faltante_base: parseFloat(trueKitchenNetNeed),
                 pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
-                supplier_name: String(activeLine.supplier_id || "Proveedor No Asignado"),
-                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(activeLine.uom || "Unidad"),
-                conversion_factor: conversionFactor,
-                
-                // 🔒 TIMEZONE IMMUNITY INTEGRITY: Map new structural tracking keys explicitly here
-                shipment_id: nextShipmentIdNumber,
-                sales_reference_date: informativeRefDate
-            };
+                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(line.uom || "Unidad"),
+                conversion_factor: conversionFactor
+            });
+        });
 
-            await fetch(API_URL + "staged_order_calculations", {
+        // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES
+        var uniqueSuppliers = Object.keys(supplierGroups);
+        for (var i = 0; i < uniqueSuppliers.length; i++) {
+            var supplierName = uniqueSuppliers[i];
+            var items = supplierGroups[supplierName];
+            
+            var paddedIndex = String(i + 1).padStart(3, '0');
+            var generatedPoNumber = "PO-SHIP-" + nextShipmentIdNumber + "-" + paddedIndex;
+
+            // A. Create master order document row marked as 'draft'
+            await fetch(API_URL + "purchase_orders", {
                 method: "POST",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY, 
-                    "Content-Type": "application/json" 
-                },
-                body: JSON.stringify(payload)
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    po_number: generatedPoNumber,
+                    supplier_name: supplierName,
+                    status: 'draft', // Saved directly as permanent cloud draft
+                    shipment_id: nextShipmentIdNumber,
+                    created_at: new Date().toISOString()
+                })
+            });
+
+            // B. Bulk insert the child line items bound tightly to that generated PO
+            var itemPayloads = items.map(function(item) {
+                return {
+                    po_id: null, // If your schema relies on raw string tracking or triggers, leave null or bind order ID
+                    po_number: generatedPoNumber,
+                    ingredient_name: item.ingredient_name,
+                    ingredient_id: item.ingredient_id,
+                    faltante_base: item.faltante_base,
+                    supplier_uom: item.supplier_uom,
+                    conversion_factor: item.conversion_factor,
+                    pedido_sugerido: item.pedido_sugerido,
+                    approved_formats_quantity: Math.ceil(item.pedido_sugerido), // Initial default match
+                    is_approved: true
+                };
+            });
+
+            await fetch(API_URL + "purchase_order_items", {
+                method: "POST",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify(itemPayloads)
             });
         }
 
-        // 4️⃣ UPDATE COUNTER IN SYSTEM SETTINGS SO THE SEQUENCE STEPS FORWARD FOR TOMORROW
+        // 5️⃣ STEP SEQUENCE COUNTER FORWARD
         await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -4115,7 +4147,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         });
 
         shipBtn.innerText = "✅ Dispatch Complete";
-        alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " despachado con éxito al Portal de Compras!");
+        alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " guardado como Borrador en la Nube con Éxito!");
 
     } catch (err) {
         console.error("Broadcast transmission halted error:", err);
@@ -4125,6 +4157,115 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         shipBtn.innerText = "❌ Reintentar";
     }
 }
+        // 🚀 VESSEL SHIP SYSTEM: Stateful Document Generation Engine [Part 2 of 3 - REPAIRED]
+        if (typeof TEMPORARY_STAGED_PURCHASE_LINES !== "undefined" && TEMPORARY_STAGED_PURCHASE_LINES.length > 0) {
+
+            console.log("🚩 1. Entering Stateful Document Generation Pipeline...");
+            var nextShipmentIdNumber = 1; 
+
+            try {
+                const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                if (seedRes.ok) {
+                    const seedData = await seedRes.json();
+                    if (seedData && seedData.length > 0) {
+                        var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
+                        nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
+                    }
+                }
+            } catch (innerCounterErr) {
+                console.error("🚩 Sequence calculation error, using fallback. Error:", innerCounterErr.message);
+                nextShipmentIdNumber = 1;
+            }
+
+            const informativeRefDate = document.getElementById("input-current-sales-date")?.value || "Sin Fecha";
+
+            // A. Wipe out legacy temporary calculations
+            try {
+                await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+            } catch(deleteErr) { console.error(deleteErr); }
+
+            // B. STRUCTURAL GROUPING BY SUPPLIER
+            var procurementSupplierGroups = {};
+            TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
+                const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
+                    ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
+                    : [];
+                
+                const activeFormatRule = authorizedFormats.find(f => 
+                    String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim() ||
+                    String(f.provider_id).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
+                );
+
+                var resolvedSupplier = activeFormatRule ? activeFormatRule.provider_name : (line.supplier_id || "Proveedor No Asignado");
+                if (!procurementSupplierGroups[resolvedSupplier]) {
+                    procurementSupplierGroups[resolvedSupplier] = [];
+                }
+
+                procurementSupplierGroups[resolvedSupplier].push({
+                    ingredient_id: line.ingredient_id,
+                    ingredient_name: line.ingredient_name,
+                    faltante_base: parseFloat(line.faltante || 0),
+                    supplier_uom: activeFormatRule ? activeFormatRule.purchase_uom : (line.uom || "Unidad"),
+                    conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
+                    pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1)
+                });
+            });
+
+            // C. BULK COMMIT ORDERS AND BOUND ITEMS TO PERSISTENT STORAGE
+            var suppliersList = Object.keys(procurementSupplierGroups);
+            for (var idx = 0; idx < suppliersList.length; idx++) {
+                var currentSupplier = suppliersList[idx];
+                var currentItems = procurementSupplierGroups[currentSupplier];
+                
+                var paddedIdxStr = String(idx + 1).padStart(3, '0');
+                var officialPoNum = "PO-SHIP-" + nextShipmentIdNumber + "-" + paddedIdxStr;
+
+                // Save Purchase Order Header
+                await fetch(API_URL + "purchase_orders", {
+                    method: "POST",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        po_number: officialPoNum,
+                        supplier_name: currentSupplier,
+                        status: 'draft',
+                        shipment_id: nextShipmentIdNumber,
+                        created_at: new Date().toISOString()
+                    })
+                });
+
+                // Save Purchase Order Items
+                var itemsPayload = currentItems.map(item => ({
+                    po_number: officialPoNum,
+                    ingredient_name: item.ingredient_name,
+                    ingredient_id: item.ingredient_id,
+                    faltante_base: item.faltante_base,
+                    supplier_uom: item.supplier_uom,
+                    conversion_factor: item.conversion_factor,
+                    pedido_sugerido: item.pedido_sugerido,
+                    approved_formats_quantity: Math.ceil(item.pedido_sugerido),
+                    is_approved: true
+                }));
+
+                await fetch(API_URL + "purchase_order_items", {
+                    method: "POST",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify(itemsPayload)
+                });
+            }
+
+            // D. UPDATE COUNTER IN SYSTEM SETTINGS
+            await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({ value_numeric: nextShipmentIdNumber })
+            });
+            console.log("🔒 Sequence counter stepped forward statefully to: " + nextShipmentIdNumber);
+        }
+
 
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
