@@ -4121,30 +4121,35 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 })
             });
 
-            if (!poResponse.ok) {
+                        if (!poResponse.ok) {
                 const poErrLog = await poResponse.text();
                 throw new Error("Error guardando orden principal: " + poErrLog);
             }
 
             const createdPoData = await poResponse.json();
-            // Securely extract the generated primary key UUID from the array or object response
+            
+            // 🔒 THE CRITICAL ARCHITECTURAL FIX: Extract index [0] legally from the incoming response array
             const targetPoRow = Array.isArray(createdPoData) ? createdPoData[0] : createdPoData;
+            
+            // This reads the 'id' column from purchase_orders
             const databaseGeneratedPoId = targetPoRow?.id || null;
 
             if (!databaseGeneratedPoId) {
+                console.error("⚠️ Payload response sample:", createdPoData);
                 throw new Error("No se pudo obtener el ID relacional de la orden generada.");
             }
 
             // B. Bulk insert the child line items matching your exact database keys
             var itemPayloads = items.map(function(item) {
                 return {
-                    po_id: databaseGeneratedPoId,
+                    po_id: databaseGeneratedPoId, // 🔒 Pushes the extracted 'id' cleanly into purchase_order_items.po_id
                     quantity_ordered: Math.ceil(item.pedido_sugerido),
                     ingredient_name: item.ingredient_name,
                     supplier_uom: item.supplier_uom,
-                    created_at: new Date().toISOString() // 🔒 Tracked securely in line items
+                    created_at: new Date().toISOString()
                 };
             });
+
 
             const itemsResponse = await fetch(API_URL + "purchase_order_items", {
                 method: "POST",
