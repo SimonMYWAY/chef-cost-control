@@ -119,9 +119,8 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM STATEFUL IMMUTABLE TABLES [REPAIRED URL SYNTAX]
-        // Swapped the order parameter styling syntax to prevent 400 Bad Request errors
-        const targetFetchUrl = API_URL + "purchase_orders?status=eq.draft&order=created_at.desc";
+        // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES
+        const targetFetchUrl = API_URL + "purchase_orders?status=eq.draft&order=po_number.desc";
         const ordersRes = await fetch(targetFetchUrl, {
             method: "GET", 
             headers: { 
@@ -140,15 +139,12 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
 
-        // 🔒 SECURED ARRAY BINDING: Safely access array index [0] to read parameters smoothly
+        // 🔒 Extract the actual timestamp of the newest order to establish title metadata references
         var absoluteNewestOrder = draftOrders[0];
-        var activeShipmentId = absoluteNewestOrder.shipment_id || "00";
         ACTIVE_SHIPMENT_TIMESTAMP = absoluteNewestOrder.created_at || new Date().toISOString();
 
-
-        // 4. 🔍 SEQUENCE-ISOLATED CHILD ITEMS DOCK
-        // Download all matching row lines bound to open orders for this shipment sequence
-        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_number,ingredient_id,ingredient_name,faltante_base,supplier_uom,conversion_factor,pedido_sugerido,approved_formats_quantity,is_approved";
+        // 4. 🔍 DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS
+        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered";
         const itemsRes = await fetch(itemsFetchUrl, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -156,25 +152,25 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!itemsRes.ok) throw new Error("Fallo al descargar los ítems de las órdenes.");
         const allOrderLines = await itemsRes.json();
 
-        // Filter and build the raw cloudRows structure expected by your Part 2 mapping logic
+        // Filter and build the structural array expected by your UI renderer functions
         var cloudRows = [];
         draftOrders.forEach(function(order) {
-            var matchedItems = allOrderLines.filter(item => String(item.po_number).trim() === String(order.po_number).trim());
+            var matchedItems = allOrderLines.filter(item => String(item.po_id).trim() === String(order.id).trim());
             
             matchedItems.forEach(function(item) {
                 cloudRows.push({
                     id: item.id,
-                    ingredient_id: item.ingredient_id,
+                    ingredient_id: item.id, // Fallback placeholder safely set
                     ingredient_name: item.ingredient_name,
-                    faltante_base: item.faltante_base,
+                    faltante_base: 0, 
                     supplier_uom: item.supplier_uom,
-                    conversion_factor: item.conversion_factor,
+                    conversion_factor: 1.0,
                     supplier_name: order.supplier_name,
-                    pedido_sugerido: item.pedido_sugerido,
-                    approved_formats_quantity: item.approved_formats_quantity,
-                    is_approved: item.is_approved,
-                    shipment_id: order.shipment_id,
-                    created_at: order.created_at,
+                    pedido_sugerido: item.quantity_ordered,
+                    approved_formats_quantity: item.quantity_ordered,
+                    is_approved: true,
+                    shipment_id: "00",
+                    created_at: order.created_at, // 🔒 Pulls real creation date here
                     po_number: order.po_number,
                     db_status: order.status
                 });
