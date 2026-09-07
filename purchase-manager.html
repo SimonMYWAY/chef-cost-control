@@ -86,33 +86,40 @@ async function pullActiveStagedCalculationFromCloud() {
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients base matrix units directly from your ingredients master table
-        const ingRes = await fetch(API_URL + "ingredients?select=id,uom", {
+        // 1. Fetch raw ingredients to build a unified Master Translation Dictionary [REPAIRED NAME-TO-UUID ENGINE]
+        const ingRes = await fetch(API_URL + "ingredients?select=id,ingredient_name,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
+        
         var recipeUnitsLookup = {};
+        var masterNameToUuidMap = {}; // 🔒 The translation link
+        
         if (ingRes.ok) {
             const ings = await ingRes.json();
             ings.forEach(function(i) {
                 if (i.id) {
-                    recipeUnitsLookup[String(i.id).toLowerCase().trim()] = i.uom ? String(i.uom).trim() : "Kg";
+                    var cleanId = String(i.id).toLowerCase().trim();
+                    var cleanName = i.ingredient_name ? String(i.ingredient_name).toLowerCase().trim() : "";
+                    
+                    recipeUnitsLookup[cleanId] = i.uom ? String(i.uom).trim() : "Kg";
+                    
+                    if (cleanName) {
+                        masterNameToUuidMap[cleanName] = cleanId; // Binds "mejillones" -> "1cfca384-..."
+                    }
                 }
             });
         }
 
-        // 2. Fetch alternative definitions linked to ingredients via supplier_formats [NAME-ALIGNED]
+        // 2. Fetch alternative definitions linked to ingredients via supplier_formats using pure database UUIDs
         var supplierFormatsLookup = {};
-        // 🔒 FIX: Added ingredient_name to the select parameters string to bypass old UUID tracking entirely
-        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,ingredient_name,provider_name,purchase_uom,units_per_purchase", {
+        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         if (formatsRes.ok) {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
             GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
-                // Use the text name as the main dictionary lookup key if available
-                var nameKeyValue = format.ingredient_name || format.ingredient_id;
-                if (nameKeyValue) {
-                    var formatKey = String(nameKeyValue).toLowerCase().trim();
+                if (format.ingredient_id) {
+                    var formatKey = String(format.ingredient_id).toLowerCase().trim();
                     supplierFormatsLookup[formatKey] = {
                         provider_name: format.provider_name ? String(format.provider_name).trim() : null,
                         purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
@@ -395,12 +402,15 @@ function renderInteractiveManagerSpreadsheetGrid() {
         group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
-            // 🔒 INSULATED LOOKUP ENGINE: Compares plain-text names to unlock the dropdown
+                       // 🔒 INSULATED RELATION TRANSLATION ENGINE: Converts row text name into format UUID for dropdown rendering
+            var currentItemNameLower = String(item.ingredient_name || "").toLowerCase().trim();
+            var resolvedIngredientUuid = masterNameToUuidMap[currentItemNameLower] || "";
+
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
-                var formatName = String(f.ingredient_name || "").toLowerCase().trim();
-                var currentItemName = String(item.ingredient_name || "").toLowerCase().trim();
-                return formatName === currentItemName && currentItemName !== "";
+                var formatUuidKey = String(f.ingredient_id || "").toLowerCase().trim();
+                return formatUuidKey === resolvedIngredientUuid && resolvedIngredientUuid !== "";
             });
+
 
             var supplierDropdownOptions = '';
             if (item.supplier_name && item.supplier_name !== "Proveedor No Asignado") {
