@@ -4061,29 +4061,22 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
         });
 
-                // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED FOR UNASSIGNED STRINGS]
+        // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
+            
+            // 🔒 INSULATED LOOKUP ENGINE: Locate any authorized format rules matching ONLY this item ID
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                 : [];
                 
-            const activeFormatRule = authorizedFormats.find(f => 
-                String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
-            );
+            // Pull the first format rule linked to this ingredient to extract the true assigned provider name
+            const activeFormatRule = authorizedFormats.length > 0 ? authorizedFormats[0] : null;
 
-            // 🔒 THE EXPLICIT SUPPLIER NAME GUARD:
-            // Checks multiple structural memory layers to completely block out raw "unassigned" text strings
+            // Resolve the final name cleanly by pulling the master rule directly
             var resolvedSupplier = "Proveedor No Asignado";
-            
-            if (activeFormatRule && activeFormatRule.provider_name) {
-                resolvedSupplier = activeFormatRule.provider_name;
-            } else if (line.supplier_name && String(line.supplier_name).trim() !== "unassigned") {
-                resolvedSupplier = String(line.supplier_name).trim();
-            } else if (line.supplier_id && String(line.supplier_id).trim() !== "unassigned") {
-                resolvedSupplier = String(line.supplier_id).trim();
-            } else if (line.provider_name && String(line.provider_name).trim() !== "unassigned") {
-                resolvedSupplier = String(line.provider_name).trim();
+            if (activeFormatRule && activeFormatRule.provider_name && String(activeFormatRule.provider_name).trim() !== "") {
+                resolvedSupplier = String(activeFormatRule.provider_name).trim();
             }
 
             if (!supplierGroups[resolvedSupplier]) {
