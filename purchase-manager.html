@@ -89,25 +89,27 @@ async function pullActiveStagedCalculationFromCloud() {
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1. Fetch raw ingredients to build a unified Master Translation Dictionary [REPAIRED NAME-TO-UUID ENGINE]
-        const ingRes = await fetch(API_URL + "ingredients?select=id,ingredient_name,uom", {
+                // 1. Fetch raw ingredients to build a unified Master Translation Dictionary [SCHEMA-ALIGNED]
+        // 🔒 FIXED: Changed select parameter to 'name_es' to match your database schema columns exactly
+        const ingRes = await fetch(API_URL + "ingredients?select=id,name_es,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         
         var recipeUnitsLookup = {};
-        masterNameToUuidMap = {}; // 🔒 The translation link
-        
         if (ingRes.ok) {
             const ings = await ingRes.json();
+            masterNameToUuidMap = {}; // Update global mapper object
+            
             ings.forEach(function(i) {
                 if (i.id) {
                     var cleanId = String(i.id).toLowerCase().trim();
-                    var cleanName = i.ingredient_name ? String(i.ingredient_name).toLowerCase().trim() : "";
+                    // 🔒 FIXED: Read property value out of 'name_es' to populate dictionary keys cleanly
+                    var cleanName = i.name_es ? String(i.name_es).toLowerCase().trim() : "";
                     
                     recipeUnitsLookup[cleanId] = i.uom ? String(i.uom).trim() : "Kg";
                     
                     if (cleanName) {
-                        masterNameToUuidMap[cleanName] = cleanId; // Binds "mejillones" -> "1cfca384-..."
+                        masterNameToUuidMap[cleanName] = cleanId;
                     }
                 }
             });
