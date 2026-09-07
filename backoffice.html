@@ -3249,13 +3249,17 @@ async function commitProcessedDateToSystemSettings(newDateString) {
         });
         if (patchRes.ok) {
             console.log("🔒 Supabase system milestones updated cleanly to: " + newDateString);
+            
+            // 1. Update the cache variable
             CACHED_LAST_PROCESSED_DATE_STR = newDateString;
+            
+            // 🚀 2. THE FIX: Visually redraw the fields on the screen immediately!
+            syncChronologicalDateDOMFields();
         }
     } catch (err) {
         console.error("Failed to commit milestone checkpoint sync:", err);
     }
 }
-
 
 // =======================================================================
 // 📋 REAL-TIME REVO CSV SALES PIPELINE & UNIFIED REPLENISHMENT ENGINE
