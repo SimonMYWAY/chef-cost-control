@@ -70,6 +70,9 @@
 
         var LOCAL_STAGED_ROWS = [];
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
+        // 🔒 GLOBAL SCOPING BIND: Ensures name translation is visible to render functions
+        var masterNameToUuidMap = {};
+
 
 // ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Sequence Isolation Engine [Part 1 of 2]
 async function pullActiveStagedCalculationFromCloud() {
@@ -92,7 +95,7 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         
         var recipeUnitsLookup = {};
-        var masterNameToUuidMap = {}; // 🔒 The translation link
+        masterNameToUuidMap = {}; // 🔒 The translation link
         
         if (ingRes.ok) {
             const ings = await ingRes.json();
