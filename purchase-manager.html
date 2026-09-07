@@ -313,13 +313,12 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
     // 🔒 LIFE-CYCLE RECOVERY CONSTANTS
     var activeShipmentSequenceId = "00";
-    var informativeDisplayDateSignature = "Fecha No Definida";
+    var informativeDisplayDateSignature = "Cargando..."; // Default layout placeholder while fetching
 
     // 🔒 ARRAY-INDEX SAFETY ENGINE: Read fields from the first object inside the downloaded collection array
     if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
         var baseRow = LOCAL_STAGED_ROWS[0]; 
         activeShipmentSequenceId = baseRow.shipment_id || "00";
-        informativeDisplayDateSignature = baseRow.sales_reference_date || "Fecha No Definida";
     }
 
     // Loop 1: Group items under their assigned suppliers
@@ -346,17 +345,43 @@ function renderInteractiveManagerSpreadsheetGrid() {
         return statusA - statusB; 
     });
 
-    // Update the visual top master interface banner safely
-    var banner = document.getElementById("terminal-cargo-meta-header");
-    if (banner) {
-        banner.innerHTML = `
-            <div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${activeShipmentSequenceId}</strong></div>
-            <div style="display:flex; align-items:center; gap:15px;">
-                <span>📅 REF CONSUMO VENTAS: ${informativeDisplayDateSignature}</span>
-                <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">⚠️ Reiniciar</button>
-            </div>
-        `;
-    }
+    // 🚀 NEW CLOUD FETCH ENGINE: Read the precise informative milestone date directly from Supabase
+    (async function renderHeaderWithLiveSystemDate() {
+        try {
+            const dateRes = await fetch(API_URL + "system_settings?key=eq.last_sales_date_processed", {
+                method: "GET",
+                headers: { "apikey": API_KEY }
+            });
+            
+            if (dateRes.ok) {
+                const dateData = await dateRes.json();
+                if (dateData && dateData.length > 0) {
+                    // Extract the text date value cleanly from index zero
+                    informativeDisplayDateSignature = dateData[0].value_text || "Fecha No Definida";
+                } else {
+                    informativeDisplayDateSignature = "Fecha No Definida";
+                }
+            } else {
+                informativeDisplayDateSignature = "Error cargando fecha";
+            }
+        } catch (err) {
+            console.error("Failed to read header date signature reference:", err);
+            informativeDisplayDateSignature = "Error de red";
+        }
+
+        // Update the visual top master interface banner safely with the true system date value
+        var banner = document.getElementById("terminal-cargo-meta-header");
+        if (banner) {
+            banner.innerHTML = `
+                <div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${activeShipmentSequenceId}</strong></div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <span>📅 REF CONSUMO VENTAS: <strong>${informativeDisplayDateSignature}</strong></span>
+                    <button onclick="forceTerminalEmergencyReset()" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">⚠️ Reiniciar</button>
+                </div>
+            `;
+        }
+    })();
+
     // Loop 2: Draw elements in their sorted physical arrangement order [Part 2 of 2]
     sortedSupplierKeys.forEach(function(supplierName) {
         var group = groupedData[supplierName];
