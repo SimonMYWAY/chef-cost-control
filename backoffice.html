@@ -4038,7 +4038,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
     shipBtn.innerText = "⏳ Generando Órdenes...";
 
     try {
-                // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE [VERIFIED ARRAY LOOKUP]
+                // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE [FIXED SEED ARRAY VALUE LOOKUP]
         const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "GET", headers: { "apikey": API_KEY }
         });
@@ -4047,7 +4047,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         if (seedRes.ok) {
             const seedData = await seedRes.json();
             if (seedData && seedData.length > 0) {
-                // 🔒 SECURED FIX: Added explicit index [0] checking to keep data parsing safe
+                // 🔒 SECURED ARRAY BINDING: Explicitly mapping to array element 0
                 var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
                 nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
             }
