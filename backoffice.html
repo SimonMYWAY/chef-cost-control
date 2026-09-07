@@ -4061,7 +4061,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
         });
 
-        // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER
+                // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED FOR UNASSIGNED STRINGS]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
@@ -4072,7 +4072,20 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 String(f.provider_name).toLowerCase().trim() === String(line.supplier_id || "").toLowerCase().trim()
             );
 
-            var resolvedSupplier = activeFormatRule ? activeFormatRule.provider_name : (line.supplier_id || "Proveedor No Asignado");
+            // 🔒 THE EXPLICIT SUPPLIER NAME GUARD:
+            // Checks multiple structural memory layers to completely block out raw "unassigned" text strings
+            var resolvedSupplier = "Proveedor No Asignado";
+            
+            if (activeFormatRule && activeFormatRule.provider_name) {
+                resolvedSupplier = activeFormatRule.provider_name;
+            } else if (line.supplier_name && String(line.supplier_name).trim() !== "unassigned") {
+                resolvedSupplier = String(line.supplier_name).trim();
+            } else if (line.supplier_id && String(line.supplier_id).trim() !== "unassigned") {
+                resolvedSupplier = String(line.supplier_id).trim();
+            } else if (line.provider_name && String(line.provider_name).trim() !== "unassigned") {
+                resolvedSupplier = String(line.provider_name).trim();
+            }
+
             if (!supplierGroups[resolvedSupplier]) {
                 supplierGroups[resolvedSupplier] = [];
             }
