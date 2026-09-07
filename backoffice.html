@@ -534,7 +534,7 @@
                     <div style="display:flex; gap:10px; align-items:center;">
                         <input type="file" id="sales-excel-upload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="processDailySalesFileIngestion(event)" />
                         <button onclick="triggerSalesFileSelectionGuard()" id="btn-upload-sales-action" class="btn btn-blue" style="background:#007afb; font-weight:bold; display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">📂 Cargar Ventas del Día</button>
-                        <button onclick="executeFinalInventoryProcurementCommit()" id="btn-commit-all-orders" class="btn btn-green" style="background:#10b981; font-weight:bold; display:none; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">💾 Confirmar y Exportar Excel</button>
+                       /* <button onclick="executeFinalInventoryProcurementCommit()" id="btn-commit-all-orders" class="btn btn-green" style="background:#10b981; font-weight:bold; display:none; align-items:center; gap:6px; padding:10px 16px; border:none; border-radius:6px; color:white; cursor:pointer;">💾 Confirmar y Exportar Excel</button> */
                         <!-- 🚀 NEW INTERACTIVE PROCUREMENT DISPATCH VECTOR -->
                         <button id="dispatch-to-manager-portal-btn" 
                                 onclick="broadcastActiveCalculationsToPurchaseApp()" 
@@ -3760,7 +3760,7 @@ function updateTemporaryProcurementLineFormatsQuantityById(ingId, val) {
         if (cellEquiv) cellEquiv.innerText = (matchedLine.approved_quantity).toFixed(1) + " " + matchedLine.uom;
     }
 }
-
+/*
 // 🌟 STEP 5: DECOUPLED INVENTORY ACTUALIZATION & ADDITIVE SAVING STREAM
 async function executeFinalInventoryProcurementCommit() {
     const feedback = document.getElementById("procurement-wizard-feedback");
@@ -4026,7 +4026,7 @@ async function executeFinalInventoryProcurementCommit() {
         if (feedback) feedback.innerHTML = "❌ Error al procesar en el servidor.";
     }
 }
-
+*/
 // ⚡ RESTORED CONVEYOR: Directly generates Stateful Draft POs and Items
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
