@@ -119,7 +119,8 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES
+        // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES [SEQUENCE-ISOLATED]
+        // Fetches open drafts and strictly isolates the active workspace to the newest shipment sequence sequence
         const targetFetchUrl = API_URL + "purchase_orders?status=eq.draft&order=po_number.desc";
         const ordersRes = await fetch(targetFetchUrl, {
             method: "GET", 
@@ -131,15 +132,46 @@ async function pullActiveStagedCalculationFromCloud() {
         });
         
         if (!ordersRes.ok) throw new Error("Fallo al descargar las órdenes de compra activas.");
-        const draftOrders = await ordersRes.json();
+        const allDraftOrders = await ordersRes.json();
 
-        if (!draftOrders || draftOrders.length === 0) {
+        if (!allDraftOrders || allDraftOrders.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
             ACTIVE_SHIPMENT_TIMESTAMP = null;
             return;
         }
 
-        // 🔒 Extract the actual timestamp of the newest order to establish title metadata references
+        // 🔒 THE SHIELD ENGINE: Analyze the batch to extract the highest/newest active shipment sequence
+        var highestShipmentId = 0;
+        allDraftOrders.forEach(function(o) {
+            // Extract the shipment ID digits out of your standard format text: "PO-SHIP-X-YYY"
+            if (o.po_number && o.po_number.includes("-SHIP-")) {
+                var parts = o.po_number.split("-SHIP-")[1];
+                if (parts) {
+                    var shipSequenceNum = parseInt(parts.split("-")[0], 10);
+                    if (!isNaN(shipSequenceNum) && shipSequenceNum > highestShipmentId) {
+                        highestShipmentId = shipSequenceNum;
+                    }
+                }
+            }
+        });
+
+        // 🔒 THE BARRICADE: Filter out and drop uncommitted legacy rows from previous days (Ship 6, Ship 7, etc.)
+        const draftOrders = allDraftOrders.filter(function(o) {
+            if (o.po_number && o.po_number.includes("-SHIP-")) {
+                var currentNum = parseInt(o.po_number.split("-SHIP-")[1].split("-")[0], 10);
+                return currentNum === highestShipmentId;
+            }
+            return false;
+        });
+
+        console.warn(`🛡️ Sequence Firewall: Identified Active Ship #${highestShipmentId}. Blocked ${allDraftOrders.length - draftOrders.length} stale uncommitted legacy orders from view.`);
+
+        if (draftOrders.length === 0) {
+            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡No hay órdenes pendientes para el cargamento activo actual!</div>';
+            return;
+        }
+
+        // Safely map active timestamp metadata for UI headings
         var absoluteNewestOrder = draftOrders[0];
         ACTIVE_SHIPMENT_TIMESTAMP = absoluteNewestOrder.created_at || new Date().toISOString();
 
