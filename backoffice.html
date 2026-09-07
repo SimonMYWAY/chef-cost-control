@@ -4172,13 +4172,16 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 throw new Error("Error guardando los ítems de la orden: " + itemErrLog);
             }
         }
-
         // 5️⃣ STEP SEQUENCE COUNTER FORWARD
         await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ value_numeric: nextShipmentIdNumber })
         });
+
+        // 🚀 THE FIX: Commit the processed date milestone to Supabase and advance the DOM inputs
+        console.log("📅 Automatically logging processed date checkpoint to cloud:", informativeRefDate);
+        await commitProcessedDateToSystemSettings(informativeRefDate);
 
         shipBtn.innerText = "✅ Dispatch Complete";
         alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " guardado como Borrador en la Nube con Éxito!");
@@ -4201,6 +4204,7 @@ document.addEventListener("click", function(event) {
         setTimeout(initializePurchasingSystemDependencies, 100);
     }
 });
+
 // 📡 SERVER HANDSHAKE: Verifies if an inventory session is open or closed right now
 async function checkLiveInventorySessionStatusFromServer() {
     const valveZone = document.getElementById("inventory-session-action-valve-zone");
