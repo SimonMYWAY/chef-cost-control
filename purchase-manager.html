@@ -100,16 +100,19 @@ async function pullActiveStagedCalculationFromCloud() {
             });
         }
 
-        // 2. Fetch alternative definitions linked to ingredients via supplier_formats
+        // 2. Fetch alternative definitions linked to ingredients via supplier_formats [NAME-ALIGNED]
         var supplierFormatsLookup = {};
-        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase", {
+        // 🔒 FIX: Added ingredient_name to the select parameters string to bypass old UUID tracking entirely
+        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,ingredient_name,provider_name,purchase_uom,units_per_purchase", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         if (formatsRes.ok) {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
             GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
-                if (format.ingredient_id) {
-                    var formatKey = String(format.ingredient_id).toLowerCase().trim();
+                // Use the text name as the main dictionary lookup key if available
+                var nameKeyValue = format.ingredient_name || format.ingredient_id;
+                if (nameKeyValue) {
+                    var formatKey = String(nameKeyValue).toLowerCase().trim();
                     supplierFormatsLookup[formatKey] = {
                         provider_name: format.provider_name ? String(format.provider_name).trim() : null,
                         purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
@@ -392,11 +395,11 @@ function renderInteractiveManagerSpreadsheetGrid() {
         group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
-            // 🔒 INSULATED NAME LOOKUP MATCHING RULE:
+            // 🔒 INSULATED LOOKUP ENGINE: Compares plain-text names to unlock the dropdown
             var validLinkedFormats = GLOBAL_SUPPLIER_FORMATS_LIST.filter(function(f) {
-               var formatNameKey = String(f.ingredient_name || f.ingredient_id || "").toLowerCase().trim();
-               var currentItemNameKey = String(item.ingredient_name || "").toLowerCase().trim();
-              return formatNameKey === currentItemNameKey && currentItemNameKey !== "";
+                var formatName = String(f.ingredient_name || "").toLowerCase().trim();
+                var currentItemName = String(item.ingredient_name || "").toLowerCase().trim();
+                return formatName === currentItemName && currentItemName !== "";
             });
 
             var supplierDropdownOptions = '';
