@@ -4191,7 +4191,11 @@ async function broadcastActiveCalculationsToPurchaseApp() {
 
             // B. STRUCTURAL GROUPING BY SUPPLIER
             var procurementSupplierGroups = {};
-            TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
+            
+            // 🔒 SYNTAX FIX: Changed from .forEach to a regular loop to support inner async mapping rules safely
+            for (var m = 0; m < TEMPORARY_STAGED_PURCHASE_LINES.length; m++) {
+                var line = TEMPORARY_STAGED_PURCHASE_LINES[m];
+                
                 const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined")
                     ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim())
                     : [];
@@ -4214,7 +4218,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                     conversion_factor: activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase) : 1.0,
                     pedido_sugerido: parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 1)
                 });
-            });
+            }
 
             // C. BULK COMMIT ORDERS AND BOUND ITEMS TO PERSISTENT STORAGE
             var suppliersList = Object.keys(procurementSupplierGroups);
