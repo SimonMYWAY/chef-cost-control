@@ -236,7 +236,57 @@ async function pullActiveStagedCalculationFromCloud() {
 
         });
 
-        
+                // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - REPAIRED]
+        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
+            var cleanIngId = String(row.ingredient_id).trim();
+            var lookupKey = cleanIngId.toLowerCase();
+            
+            // 🚀 THE FIX: Use the true database recipe unit string. Only use lookup/Kg as a final fallback!
+            var realRecipeUnit = row.recipe_uom || (typeof recipeUnitsLookup !== "undefined" && recipeUnitsLookup[lookupKey]) || "unidad";
+            
+            // Extract the supplier name directly out of our pre-joined cloud object row
+            var realSupplierName = row.supplier_name || "Proveedor No Asignado";
+
+            var realPurchaseUnit = row.supplier_uom || "Formato";
+            
+            // 🚀 THE FIX: Pull the direct database 'equivalencia' field as your operational multiplier
+            var finalMultiplier = parseFloat(row.equivalencia || row.conversion_factor || 1.0);
+            
+            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
+            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
+            var approvedCount = parseFloat(row.approved_formats_quantity || rawPedidoSugerido);
+
+            // Read the real state parameters directly out of the database row properties
+            var resolvedPoNumber = row.po_number || "PO-PENDING";
+            var resolvedDbStatus = row.db_status || "draft";
+
+            return {
+                id: row.id,
+                ingredient_id: cleanIngId,
+                ingredient_name: row.ingredient_name,
+                faltante_base: calculatedRecipeFaltante, 
+                
+                // 🔒 CRITICAL CORRECTIONS: Bound straight to your grid layout renderer metrics
+                recipe_uom: String(realRecipeUnit).trim(),               
+                equivalencia: finalMultiplier,
+                conversion_factor: finalMultiplier, 
+                
+                supplier_name: realSupplierName,          
+                supplier_uom: realPurchaseUnit,           
+                pedido_sugerido: rawPedidoSugerido,       
+                approved_formats_quantity: approvedCount, 
+                is_approved: row.is_approved !== undefined ? row.is_approved : true, 
+                
+                shipment_id: row.shipment_id || "00",
+                sales_reference_date: row.created_at || "Fecha No Definida",
+                
+                poNumber: resolvedPoNumber,
+                dbStatus: resolvedDbStatus,
+                
+                forced_po_number: resolvedPoNumber,
+                db_saved_status: resolvedDbStatus
+            };
+        });
 
         if (loadButton) {
             loadButton.disabled = true;
