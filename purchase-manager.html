@@ -456,9 +456,16 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 }
             });
 
-            var conversionFactor = parseFloat(item.conversion_factor || 1);
-            var approvedCount = parseFloat(item.approved_formats_quantity || 0);
-            var currentEquivalenceWeightValue = (approvedCount * conversionFactor).toFixed(2);
+            // 🚀 DATABASE ROOT CALCULATION: Read the values directly saved from the backoffice
+            var baseMissingQty = parseFloat(item.faltante_base || 0);
+            var approvedCount = parseFloat(item.approved_formats_quantity || item.quantity_ordered || 0);
+            var equivalenceMultiplier = parseFloat(item.equivalencia || 1.0);
+            
+            // Calculate the actual net recipe weight based on the conversion factor saved at the root
+            var currentEquivalenceWeightValue = (approvedCount * equivalenceMultiplier).toFixed(2);
+            
+            // Fallback display unit if recipe_uom wasn't passed down (or use item.supplier_uom + " Receta")
+            var displayRecipeUOM = item.recipe_uom || "U. Receta";
 
             // 🔒 CRITICAL DEEP INLINE FREEZE: Injects ${isDisabledAttr} inside select, input, and checkbox elements
             blockHtml += `
@@ -467,13 +474,14 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
-                            <div class="box-val">${parseFloat(item.faltante_base || 0).toFixed(2)} ${item.recipe_uom}</div>
+                            <!-- 🚀 FIXED: Displays the true raw missing metric directly from the database -->
+                            <div class="box-val">${baseMissingQty.toFixed(2)} ${displayRecipeUOM}</div>
                         </div>
                         <div class="data-box">
                             <div class="box-label">Formato Compra</div>
-                            <div class="box-val" style="color:var(--primary);">${item.supplier_uom}</div>
+                            <div class="box-val" style="color:var(--primary);">${item.supplier_uom || 'Unidad'}</div>
                         </div>
-                        <div class="data-box style="grid-column: span 2;">
+                        <div class="data-box" style="grid-column: span 2;">
                             <div class="box-label">Proveedor Asignado</div>
                             <div class="box-val" style="margin-top:3px;">
                                 <select class="select-dropdown" ${isDisabledAttr} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
@@ -483,18 +491,19 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         </div>
                         <div class="data-box">
                             <div class="box-label">Pedido Sugerido</div>
-                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)} ${item.supplier_uom}</div>
+                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || item.quantity_ordered || 0)} ${item.supplier_uom || 'Unidad'}</div>
                         </div>
                         <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
                             <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
                             <div class="box-val" style="margin-top:2px;">
-                                <input type="number" class="edit-input" value="${item.approved_formats_quantity}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                                <input type="number" class="edit-input" value="${item.approved_formats_quantity || item.quantity_ordered || 0}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
                             </div>
                         </div>
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
                             <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
                             <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">
-                                ${currentEquivalenceWeightValue} ${item.recipe_uom}
+                                <!-- 🚀 FIXED: Renders the precise net scale calculation -->
+                                ${currentEquivalenceWeightValue} ${displayRecipeUOM} (Factor: 1x ${equivalenceMultiplier})
                             </div>
                         </div>
                     </div>
@@ -506,6 +515,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     </div>
                 </div>
             `;
+
         });
 
         // Resolve actions panel button configurations and style layers inline

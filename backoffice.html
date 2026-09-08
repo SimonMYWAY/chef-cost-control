@@ -3828,14 +3828,19 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
 
+            // 🚀 INSIDE YOUR STEP 3 .forEach(function(line) { ... }) LOOP:
             supplierGroups[resolvedSupplier].push({
                 ingredient_id: String(line.ingredient_id).trim(),
                 ingredient_name: String(line.ingredient_name),
                 faltante_base: parseFloat(trueKitchenNetNeed),
                 pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(line.uom || "Unidad"),
-                conversion_factor: conversionFactor
+                conversion_factor: conversionFactor,
+                
+                // 🚀 THE FIX: Capture the true recipe unit from the ingredients master file line!
+                recipe_uom: String(line.uom || "Kg").trim() 
             });
+
         });
 
         // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES [SCHEMA & DATE ALIGNED]
@@ -3882,13 +3887,19 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 throw new Error("No se pudo obtener el ID relacional de la orden generada.");
             }
 
-            // B. Bulk insert the child line items matching your exact database keys
+                    // B. Bulk insert the child line items matching your exact database keys
             var itemPayloads = items.map(function(item) {
                 return {
-                    po_id: databaseGeneratedPoId, // 🔒 Pushes the extracted 'id' cleanly into purchase_order_items.po_id
+                    po_id: databaseGeneratedPoId,
                     quantity_ordered: Math.ceil(item.pedido_sugerido),
                     ingredient_name: item.ingredient_name,
-                    supplier_uom: item.supplier_uom,
+                    supplier_uom: item.supplier_uom, 
+                    
+                    // 🚀 DATABASE ROOT FIX: Writing correct structural metrics
+                    faltante_base: parseFloat(item.faltante_base || 0),
+                    equivalencia: parseFloat(item.conversion_factor || 1.0),
+                    recipe_uom: item.recipe_uom, // 🔒 SECURED: True recipe unit (e.g., "g", "Kg", "Unidad")
+                    
                     created_at: new Date().toISOString()
                 };
             });
