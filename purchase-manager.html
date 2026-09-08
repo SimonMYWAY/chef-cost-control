@@ -213,18 +213,16 @@ async function pullActiveStagedCalculationFromCloud() {
             matchedItems.forEach(function(item) {
                 cloudRows.push({
                     id: item.id,
-                    
-                    // 🔒 THE VALUE CONVERSION: Map ingredient_id to the text name string property
                     ingredient_id: String(item.ingredient_name).trim(), 
                     ingredient_name: item.ingredient_name,
                     
-                    // 🚀 THE FIX: Pull the saved database columns directly instead of hardcoding 0 or 1.0!
+                    // 🚀 THE CRITICAL FIX: Pull your exact database columns!
                     faltante_base: parseFloat(item.faltante_base || 0), 
-                    equivalencia: parseFloat(item.equivalencia || 1.0),
-                    recipe_uom: item.recipe_uom || "Kg",
+                    equivalencia: parseFloat(item.equivalencia || 1.0), // 🔒 Real conversion factor ratio
+                    recipe_uom: item.recipe_uom || "unidad",            // 🔒 Real database unit string
                     
                     supplier_uom: item.supplier_uom || "Formato",
-                    conversion_factor: parseFloat(item.equivalencia || 1.0), // Keeps downstream variables operational
+                    conversion_factor: parseFloat(item.equivalencia || 1.0), 
                     supplier_name: order.supplier_name || "Proveedor No Asignado", 
                     pedido_sugerido: item.quantity_ordered || 0,
                     approved_formats_quantity: item.quantity_ordered || 0,
@@ -235,6 +233,7 @@ async function pullActiveStagedCalculationFromCloud() {
                     db_status: order.status
                 });
             });
+
         });
 
         // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - REPAIRED]
@@ -460,25 +459,24 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 }
             });
 
-                    // 🚀 DATABASE ROOT CALCULATION: Read the values directly saved from the backoffice
+                    // 🚀 THE MATHEMATICAL SYNC
             var baseMissingQty = parseFloat(item.faltante_base || 0);
-            var approvedCount = parseFloat(item.approved_formats_quantity || item.quantity_ordered || 0);
+            var approvedCount = parseFloat(item.approved_formats_quantity || item.pedido_sugerido || 0);
             var equivalenceMultiplier = parseFloat(item.equivalencia || 1.0);
             
-            // Calculate the actual net recipe weight based on the conversion factor saved at the root
+            // 🔥 FIXED CRITICAL FORMULA: Approved Formats Quantity * Conversion Factor (Multiplier)
             var currentEquivalenceWeightValue = (approvedCount * equivalenceMultiplier).toFixed(2);
             
-            // 🔒 read the recipe_uom directly from the database row item payload
+            // 🔥 FIXED CRITICAL UNIT DISPLAY: Use the real database field string
             var displayRecipeUOM = item.recipe_uom || "unidad";
 
-            // 🔒 INLINE CONTENT INJECTION
             blockHtml += `
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
                     <div class="item-title">${item.ingredient_name}</div>
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
-                            <!-- 🚀 FIXED: Displays the true raw missing metric directly from the database -->
+                            <!-- 🚀 FIXED UNITS -->
                             <div class="box-val">${baseMissingQty.toFixed(2)} ${displayRecipeUOM}</div>
                         </div>
                         <div class="data-box">
@@ -495,19 +493,19 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         </div>
                         <div class="data-box">
                             <div class="box-label">Pedido Sugerido</div>
-                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || item.quantity_ordered || 0)} ${item.supplier_uom || 'Unidad'}</div>
+                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)} ${item.supplier_uom || 'Unidad'}</div>
                         </div>
                         <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
                             <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
                             <div class="box-val" style="margin-top:2px;">
-                                <input type="number" class="edit-input" value="${item.approved_formats_quantity || item.quantity_ordered || 0}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                                <input type="number" class="edit-input" value="${approvedCount}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
                             </div>
                         </div>
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
                             <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
                             <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">
-                                <!-- 🚀 FIXED: Renders the precise net scale calculation from root database metrics -->
-                                ${currentEquivalenceWeightValue} ${displayRecipeUOM} (Factor: 1x ${equivalenceMultiplier})
+                                <!-- 🚀 FIXED CALCULATIONS & UNITS -->
+                                <strong>${currentEquivalenceWeightValue} ${displayRecipeUOM}</strong> (Factor: 1x ${equivalenceMultiplier})
                             </div>
                         </div>
                     </div>
