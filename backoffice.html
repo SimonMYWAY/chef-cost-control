@@ -3801,7 +3801,9 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
-            
+        // 🔍 DIAGNOSTIC: Prints a single data line structure so we can see its exact columns!
+    console.log("📊 Raw Backoffice Line Object:", JSON.stringify(line));
+    console.log("📋 Master Ingredients Lookups Sample:", JSON.stringify(_masterIngredientsLookupArray[0]));        
             // 🔒 INSULATED LOOKUP ENGINE: Locate any authorized format rules matching ONLY this item ID
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
