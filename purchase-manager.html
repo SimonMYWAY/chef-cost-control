@@ -236,52 +236,7 @@ async function pullActiveStagedCalculationFromCloud() {
 
         });
 
-        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - REPAIRED]
-        LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
-            var cleanIngId = String(row.ingredient_id).trim();
-            var lookupKey = cleanIngId.toLowerCase();
-            
-            // Look up alternative definitions linked to ingredients via supplier_formats if available
-            var realRecipeUnit = (typeof recipeUnitsLookup !== "undefined" && recipeUnitsLookup[lookupKey]) || "Kg";
-            var matchedFormat = (typeof supplierFormatsLookup !== "undefined") ? supplierFormatsLookup[lookupKey] : null;
-            
-            // Extract the supplier name directly out of our pre-joined cloud object row
-            var realSupplierName = row.supplier_name || "Proveedor No Asignado";
-
-            var realPurchaseUnit = row.supplier_uom || "Formato";
-            var finalMultiplier = parseFloat(row.conversion_factor || 1);
-            var calculatedRecipeFaltante = parseFloat(row.faltante_base || 0); 
-            var rawPedidoSugerido = parseFloat(row.pedido_sugerido || 0);         
-            var approvedCount = parseFloat(row.approved_formats_quantity || rawPedidoSugerido);
-
-            // Read the real state parameters directly out of the database row properties
-            var resolvedPoNumber = row.po_number || "PO-PENDING";
-            var resolvedDbStatus = row.db_status || "draft";
-
-            return {
-                id: row.id,
-                ingredient_id: cleanIngId,
-                ingredient_name: row.ingredient_name,
-                faltante_base: calculatedRecipeFaltante, 
-                recipe_uom: realRecipeUnit,               
-                supplier_name: realSupplierName,          
-                supplier_uom: realPurchaseUnit,           
-                conversion_factor: finalMultiplier, 
-                pedido_sugerido: rawPedidoSugerido,       
-                approved_formats_quantity: approvedCount, 
-                is_approved: row.is_approved !== undefined ? row.is_approved : true, 
-                
-                shipment_id: row.shipment_id || "00",
-                sales_reference_date: row.created_at || "Fecha No Definida",
-                
-                // 🔒 CRITICAL SYNCHRONIZATION BINDING: Feeds straight to grid render loops
-                poNumber: resolvedPoNumber,
-                dbStatus: resolvedDbStatus,
-                
-                forced_po_number: resolvedPoNumber,
-                db_saved_status: resolvedDbStatus
-            };
-        });
+        
 
         if (loadButton) {
             loadButton.disabled = true;
@@ -562,8 +517,12 @@ function updateLiveRowApprovedQuantity(idx, val) {
     // Recalculate display equivalence values directly
     var displayNode = document.getElementById("equivalence-display-node-" + idx);
     if (displayNode) {
-        var conv = parseFloat(LOCAL_STAGED_ROWS[idx].conversion_factor || 1);
-        displayNode.innerHTML = (num * conv).toFixed(2) + " " + LOCAL_STAGED_ROWS[idx].recipe_uom;
+        // 🚀 THE FIX: Use your root database parameter values to secure calculation parity!
+        var conv = parseFloat(LOCAL_STAGED_ROWS[idx].equivalencia || LOCAL_STAGED_ROWS[idx].conversion_factor || 1);
+        var unitStr = String(LOCAL_STAGED_ROWS[idx].recipe_uom || "unidad").trim();
+        
+        // Render the exact calculation formula on live input key changes
+        displayNode.innerHTML = `<strong>${(num * conv).toFixed(2)} ${unitStr}</strong> (Factor: 1x ${conv})`;
     }
     refreshAllActiveReceiptDisplays();
 }
