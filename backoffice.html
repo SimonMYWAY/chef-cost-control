@@ -3827,23 +3827,28 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
-        // 🚀 INSIDE STEP 3: Fallback check for the recipe unit key name
-var resolvedRecipeUOM = line.uom || line.recipe_uom || line.unit || line.unidad || "Kg";
 
-supplierGroups[resolvedSupplier].push({
-    ingredient_id: String(line.ingredient_id).trim(),
-    ingredient_name: String(line.ingredient_name),
-    faltante_base: parseFloat(trueKitchenNetNeed),
-    pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
-    supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(resolvedRecipeUOM),
-    conversion_factor: conversionFactor,
-    
-    // 🔒 DEFENSIVE MAP: Captures whatever unit naming format exists
-    recipe_uom: String(resolvedRecipeUOM).trim()
-});
+            // 🚀 THE MASTER LOOKUP ENGAGED:
+            // Find the true, matching core ingredient profile from your master database array
+            var cleanTargetId = String(line.ingredient_id || "").toLowerCase().trim();
+            var ingredientMasterMatch = _masterIngredientsLookupArray.find(function(ing) {
+                return String(ing.id || "").toLowerCase().trim() === cleanTargetId;
+            });
 
-            
+            // Extract the fundamental recipe uom from the profile. Fall back to "Kg" only if totally missing.
+            var fundamentalRecipeUOM = ingredientMasterMatch && ingredientMasterMatch.uom ? ingredientMasterMatch.uom : "Kg";
 
+            supplierGroups[resolvedSupplier].push({
+                ingredient_id: String(line.ingredient_id).trim(),
+                ingredient_name: String(line.ingredient_name),
+                faltante_base: parseFloat(trueKitchenNetNeed),
+                pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
+                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(fundamentalRecipeUOM),
+                conversion_factor: conversionFactor,
+                
+                // 🔒 Secured and passed cleanly to the Step 4-B table writer payload
+                recipe_uom: String(fundamentalRecipeUOM).trim()
+            });
         });
 
         // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES [SCHEMA & DATE ALIGNED]
