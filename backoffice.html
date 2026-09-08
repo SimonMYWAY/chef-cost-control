@@ -3801,9 +3801,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
-        // 🔍 DIAGNOSTIC: Prints a single data line structure so we can see its exact columns!
-    console.log("📊 Raw Backoffice Line Object:", JSON.stringify(line));
-    console.log("📋 Master Ingredients Lookups Sample:", JSON.stringify(_masterIngredientsLookupArray[0]));        
+            
             // 🔒 INSULATED LOOKUP ENGINE: Locate any authorized format rules matching ONLY this item ID
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
@@ -3830,15 +3828,8 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
 
-            // 🚀 THE MASTER LOOKUP ENGAGED:
-            // Find the true, matching core ingredient profile from your master database array
-            var cleanTargetId = String(line.ingredient_id || "").toLowerCase().trim();
-            var ingredientMasterMatch = _masterIngredientsLookupArray.find(function(ing) {
-                return String(ing.id || "").toLowerCase().trim() === cleanTargetId;
-            });
-
-            // Extract the fundamental recipe uom from the profile. Fall back to "Kg" only if totally missing.
-            var fundamentalRecipeUOM = ingredientMasterMatch && ingredientMasterMatch.uom ? ingredientMasterMatch.uom : "Kg";
+            // 🚀 THE FIX: Read the recipe uom directly out of the verified 'line.uom' payload property!
+            var fundamentalRecipeUOM = line.uom || "unidad";
 
             supplierGroups[resolvedSupplier].push({
                 ingredient_id: String(line.ingredient_id).trim(),
@@ -3848,10 +3839,11 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(fundamentalRecipeUOM),
                 conversion_factor: conversionFactor,
                 
-                // 🔒 Secured and passed cleanly to the Step 4-B table writer payload
+                // 🔒 Passed accurately directly into Step 4-B data writer payload
                 recipe_uom: String(fundamentalRecipeUOM).trim()
             });
         });
+
 
         // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES [SCHEMA & DATE ALIGNED]
         var uniqueSuppliers = Object.keys(supplierGroups);
