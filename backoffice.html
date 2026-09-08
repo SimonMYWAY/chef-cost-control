@@ -3827,19 +3827,22 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
                 trueWholesaleSuggestedCount = trueKitchenNetNeed;
             }
+        // 🚀 INSIDE STEP 3: Fallback check for the recipe unit key name
+var resolvedRecipeUOM = line.uom || line.recipe_uom || line.unit || line.unidad || "Kg";
 
-            // 🚀 INSIDE YOUR STEP 3 .forEach(function(line) { ... }) LOOP:
-            supplierGroups[resolvedSupplier].push({
-                ingredient_id: String(line.ingredient_id).trim(),
-                ingredient_name: String(line.ingredient_name),
-                faltante_base: parseFloat(trueKitchenNetNeed),
-                pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
-                supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(line.uom || "Unidad"),
-                conversion_factor: conversionFactor,
-                
-                // 🚀 THE FIX: Capture the true recipe unit from the ingredients master file line!
-                recipe_uom: String(line.uom || "Kg").trim() 
-            });
+supplierGroups[resolvedSupplier].push({
+    ingredient_id: String(line.ingredient_id).trim(),
+    ingredient_name: String(line.ingredient_name),
+    faltante_base: parseFloat(trueKitchenNetNeed),
+    pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
+    supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(resolvedRecipeUOM),
+    conversion_factor: conversionFactor,
+    
+    // 🔒 DEFENSIVE MAP: Captures whatever unit naming format exists
+    recipe_uom: String(resolvedRecipeUOM).trim()
+});
+
+            
 
         });
 

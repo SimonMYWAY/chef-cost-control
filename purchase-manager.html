@@ -190,8 +190,9 @@ async function pullActiveStagedCalculationFromCloud() {
         var absoluteNewestOrder = draftOrders[0];
         ACTIVE_SHIPMENT_TIMESTAMP = absoluteNewestOrder.created_at || new Date().toISOString();
 
-        // 4. 🔍 DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS [NAME-BASED LINKING]
-        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered";
+                // 4. 🔍 DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS [NAME-BASED LINKING]
+        // 🚀 THE FIX: Added faltante_base, equivalencia, and recipe_uom to the query string selection layer
+        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,faltante_base,equivalencia,recipe_uom";
         const itemsRes = await fetch(itemsFetchUrl, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -214,13 +215,16 @@ async function pullActiveStagedCalculationFromCloud() {
                     id: item.id,
                     
                     // 🔒 THE VALUE CONVERSION: Map ingredient_id to the text name string property
-                    // This allows your downstream format filters to join alternatives using string names perfectly!
                     ingredient_id: String(item.ingredient_name).trim(), 
                     ingredient_name: item.ingredient_name,
                     
-                    faltante_base: 0, 
+                    // 🚀 THE FIX: Pull the saved database columns directly instead of hardcoding 0 or 1.0!
+                    faltante_base: parseFloat(item.faltante_base || 0), 
+                    equivalencia: parseFloat(item.equivalencia || 1.0),
+                    recipe_uom: item.recipe_uom || "Kg",
+                    
                     supplier_uom: item.supplier_uom || "Formato",
-                    conversion_factor: 1.0,
+                    conversion_factor: parseFloat(item.equivalencia || 1.0), // Keeps downstream variables operational
                     supplier_name: order.supplier_name || "Proveedor No Asignado", 
                     pedido_sugerido: item.quantity_ordered || 0,
                     approved_formats_quantity: item.quantity_ordered || 0,
@@ -515,7 +519,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     </div>
                 </div>
             `;
-
         });
 
         // Resolve actions panel button configurations and style layers inline
