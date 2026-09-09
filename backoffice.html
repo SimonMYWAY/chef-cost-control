@@ -2035,9 +2035,12 @@ function loadAndRenderSupplierFormats() {
             return;
         }
 
-        // 🔀 Priority Sorting: Alphabetical by Ingredient first, secondary sort by Supplier Name
+        // 🔀 Priority Sorting: Alphabetical by translated Ingredient name first, secondary sort by Supplier Name
         formats.sort(function(a, b) {
-            var ingredientCompare = (a.ingredient_id || "").localeCompare(b.ingredient_id || "");
+            var nameA = _ingredientsCache[a.ingredient_id] || "Ingrediente #" + a.ingredient_id;
+            var nameB = _ingredientsCache[b.ingredient_id] || "Ingrediente #" + b.ingredient_id;
+            
+            var ingredientCompare = nameA.localeCompare(nameB);
             if (ingredientCompare !== 0) return ingredientCompare;
             return (a.provider_name || "").localeCompare(b.provider_name || "");
         });
@@ -2046,12 +2049,15 @@ function loadAndRenderSupplierFormats() {
         formats.forEach(function(item) {
             var isFrozen = item.is_frozen || false;
             
+            // 🌟 CRITICAL FIX: Translate the raw ingredient_id UUID into the cache name string
+            var friendlyIngredientName = _ingredientsCache[item.ingredient_id] || "Ingrediente #" + item.ingredient_id;
+            
             html += `
             <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
                 <div class="row-info-group" style="flex: 1;">
                     <!-- Header Labels -->
                     <div class="meta-label" style="margin-bottom: 6px;">
-                        <strong style="color: #1e293b; font-size: 0.95rem;">${item.ingredient_id}</strong> 
+                        <strong style="color: #1e293b; font-size: 0.95rem;">${friendlyIngredientName}</strong> 
                         <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
                     </div>
                     
