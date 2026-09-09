@@ -2018,164 +2018,186 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
                     });
                 });
         }
-// 🔄 Fetch and Render the conversion rows cleanly
-async function loadAndRenderSupplierFormats() {
-    // Fetch directly from the Supabase table
-    const { data: formats, error } = await supabase
-        .from('supplier_formats')
-        .select('*');
-
-    if (error) {
-        console.error("Error connecting to supplier_formats:", error);
-        return;
-    }
-
-    const listContainer = document.getElementById("conversion-side-list");
+// 🔄 Fetch and Render the conversion rows cleanly via native HTTP client
+function loadAndRenderSupplierFormats() {
+    var listContainer = document.getElementById("conversion-side-list");
     if (!listContainer) return;
 
-    if (!formats || formats.length === 0) {
-        listContainer.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No se encontraron tasas de conversión registradas.</div>';
-        return;
-    }
-
-    // 🔀 Priority Sorting: Alphabetical by Ingredient first, secondary sort by Supplier Name
-    formats.sort((a, b) => {
-        const ingredientCompare = (a.ingredient_id || "").localeCompare(b.ingredient_id || "");
-        if (ingredientCompare !== 0) return ingredientCompare;
-        return (a.provider_name || "").localeCompare(b.provider_name || "");
-    });
-
-    let html = "";
-    formats.forEach(item => {
-        const isFrozen = item.is_frozen || false;
+    fetch(API_URL + "supplier_formats", { 
+        headers: { "apikey": API_KEY } 
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(formats) {
+        listContainer.innerHTML = "";
         
-        html += `
-        <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
-            <div class="row-info-group" style="flex: 1;">
-                <!-- Header Labels -->
-                <div class="meta-label" style="margin-bottom: 6px;">
-                    <strong style="color: #1e293b; font-size: 0.95rem;">${item.ingredient_id}</strong> 
-                    <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
+        if (!formats || formats.length === 0 || formats.message) {
+            listContainer.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No se encontraron tasas de conversión registradas.</div>';
+            return;
+        }
+
+        // 🔀 Priority Sorting: Alphabetical by Ingredient first, secondary sort by Supplier Name
+        formats.sort(function(a, b) {
+            var ingredientCompare = (a.ingredient_id || "").localeCompare(b.ingredient_id || "");
+            if (ingredientCompare !== 0) return ingredientCompare;
+            return (a.provider_name || "").localeCompare(b.provider_name || "");
+        });
+
+        var html = "";
+        formats.forEach(function(item) {
+            var isFrozen = item.is_frozen || false;
+            
+            html += `
+            <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
+                <div class="row-info-group" style="flex: 1;">
+                    <!-- Header Labels -->
+                    <div class="meta-label" style="margin-bottom: 6px;">
+                        <strong style="color: #1e293b; font-size: 0.95rem;">${item.ingredient_id}</strong> 
+                        <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
+                    </div>
+                    
+                    <!-- Dynamic Input Workspace -->
+                    <div class="edit-inputs-wrapper" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <input type="text" 
+                               class="input-uom-desc" 
+                               value="${item.purchase_uom || ''}" 
+                               onchange="updateSupabaseField('${item.id}', 'purchase_uom', this.value)"
+                               style="width: 140px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
+                               ${isFrozen ? 'disabled' : ''}>
+                        
+                        <span class="math-operator" style="font-weight: bold; color: #94a3b8;">=</span>
+                        
+                        <input type="number" 
+                               class="input-rate-val" 
+                               step="0.0001"
+                               value="${item.units_per_purchase || 0}" 
+                               onchange="updateSupabaseField('${item.id}', 'units_per_purchase', parseFloat(this.value))"
+                               style="width: 85px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
+                               ${isFrozen ? 'disabled' : ''}>
+                        
+                        <span class="recipe-suffix" style="color: #64748b; font-size: 0.85rem;">uds de receta</span>
+                    </div>
                 </div>
                 
-                <!-- Dynamic Input Workspace -->
-                <div class="edit-inputs-wrapper" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <input type="text" 
-                           class="input-uom-desc" 
-                           value="${item.purchase_uom || ''}" 
-                           onchange="updateSupabaseField('${item.id}', 'purchase_uom', this.value)"
-                           style="width: 140px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
-                           ${isFrozen ? 'disabled' : ''}>
-                    
-                    <span class="math-operator" style="font-weight: bold; color: #94a3b8;">=</span>
-                    
-                    <input type="number" 
-                           class="input-rate-val" 
-                           step="0.0001"
-                           value="${item.units_per_purchase || 0}" 
-                           onchange="updateSupabaseField('${item.id}', 'units_per_purchase', parseFloat(this.value))"
-                           style="width: 85px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
-                           ${isFrozen ? 'disabled' : ''}>
-                    
-                    <span class="recipe-suffix" style="color: #64748b; font-size: 0.85rem;">uds de receta</span>
+                <div class="row-action-controls" style="margin-left: 15px;">
+                    ${isFrozen ? `
+                        <span class="badge-frozen" style="color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">❄️ Congelado</span>
+                    ` : `
+                        <button class="btn-delete-format" 
+                                onclick="attemptDeleteFormat('${item.id}', '${item.ingredient_id}', '${item.provider_name}')"
+                                style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: opacity 0.2s;"
+                                onmouseover="this.style.opacity='0.8'"
+                                onmouseout="this.style.opacity='1'">
+                            🗑️ Eliminar
+                        </button>
+                    `}
                 </div>
-            </div>
-            
-            <div class="row-action-controls" style="margin-left: 15px;">
-                ${isFrozen ? `
-                    <span class="badge-frozen" style="color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">❄️ Congelado</span>
-                ` : `
-                    <button class="btn-delete-format" 
-                            onclick="attemptDeleteFormat('${item.id}', '${item.ingredient_id}', '${item.provider_name}')"
-                            style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: opacity 0.2s;"
-                            onmouseover="this.style.opacity='0.8'"
-                            onmouseout="this.style.opacity='1'">
-                        🗑️ Eliminar
-                    </button>
-                `}
-            </div>
-        </div>`;
-    });
+            </div>`;
+        });
 
-    listContainer.innerHTML = html;
+        listContainer.innerHTML = html;
+    })
+    .catch(function(err) { 
+        console.error("Mappings load error:", err); 
+        listContainer.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Error al cargar datos.</div>';
+    });
 }
 
-// 💾 Inline Auto-Save Handler for modified text inputs and numbers
-async function updateSupabaseField(id, column, value) {
-    const updateData = {};
+// 💾 Inline Auto-Save Handler matching your REST API criteria
+function updateSupabaseField(id, column, value) {
+    var updateData = {};
     updateData[column] = value;
 
-    const { error } = await supabase
-        .from('supplier_formats')
-        .update(updateData)
-        .eq('id', id);
-
-    if (error) {
+    fetch(API_URL + "supplier_formats?id=eq." + id, {
+        method: "PATCH",
+        headers: {
+            "apikey": API_KEY,
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        },
+        body: JSON.stringify(updateData)
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error("API Patch Error");
+        console.log(`Auto-saved conversion field successfully: ${column} -> ${value}`);
+    })
+    .catch(function(err) {
         alert("⚠️ No se pudo guardar el cambio de forma automática.");
-        console.error("Update error:", error);
-    } else {
-        console.log(`Field updated successfully: [ID: ${id}] -> ${column} = ${value}`);
-    }
+        console.error("Update error:", err);
+    });
 }
 
 // 🛡️ Deletion Blocker & Manual Freeze Prompt 
-async function attemptDeleteFormat(id, ingredientId, providerName) {
-    // 🔍 Step 1: Scan historical items table to look for references
-    const { data: historicalMatches, error } = await supabase
-        .from('purchase_order_items')
-        .select('id')
-        .eq('ingredient_id', ingredientId)
-        .eq('provider_name', providerName)
-        .limit(1);
+function attemptDeleteFormat(id, ingredientId, providerName) {
+    console.log(`Checking order dependency status for: ${ingredientId} / ${providerName}`);
 
-    if (error) {
-        console.error("Dependency layout breakdown check fail:", error);
-        alert("⚠️ No se pudo verificar el historial operativo.");
-        return;
-    }
-
-    // 🚫 Condition A: It has history. Intercept delete, trigger manual freeze sequence.
-    if (historicalMatches && historicalMatches.length > 0) {
-        const confirmFreeze = confirm(
-            `❌ Imposible eliminar: "${ingredientId} (${providerName})" ya ha sido utilizado en órdenes de compra históricas.\n\n` +
-            `¿Desea CONGELAR esta línea? Esto bloqueará su edición para proteger los registros históricos y evitará que se vuelva a usar.`
-        );
+    // Scan order history using REST query string mechanics
+    fetch(API_URL + "purchase_order_items?ingredient_id=eq." + encodeURIComponent(ingredientId) + "&provider_name=eq." + encodeURIComponent(providerName) + "&select=id", {
+        headers: { "apikey": API_KEY }
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(historicalMatches) {
         
-        if (confirmFreeze) {
-            await freezeFormatLine(id);
+        // 🚫 Condition A: Historical entries exist. Trigger manual freeze sequence.
+        if (historicalMatches && historicalMatches.length > 0) {
+            var confirmFreeze = confirm(
+                `❌ Imposible eliminar: "${ingredientId} (${providerName})" ya ha sido utilizado en órdenes de compra históricas.\n\n` +
+                `¿Desea CONGELAR esta línea? Esto bloqueará su edición para proteger los registros históricos y evitará que se vuelva a usar.`
+            );
+            
+            if (confirmFreeze) {
+                freezeFormatLine(id);
+            }
+            return;
         }
-        return;
-    }
 
-    // 🗑️ Condition B: Unused entry. Safe to erase completely.
-    if (confirm(`¿Está seguro que desea eliminar permanentemente la conversión de "${ingredientId} (${providerName})"?`)) {
-        const { error: deleteErr } = await supabase
-            .from('supplier_formats')
-            .delete()
-            .eq('id', id);
-
-        if (!deleteErr) {
-            await loadAndRenderSupplierFormats(); // Live layout rebuild
-        } else {
-            alert("Error de red intentando eliminar el formato.");
-            console.error(deleteErr);
+        // 🗑️ Condition B: Unused entry. Safe to erase completely.
+        if (confirm(`¿Está seguro que desea eliminar permanentemente la conversión de "${ingredientId} (${providerName})"?`)) {
+            fetch(API_URL + "supplier_formats?id=eq." + id, {
+                method: "DELETE",
+                headers: {
+                    "apikey": API_KEY,
+                    "Authorization": "Bearer " + API_KEY
+                }
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error("Delete Request Denied");
+                alert("🗑️ Conversión eliminada con éxito.");
+                loadAndRenderSupplierFormats();
+            })
+            .catch(function(err) {
+                alert("Error de red intentando eliminar el formato.");
+                console.error(err);
+            });
         }
-    }
+    })
+    .catch(function(err) {
+        console.error("Dependency check breakdown:", err);
+        alert("⚠️ No se pudo verificar el historial operativo.");
+    });
 }
 
-// ❄️ Switch frozen flag status to database row
-async function freezeFormatLine(id) {
-    const { error } = await supabase
-        .from('supplier_formats')
-        .update({ is_frozen: true })
-        .eq('id', id);
-
-    if (!error) {
-        await loadAndRenderSupplierFormats();
-    } else {
+// ❄️ Switch frozen flag status to database row using PATCH
+function freezeFormatLine(id) {
+    fetch(API_URL + "supplier_formats?id=eq." + id, {
+        method: "PATCH",
+        headers: {
+            "apikey": API_KEY,
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ is_frozen: true })
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error("Patch Freeze Error");
+        alert("❄️ Conversión congelada de forma segura.");
+        loadAndRenderSupplierFormats();
+    })
+    .catch(function(err) {
         alert("Error de red intentando congelar el formato.");
-        console.error(error);
-    }
+        console.error(err);
+    });
 }
 
                 // 🔗 LOGISTICS MODULE: Submit conversion data using your exact database columns and UUID string types
