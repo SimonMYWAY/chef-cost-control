@@ -359,22 +359,16 @@
                     </form>
                 </div>
 
-                <!-- COLUMN B: THE CONVERSIONS LIST GRID -->
-                <div class="card" style="flex: 2; min-width: 450px;">
-                    <h3>Tasas de Equivalencia Activas</h3>
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico.</p>
-                    <table class="ingredient-table" style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:#f8fafc; border-bottom:2px solid var(--border-color);">
-                                <th style="text-align:left; padding:10px;">Ingrediente</th>
-                                <th style="text-align:left; padding:10px;">Enlace Logístico</th>
-                            </tr>
-                        </thead>
-                        <tbody id="mappings-table-rows">
-                            <tr><td colspan="2" style="color:var(--text-muted); font-style:italic; text-align:center; padding:10px;">Cargando tasas de conversión...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
+<div class="card" style="flex: 2; min-width: 450px;">
+    <h3>Tasas de Equivalencia Activas</h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
+    
+    <!-- 🔄 The dynamic rows will build right inside this container -->
+    <div id="conversion-side-list" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="color:var(--text-muted); font-style:italic; text-align:center; padding:20px;">Cargando tasas de conversión...</div>
+    </div>
+</div>
 
             </div>
         </div>
@@ -2024,34 +2018,165 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
                     });
                 });
         }
-                // 🔗 LOGISTICS MODULE: Download and render existing purchasing conversions
-        function renderMappingsTable() {
-            var rowsTarget = document.getElementById("mappings-table-rows");
-            if (!rowsTarget) return;
+// 🔄 Fetch and Render the conversion rows cleanly
+async function loadAndRenderSupplierFormats() {
+    // Fetch directly from the Supabase table
+    const { data: formats, error } = await supabase
+        .from('supplier_formats')
+        .select('*');
 
-            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    rowsTarget.innerHTML = "";
-                    if (!data || data.length === 0 || data.message) {
-                        rowsTarget.innerHTML = "<tr><td colspan='2' style='text-align:center; padding:10px; color:var(--text-muted);'>No hay formatos registrados.</td></tr>";
-                        return;
-                    }
+    if (error) {
+        console.error("Error connecting to supplier_formats:", error);
+        return;
+    }
 
-                    data.forEach(function(item) {
-                        var tr = document.createElement("tr");
-                        var ingName = _ingredientsCache[item.ingredient_id] || "Ingrediente #" + item.ingredient_id;
-                        var provider = item.provider_name || "N/A";
-                        var packing = item.purchase_uom || "Empaque";
-                        var ratio = parseFloat(item.units_per_purchase) || 0;
+    const listContainer = document.getElementById("conversion-side-list");
+    if (!listContainer) return;
 
-                        tr.innerHTML = "<td style='padding:10px; font-weight:600;'>" + ingName + " <span style='color:var(--text-muted); font-size:0.8rem; font-weight:400;'>(" + provider + ")</span></td>" +
-                                       "<td style='padding:10px; color:var(--text-muted);'>1 " + packing + " = " + ratio.toLocaleString() + " uds de receta</td>";
-                        rowsTarget.appendChild(tr);
-                    });
-                })
-                .catch(function(err) { console.error("Mappings load error:", err); });
+    if (!formats || formats.length === 0) {
+        listContainer.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No se encontraron tasas de conversión registradas.</div>';
+        return;
+    }
+
+    // 🔀 Priority Sorting: Alphabetical by Ingredient first, secondary sort by Supplier Name
+    formats.sort((a, b) => {
+        const ingredientCompare = (a.ingredient_id || "").localeCompare(b.ingredient_id || "");
+        if (ingredientCompare !== 0) return ingredientCompare;
+        return (a.provider_name || "").localeCompare(b.provider_name || "");
+    });
+
+    let html = "";
+    formats.forEach(item => {
+        const isFrozen = item.is_frozen || false;
+        
+        html += `
+        <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
+            <div class="row-info-group" style="flex: 1;">
+                <!-- Header Labels -->
+                <div class="meta-label" style="margin-bottom: 6px;">
+                    <strong style="color: #1e293b; font-size: 0.95rem;">${item.ingredient_id}</strong> 
+                    <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
+                </div>
+                
+                <!-- Dynamic Input Workspace -->
+                <div class="edit-inputs-wrapper" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="text" 
+                           class="input-uom-desc" 
+                           value="${item.purchase_uom || ''}" 
+                           onchange="updateSupabaseField('${item.id}', 'purchase_uom', this.value)"
+                           style="width: 140px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
+                           ${isFrozen ? 'disabled' : ''}>
+                    
+                    <span class="math-operator" style="font-weight: bold; color: #94a3b8;">=</span>
+                    
+                    <input type="number" 
+                           class="input-rate-val" 
+                           step="0.0001"
+                           value="${item.units_per_purchase || 0}" 
+                           onchange="updateSupabaseField('${item.id}', 'units_per_purchase', parseFloat(this.value))"
+                           style="width: 85px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;"
+                           ${isFrozen ? 'disabled' : ''}>
+                    
+                    <span class="recipe-suffix" style="color: #64748b; font-size: 0.85rem;">uds de receta</span>
+                </div>
+            </div>
+            
+            <div class="row-action-controls" style="margin-left: 15px;">
+                ${isFrozen ? `
+                    <span class="badge-frozen" style="color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">❄️ Congelado</span>
+                ` : `
+                    <button class="btn-delete-format" 
+                            onclick="attemptDeleteFormat('${item.id}', '${item.ingredient_id}', '${item.provider_name}')"
+                            style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: opacity 0.2s;"
+                            onmouseover="this.style.opacity='0.8'"
+                            onmouseout="this.style.opacity='1'">
+                        🗑️ Eliminar
+                    </button>
+                `}
+            </div>
+        </div>`;
+    });
+
+    listContainer.innerHTML = html;
+}
+
+// 💾 Inline Auto-Save Handler for modified text inputs and numbers
+async function updateSupabaseField(id, column, value) {
+    const updateData = {};
+    updateData[column] = value;
+
+    const { error } = await supabase
+        .from('supplier_formats')
+        .update(updateData)
+        .eq('id', id);
+
+    if (error) {
+        alert("⚠️ No se pudo guardar el cambio de forma automática.");
+        console.error("Update error:", error);
+    } else {
+        console.log(`Field updated successfully: [ID: ${id}] -> ${column} = ${value}`);
+    }
+}
+
+// 🛡️ Deletion Blocker & Manual Freeze Prompt 
+async function attemptDeleteFormat(id, ingredientId, providerName) {
+    // 🔍 Step 1: Scan historical items table to look for references
+    const { data: historicalMatches, error } = await supabase
+        .from('purchase_order_items')
+        .select('id')
+        .eq('ingredient_id', ingredientId)
+        .eq('provider_name', providerName)
+        .limit(1);
+
+    if (error) {
+        console.error("Dependency layout breakdown check fail:", error);
+        alert("⚠️ No se pudo verificar el historial operativo.");
+        return;
+    }
+
+    // 🚫 Condition A: It has history. Intercept delete, trigger manual freeze sequence.
+    if (historicalMatches && historicalMatches.length > 0) {
+        const confirmFreeze = confirm(
+            `❌ Imposible eliminar: "${ingredientId} (${providerName})" ya ha sido utilizado en órdenes de compra históricas.\n\n` +
+            `¿Desea CONGELAR esta línea? Esto bloqueará su edición para proteger los registros históricos y evitará que se vuelva a usar.`
+        );
+        
+        if (confirmFreeze) {
+            await freezeFormatLine(id);
         }
+        return;
+    }
+
+    // 🗑️ Condition B: Unused entry. Safe to erase completely.
+    if (confirm(`¿Está seguro que desea eliminar permanentemente la conversión de "${ingredientId} (${providerName})"?`)) {
+        const { error: deleteErr } = await supabase
+            .from('supplier_formats')
+            .delete()
+            .eq('id', id);
+
+        if (!deleteErr) {
+            await loadAndRenderSupplierFormats(); // Live layout rebuild
+        } else {
+            alert("Error de red intentando eliminar el formato.");
+            console.error(deleteErr);
+        }
+    }
+}
+
+// ❄️ Switch frozen flag status to database row
+async function freezeFormatLine(id) {
+    const { error } = await supabase
+        .from('supplier_formats')
+        .update({ is_frozen: true })
+        .eq('id', id);
+
+    if (!error) {
+        await loadAndRenderSupplierFormats();
+    } else {
+        alert("Error de red intentando congelar el formato.");
+        console.error(error);
+    }
+}
 
                 // 🔗 LOGISTICS MODULE: Submit conversion data using your exact database columns and UUID string types
         function createNewMapping(event) {
@@ -2069,34 +2194,37 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
 
             var providerTextName = provSelect.options[provSelect.selectedIndex].text.trim();
 
-            // FIXED TYPE SCHEMA MATCH: ingredient_id is passed as a string string to satisfy UUID format parameters
-            var payload = {
-                ingredient_id: ingSelect.value, // Replaced parseInt() with raw option hash string value!
-                provider_name: providerTextName,
-                purchase_uom: purchaseUom,
-                units_per_purchase: factorInput
-            };
+        // FIXED TYPE SCHEMA MATCH: ingredient_id is passed as a string string to satisfy UUID format parameters
+var payload = {
+    ingredient_id: ingSelect.value, 
+    provider_name: providerTextName,
+    purchase_uom: purchaseUom,
+    units_per_purchase: factorInput,
+    is_frozen: false // ✨ ADD THIS LINE: Automatically initializes new inputs as unfrozen
+};
 
-            fetch(API_URL + "supplier_formats", {
-                method: "POST",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY, 
-                    "Content-Type": "application/json", 
-                    "Prefer": "return=minimal" 
-                },
-                body: JSON.stringify(payload)
-            }).then(function(res) {
-                if (res.ok) {
-                    alert("✅ ¡Tasa de conversión registrada con éxito!");
-                    document.getElementById("mapping-form").reset();
-                    renderMappingsTable();
-                } else {
-                    alert("❌ Error 400: Conflicto en el tipo de dato del Servidor.");
-                }
-            }).catch(function(err) {
-                console.error("Critical submission fail:", err);
-            });
+fetch(API_URL + "supplier_formats", {
+    method: "POST",
+    headers: { 
+        "apikey": API_KEY, 
+        "Authorization": "Bearer " + API_KEY, 
+        "Content-Type": "application/json", 
+        "Prefer": "return=minimal" 
+    },
+    body: JSON.stringify(payload)
+}).then(function(res) {
+    if (res.ok) {
+        alert("✅ ¡Tasa de conversión registrada con éxito!");
+        document.getElementById("mapping-form").reset();
+        
+        // 🔄 CHANGE THIS LINE: Call the new renderer instead of the deleted one
+        loadAndRenderSupplierFormats(); 
+    } else {
+        alert("❌ Error 400: Conflicto en el tipo de dato del Servidor.");
+    }
+}).catch(function(err) {
+    console.error("Critical submission fail:", err);
+});
         }
 
 
@@ -2239,7 +2367,7 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
                 renderProvidersTable();
                 populateIngredientDropdown();
                 populateSupplierDropdown(); 
-                renderMappingsTable();
+                loadAndRenderSupplierFormats(); 
                 
                 // 🧪 SIMULATOR INITIALIZER: Populates your sandbox vendor item selector dropdown right at startup
                 if (typeof populateSimulatorIngredientDropdownMenu === "function") {
@@ -3843,7 +3971,6 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 recipe_uom: String(fundamentalRecipeUOM).trim()
             });
         });
-
 
         // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES [SCHEMA & DATE ALIGNED]
         var uniqueSuppliers = Object.keys(supplierGroups);
