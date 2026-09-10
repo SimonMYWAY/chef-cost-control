@@ -360,6 +360,28 @@
                 </div>
 
                 <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
+
+                <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
+<div class="card" style="flex: 2; min-width: 450px;">
+    <h3>Tasas de Equivalencia Activas</h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
+    
+    <!-- 🔍 NEW: REAL-TIME CONVERSION SEARCH BAR -->
+    <div style="margin-bottom: 12px;">
+        <input type="text" 
+               id="search-conversion-field" 
+               oninput="executeConversionFilterSearch()" 
+               placeholder="🔍 Buscar por ingrediente o proveedor..." 
+               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; background: #ffffff;" />
+    </div>
+    
+    <!-- The dynamic rows build right inside this container -->
+    <div id="conversion-side-list" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="color:var(--text-muted); font-style:italic; text-align:center; padding:20px;">Cargando tasas de conversión...</div>
+    </div>
+</div>
+
+
 <div class="card" style="flex: 2; min-width: 450px;">
     <h3>Tasas de Equivalencia Activas</h3>
     <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
@@ -2020,6 +2042,11 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
         }
 // 🔄 Fetch and Render the conversion rows cleanly via native HTTP client
 function loadAndRenderSupplierFormats() {
+    // Add this line at the top of loadAndRenderSupplierFormats() to reset search on redraw:
+if (document.getElementById("search-conversion-field")) {
+    document.getElementById("search-conversion-field").value = "";
+}
+
     var listContainer = document.getElementById("conversion-side-list");
     if (!listContainer) return;
 
@@ -2105,6 +2132,32 @@ function loadAndRenderSupplierFormats() {
     .catch(function(err) { 
         console.error("Mappings load error:", err); 
         listContainer.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Error al cargar datos.</div>';
+    });
+}
+// 🔍 Live Real-time Client Filter for Supplier Formats Workspace
+function executeConversionFilterSearch() {
+    // 1. Grab what the admin typed and make it lowercase to prevent case issues
+    var searchInput = document.getElementById("search-conversion-field");
+    if (!searchInput) return;
+    var query = searchInput.value.toLowerCase().trim();
+
+    // 2. Select every rendered conversion block row card on screen
+    var rows = document.querySelectorAll("#conversion-side-list .conversion-row");
+    
+    rows.forEach(function(row) {
+        // 3. Extract text strings from the labels inside the card
+        var strongLabel = row.querySelector(".meta-label strong");
+        var supplierTag = row.querySelector(".supplier-tag");
+        
+        var ingredientText = strongLabel ? strongLabel.innerText.toLowerCase() : "";
+        var supplierText = supplierTag ? supplierTag.innerText.toLowerCase() : "";
+
+        // 4. If query matches either the ingredient or the supplier name, display it!
+        if (ingredientText.includes(query) || supplierText.includes(query)) {
+            row.style.display = "flex"; // Restore original card layout alignment
+        } else {
+            row.style.display = "none";  // Hide matching entry out of view safely
+        }
     });
 }
 
