@@ -1242,20 +1242,40 @@ function viewIngredientImpactRecipies(ingredientId, ingredientName) {
     if (!modal || !modalContent || !modalTitle) return;
 
     modalTitle.innerText = "Impacto en Cadena: " + ingredientName;
-    modalContent.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:15px; font-style:italic;">Buscando enlaces de producción...</div>';
     modal.style.display = "flex";
 
-    // ✨ STRING ROBUST OVERRIDE: Normalize both IDs to lowercase strings to eliminate data type mismatches
+    // 🧪 THE DIAGNOSTIC BRIDGE: Inspect the raw structure of your rows
+    console.log("=== INGREDIENT IMPACT DIAGNOSTIC LOG ===");
+    console.log("Looking for Ingredient ID:", ingredientId);
+    console.log("Total entries cached in array:", _masterIngredientsLookupArray.length);
+    
+    if (_masterIngredientsLookupArray.length > 0) {
+        console.log("Sample row from your database table:", _masterIngredientsLookupArray[0]);
+    } else {
+        console.warn("The cached mapping array is completely empty! Check if the API request failed.");
+    }
+
+    // Try tracking entries using both English and Spanish fallback naming variations
     var links = _masterIngredientsLookupArray.filter(function(row) {
-        return String(row.ingredient_id).toLowerCase().trim() === String(ingredientId).toLowerCase().trim();
+        var databaseIngredientKey = row.ingredient_id || row.id_ingrediente || row.ingredient;
+        return String(databaseIngredientKey).toLowerCase().trim() === String(ingredientId).toLowerCase().trim();
     });
 
+    console.log("Total matched link entries found:", links.length);
+    console.log("========================================");
+
     if (links.length === 0) {
-        modalContent.innerHTML = '<div style="color:#f97316; text-align:center; padding:15px; font-weight:600;">⚠️ Este ingrediente no está registrado en ninguna receta activa en este momento.</div>';
+        modalContent.innerHTML = `
+            <div style="color:#f97316; text-align:center; padding:15px; font-weight:600;">
+                ⚠️ No se encontraron enlaces para este ingrediente.<br>
+                <span style="font-size:0.8rem; font-weight:400; color:#64748b;">Abre la consola del navegador (F12) para ver el análisis de columnas.</span>
+            </div>`;
         return;
     }
 
     // Fetch the recipe catalog master rows to translate recipe_id fields into friendly names
+    modalContent.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:15px; font-style:italic;">Cargando nombres de recetas...</div>';
+    
     fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } })
     .then(function(res) { return res.json(); })
     .then(function(recipesList) {
@@ -1263,16 +1283,17 @@ function viewIngredientImpactRecipies(ingredientId, ingredientName) {
 
         var recipesIndexedMap = {};
         recipesList.forEach(function(rec) {
-            // Support both standard name fields or alternative translation columns
             recipesIndexedMap[String(rec.id)] = rec.name || rec.name_es || "Receta Desconocida";
         });
 
         var html = '<ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">';
         
         links.forEach(function(linkItem) {
-            var lookupId = String(linkItem.recipe_id);
+            // Fallback for recipe primary identifiers as well
+            var targetRecipeId = linkItem.recipe_id || linkItem.id_receta || linkItem.recipe;
+            var lookupId = String(targetRecipeId);
             var dishName = recipesIndexedMap[lookupId] || "ID de Receta: " + lookupId;
-            var exactQuantity = parseFloat(linkItem.quantity) || 0;
+            var exactQuantity = parseFloat(linkItem.quantity || linkItem.cantidad) || 0;
 
             html += `
             <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
