@@ -1168,6 +1168,7 @@ function renderMasterIngredientsTable() {
         fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
     ])
     .then(function(results) {
+        // ✨ FIXED SLOT INDEX EXTRACTION MATRIX:
         var data = results[0];
         var formulaLinks = results[1];
         
@@ -1190,8 +1191,6 @@ function renderMasterIngredientsTable() {
             
             var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
             
-            // "pending" represents an active ingredient on your kitchen floor
-            // "approved" represents a disabled/archived item from calculations
             var currentRawStatus = String(item.status || "pending").toLowerCase().trim();
             var isEnabled = currentRawStatus === "pending";
             
@@ -1203,7 +1202,6 @@ function renderMasterIngredientsTable() {
                 tr.setAttribute("style", "opacity: 0.55; background-color: #f8fafc;");
             }
             
-            // 🌟 UPGRADED: Added a dedicated cell for the Value Chain Impact button right before actions
             tr.innerHTML = 
                 "<td style='padding:6px; text-align:left;'> " +
                     "<div style='display:flex; flex-direction:column; gap:4px;'> " +
@@ -1234,6 +1232,7 @@ function renderMasterIngredientsTable() {
         });
     }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
 }
+
 // 🔍 Cross-examine memory cache map array to list parent recipes using this specific asset
 function viewIngredientImpactRecipies(ingredientId, ingredientName) {
     var modal = document.getElementById("ingredient-impact-modal");
@@ -1242,40 +1241,38 @@ function viewIngredientImpactRecipies(ingredientId, ingredientName) {
     
     if (!modal || !modalContent || !modalTitle) return;
 
-    // Open up modal skeleton and display a loading tracker
     modalTitle.innerText = "Impacto en Cadena: " + ingredientName;
     modalContent.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:15px; font-style:italic;">Buscando enlaces de producción...</div>';
     modal.style.display = "flex";
 
-    // 1. Filter local cached variable to extract rows matching our unique ingredient asset token
+    // ✨ STRING ROBUST OVERRIDE: Normalize both IDs to lowercase strings to eliminate data type mismatches
     var links = _masterIngredientsLookupArray.filter(function(row) {
-        return String(row.ingredient_id) === String(ingredientId);
+        return String(row.ingredient_id).toLowerCase().trim() === String(ingredientId).toLowerCase().trim();
     });
 
     if (links.length === 0) {
-        modalContent.innerHTML = '<div style="color:#ef4444; text-align:center; padding:15px; font-weight:600;">⚠️ Este ingrediente no se está utilizando en ninguna receta activa actualmente.</div>';
+        modalContent.innerHTML = '<div style="color:#f97316; text-align:center; padding:15px; font-weight:600;">⚠️ Este ingrediente no está registrado en ninguna receta activa en este momento.</div>';
         return;
     }
 
-    // 2. Fetch the recipe catalog master rows to translate recipe_id fields into friendly names
+    // Fetch the recipe catalog master rows to translate recipe_id fields into friendly names
     fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } })
     .then(function(res) { return res.json(); })
     .then(function(recipesList) {
         if (!recipesList || recipesList.message) throw new Error("Fallo de red catalog");
 
-        // Map list into an easily accessible fast key dictionary object tracker
         var recipesIndexedMap = {};
         recipesList.forEach(function(rec) {
-            recipesIndexedMap[rec.id] = rec.name || rec.name_es || "Receta Desconocida";
+            // Support both standard name fields or alternative translation columns
+            recipesIndexedMap[String(rec.id)] = rec.name || rec.name_es || "Receta Desconocida";
         });
 
-        // 3. Assemble clean structural view loop cards
         var html = '<ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">';
         
         links.forEach(function(linkItem) {
-            var dishName = recipesIndexedMap[linkItem.recipe_id] || "ID de Receta: " + linkItem.recipe_id;
+            var lookupId = String(linkItem.recipe_id);
+            var dishName = recipesIndexedMap[lookupId] || "ID de Receta: " + lookupId;
             var exactQuantity = parseFloat(linkItem.quantity) || 0;
-            var scrapPct = parseFloat(linkItem.scrap_percentage) || 0;
 
             html += `
             <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
@@ -1284,7 +1281,6 @@ function viewIngredientImpactRecipies(ingredientId, ingredientName) {
                 </div>
                 <div style="text-align:right; font-size:0.8rem; color:#64748b; font-family:monospace; font-weight:600;">
                     <div>Cant: ${exactQuantity}</div>
-                    ${scrapPct > 0 ? `<div style="color:#f97316;">Merma: ${scrapPct}%</div>` : ''}
                 </div>
             </li>`;
         });
