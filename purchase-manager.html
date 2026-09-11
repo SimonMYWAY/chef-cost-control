@@ -602,10 +602,59 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     if (matchedFormat) {
         LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom ? String(matchedFormat.purchase_uom).trim() : "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
+        // Also ensure 'equivalencia' field updates to prevent formula display conflicts
+        LOCAL_STAGED_ROWS[idx].equivalencia = parseFloat(matchedFormat.units_per_purchase || 1);
     } else {
         // Fallback safety defaults if no alternate link format was found
         LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
+        LOCAL_STAGED_ROWS[idx].equivalencia = 1;
+    }
+
+    // 🌟 NEW INTERNAL MATRIX LAYER: Dynamically compute and assign unique PO sequence allocations
+    var activeShipmentSequenceId = "00";
+    if (LOCAL_STAGED_ROWS.length > 0) {
+        // Extract shipment ID from first available row in memory cache
+        activeShipmentSequenceId = LOCAL_STAGED_ROWS[0].shipment_id || "00";
+    }
+
+    var existingPoNumberForNewSupplier = null;
+    var highestPoIndexUsed = 0;
+
+    // Scan memory matrix rows to analyze active allocations and calculate maximum trailing index digits
+    LOCAL_STAGED_ROWS.forEach(function(row) {
+        var poStr = row.forced_po_number || row.poNumber || "";
+        
+        // A. Check if the newly selected supplier already has an active card group open on canvas
+        if (row.supplier_name === newSupplierName && poStr !== "") {
+            existingPoNumberForNewSupplier = poStr;
+        }
+
+        // B. Parse out the numeric suffix out of "PO-SHIP-XX-YYY" to track maximum values
+        if (poStr.includes("-SHIP-")) {
+            var parts = poStr.split("-");
+            var lastPart = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(lastPart) && lastPart > highestPoIndexUsed) {
+                highestPoIndexUsed = lastPart;
+            }
+        }
+    });
+
+    // Enforce distinct or matching sequence tracking attributes
+    if (existingPoNumberForNewSupplier) {
+        // Target card already exists: adopt its unique PO string matrix properties
+        LOCAL_STAGED_ROWS[idx].poNumber = existingPoNumberForNewSupplier;
+        LOCAL_STAGED_ROWS[idx].forced_po_number = existingPoNumberForNewSupplier;
+    } else {
+        // Brand new card target layout: generate a completely clean advanced index suffix string
+        var nextPoSuffixDigit = String(highestPoIndexUsed + 1).padStart(3, '0');
+        var brandNewUniquePoNumber = "PO-SHIP-" + activeShipmentSequenceId + "-" + nextPoSuffixDigit;
+        
+        LOCAL_STAGED_ROWS[idx].poNumber = brandNewUniquePoNumber;
+        LOCAL_STAGED_ROWS[idx].forced_po_number = brandNewUniquePoNumber;
+        LOCAL_STAGED_ROWS[idx].db_saved_status = null; // Reset draft state for new target workspace block
+        
+        console.log("✨ Allocated new distinct PO sequence mapping for runtime block: " + brandNewUniquePoNumber);
     }
 
     // 3. Re-render the grid layout so the item visually snaps into its new supplier group block
@@ -616,6 +665,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         refreshAllActiveReceiptDisplays();
     }
 }
+
         function refreshAllActiveReceiptDisplays() {
             var blockDivs = document.getElementsByClassName("supplier-block");
             for (var i = 0; i < blockDivs.length; i++) {
