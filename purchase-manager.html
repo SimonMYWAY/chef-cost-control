@@ -589,11 +589,15 @@ function updateLiveRowApprovalToggleState(idx, state) {
 function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     if (!newSupplierName || newSupplierName === "Proveedor No Asignado") return;
 
+    var currentItem = LOCAL_STAGED_ROWS[idx];
+    
+    // Extract the original PO string before changing the supplier name
+    var originalPoString = currentItem.forced_po_number || currentItem.poNumber || "";
+
     // 1. Update the local row's provider name in memory
     LOCAL_STAGED_ROWS[idx].supplier_name = newSupplierName;
 
     // 2. Scan global formats to auto-update the purchase UOM and conversion factor for this specific vendor
-    var currentItem = LOCAL_STAGED_ROWS[idx];
     var matchedFormat = GLOBAL_SUPPLIER_FORMATS_LIST.find(function(f) {
         return String(f.ingredient_id).trim() === String(currentItem.ingredient_id).trim() && 
                String(f.provider_name).trim() === String(newSupplierName).trim();
@@ -602,27 +606,36 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     if (matchedFormat) {
         LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom ? String(matchedFormat.purchase_uom).trim() : "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
-        // Also ensure 'equivalencia' field updates to prevent formula display conflicts
         LOCAL_STAGED_ROWS[idx].equivalencia = parseFloat(matchedFormat.units_per_purchase || 1);
     } else {
-        // Fallback safety defaults if no alternate link format was found
         LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
         LOCAL_STAGED_ROWS[idx].equivalencia = 1;
     }
 
-    // 🌟 NEW INTERNAL MATRIX LAYER: Dynamically compute and assign unique PO sequence allocations
-    var activeShipmentSequenceId = "00";
-    if (LOCAL_STAGED_ROWS.length > 0) {
-        // Extract shipment ID from first available row in memory cache
-        activeShipmentSequenceId = LOCAL_STAGED_ROWS[0].shipment_id || "00";
+    // 🌟 REPAIRED ARCHITECTURAL LAYER: Dynamic PO Prefix Isolation Engine
+    var poPrefixBase = "PO-SHIP-0";
+    if (originalPoString && originalPoString.includes("-SHIP-")) {
+        // Example: If original is "PO-SHIP-1-002", this splits it and extracts "PO-SHIP-1"
+        var poParts = originalPoString.split("-");
+        if (poParts.length >= 3) {
+            poPrefixBase = poParts[0] + "-" + poParts[1] + "-" + poParts[2]; // e.g. "PO-SHIP-1" or "PO-SHIP-12"
+        }
+    } else if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+        // Fallback to array element 0 mapping accessor if original PO string was missing
+        var baseRow = LOCAL_STAGED_ROWS[0];
+        var shipId = baseRow.shipment_id || "0";
+        poPrefixBase = "PO-SHIP-" + shipId;
     }
 
     var existingPoNumberForNewSupplier = null;
     var highestPoIndexUsed = 0;
 
     // Scan memory matrix rows to analyze active allocations and calculate maximum trailing index digits
-    LOCAL_STAGED_ROWS.forEach(function(row) {
+    LOCAL_STAGED_ROWS.forEach(function(row, loopIdx) {
+        // 🔒 SAFETY: Skip the current item we are modifying so we don't look at its old PO record assignment
+        if (loopIdx === idx) return;
+
         var poStr = row.forced_po_number || row.poNumber || "";
         
         // A. Check if the newly selected supplier already has an active card group open on canvas
@@ -630,7 +643,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
             existingPoNumberForNewSupplier = poStr;
         }
 
-        // B. Parse out the numeric suffix out of "PO-SHIP-XX-YYY" to track maximum values
+        // B. Parse out the numeric suffix out of your exact tracking string structure
         if (poStr.includes("-SHIP-")) {
             var parts = poStr.split("-");
             var lastPart = parseInt(parts[parts.length - 1], 10);
@@ -648,13 +661,13 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     } else {
         // Brand new card target layout: generate a completely clean advanced index suffix string
         var nextPoSuffixDigit = String(highestPoIndexUsed + 1).padStart(3, '0');
-        var brandNewUniquePoNumber = "PO-SHIP-" + activeShipmentSequenceId + "-" + nextPoSuffixDigit;
+        var brandNewUniquePoNumber = poPrefixBase + "-" + nextPoSuffixDigit;
         
         LOCAL_STAGED_ROWS[idx].poNumber = brandNewUniquePoNumber;
         LOCAL_STAGED_ROWS[idx].forced_po_number = brandNewUniquePoNumber;
         LOCAL_STAGED_ROWS[idx].db_saved_status = null; // Reset draft state for new target workspace block
         
-        console.log("✨ Allocated new distinct PO sequence mapping for runtime block: " + brandNewUniquePoNumber);
+        console.log("✨ Successfully allocated distinct PO sequence: " + brandNewUniquePoNumber);
     }
 
     // 3. Re-render the grid layout so the item visually snaps into its new supplier group block
