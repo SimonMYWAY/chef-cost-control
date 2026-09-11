@@ -4156,8 +4156,15 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                 : [];
                 
-            // Pull the first format rule linked to this ingredient to extract the true assigned provider name
-            const activeFormatRule = authorizedFormats.length > 0 ? authorizedFormats[0] : null;
+            // 🌟 UPGRADED ENGINE: Look for the 'is_preferred' flag first among the authorized candidate formats
+            var activeFormatRule = authorizedFormats.find(function(m) { 
+                return m.is_preferred === true || m.is_preferred === 'true'; 
+            });
+
+            // Fallback: If no line was explicitly marked preferred, default back to the first available match
+            if (!activeFormatRule && authorizedFormats.length > 0) {
+                activeFormatRule = authorizedFormats[0];
+            }
 
             // Resolve the final name cleanly by pulling the master rule directly
             var resolvedSupplier = "Proveedor No Asignado";
