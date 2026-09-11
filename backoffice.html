@@ -383,40 +383,27 @@
                 </div>
 
                 <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
+                <div class="card" style="flex: 2; min-width: 450px;">
+                    <h3>Tasas de Equivalencia Activas</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
+                    
+                    <!-- 🔍 NEW: REAL-TIME CONVERSION SEARCH BAR -->
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" 
+                               id="search-conversion-field" 
+                               oninput="executeConversionFilterSearch()" 
+                               placeholder="🔍 Buscar por ingrediente o proveedor..." 
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; background: #ffffff;" />
+                    </div>
+                    
+                    <!-- The dynamic rows build right inside this container -->
+                    <div id="conversion-side-list" style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="color:var(--text-muted); font-style:italic; text-align:center; padding:20px;">Cargando tasas de conversión...</div>
+                    </div>
+                </div>
 
-                <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
-<div class="card" style="flex: 2; min-width: 450px;">
-    <h3>Tasas de Equivalencia Activas</h3>
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
-    
-    <!-- 🔍 NEW: REAL-TIME CONVERSION SEARCH BAR -->
-    <div style="margin-bottom: 12px;">
-        <input type="text" 
-               id="search-conversion-field" 
-               oninput="executeConversionFilterSearch()" 
-               placeholder="🔍 Buscar por ingrediente o proveedor..." 
-               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; background: #ffffff;" />
-    </div>
-    
-    <!-- The dynamic rows build right inside this container -->
-    <div id="conversion-side-list" style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="color:var(--text-muted); font-style:italic; text-align:center; padding:20px;">Cargando tasas de conversión...</div>
-    </div>
-</div>
-
-
-<div class="card" style="flex: 2; min-width: 450px;">
-    <h3>Tasas de Equivalencia Activas</h3>
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Factores matemáticos aplicados para el cruce de inventario teórico. (Ordenado por Ingrediente y Proveedor)</p>
-    
-    <!-- 🔄 The dynamic rows will build right inside this container -->
-    <div id="conversion-side-list" style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="color:var(--text-muted); font-style:italic; text-align:center; padding:20px;">Cargando tasas de conversión...</div>
-    </div>
-</div>
-
-            </div>
-        </div>
+            </div> <!-- Closes the flex row -->
+        </div> <!-- Closes the view tab pane -->
 
         <!-- ======================================================================= -->
         <!-- 📦 VIEW PANEL B: STANDALONE MANUAL INVENTORY ADJUSTMENTS SPREADSHEET MATRIX -->
