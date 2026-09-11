@@ -2126,12 +2126,11 @@ function closeImpactModal() {
                     });
                 });
         }
-// 🔄 Fetch and Render the conversion rows cleanly via native HTTP client
+// 🔄 Fetch and Render the conversion rows with Priority Supplier Selector
 function loadAndRenderSupplierFormats() {
-    // Add this line at the top of loadAndRenderSupplierFormats() to reset search on redraw:
-if (document.getElementById("search-conversion-field")) {
-    document.getElementById("search-conversion-field").value = "";
-}
+    if (document.getElementById("search-conversion-field")) {
+        document.getElementById("search-conversion-field").value = "";
+    }
 
     var listContainer = document.getElementById("conversion-side-list");
     if (!listContainer) return;
@@ -2161,17 +2160,28 @@ if (document.getElementById("search-conversion-field")) {
         var html = "";
         formats.forEach(function(item) {
             var isFrozen = item.is_frozen || false;
+            var isPreferred = item.is_preferred || false;
             
-            // 🌟 CRITICAL FIX: Translate the raw ingredient_id UUID into the cache name string
             var friendlyIngredientName = _ingredientsCache[item.ingredient_id] || "Ingrediente #" + item.ingredient_id;
             
             html += `
             <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
+                
+                <!-- 🌟 NEW: PREFERRED SUPPLIER RADIO SELECTION LAYER -->
+                <div style="margin-right: 15px; display: flex; align-items: center; justify-content: center;" title="Marcar como proveedor preferencial">
+                    <input type="radio" 
+                           name="preferred-${item.ingredient_id}" 
+                           onclick="setAsPreferredSupplier('${item.id}', '${item.ingredient_id}')"
+                           style="width: 18px; height: 18px; cursor: pointer; accent-color: #10b981;"
+                           ${isPreferred ? 'checked' : ''}>
+                </div>
+
                 <div class="row-info-group" style="flex: 1;">
                     <!-- Header Labels -->
                     <div class="meta-label" style="margin-bottom: 6px;">
                         <strong style="color: #1e293b; font-size: 0.95rem;">${friendlyIngredientName}</strong> 
                         <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
+                        ${isPreferred ? '<span style="background-color:#d1fae5; color:#065f46; font-size:0.75rem; font-weight:bold; padding:2px 6px; border-radius:4px; margin-left:6px;">⭐ Preferido</span>' : ''}
                     </div>
                     
                     <!-- Dynamic Input Workspace -->
@@ -2220,6 +2230,50 @@ if (document.getElementById("search-conversion-field")) {
         listContainer.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Error al cargar datos.</div>';
     });
 }
+
+// 🌟 Database Mutator: Enforces mutual exclusion rules for Preferred Suppliers per Ingredient
+function setAsPreferredSupplier(selectedId, ingredientId) {
+    console.log("Updating priority logic mapping setup for asset:", ingredientId);
+
+    // Step A: Set 'is_preferred' to false across all rows containing this specific ingredient ID
+    fetch(API_URL + "supplier_formats?ingredient_id=eq." + encodeURIComponent(ingredientId), {
+        method: "PATCH",
+        headers: {
+            "apikey": API_KEY,
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ is_preferred: false })
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error("Fault breaking old selections");
+
+        // Step B: Set 'is_preferred' to true on the selected line row
+        return fetch(API_URL + "supplier_formats?id=eq." + selectedId, {
+            method: "PATCH",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            },
+            body: JSON.stringify({ is_preferred: true })
+        });
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error("Fault reinforcing new priority line choice");
+        console.log("Database successfully isolated preferred line context.");
+        
+        // Step C: Trigger live repainting matrix loop to draw the green '⭐ Preferido' label badge
+        loadAndRenderSupplierFormats();
+    })
+    .catch(function(err) {
+        console.error("Critical matrix update assignment error:", err);
+        alert("⚠️ No se pudo registrar la preferencia del proveedor en la base de datos.");
+    });
+}
+
 // 🔍 Live Real-time Client Filter for Supplier Formats Workspace
 function executeConversionFilterSearch() {
     // 1. Grab what the admin typed and make it lowercase to prevent case issues
