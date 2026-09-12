@@ -720,7 +720,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
                 }
             }
         }
-// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('Pending') without altering inventory stock
+// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('draft') without altering inventory stock
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -739,7 +739,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     try {
         var generatedPoUuid = null;
         
-        // Check if header already exists in purchase_orders
+        // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS IN PERSISTENT ORDER REGISTRY TABLES
         const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -747,22 +747,23 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         if (checkPoRes.ok) {
             const existingPoData = await checkPoRes.json();
             if (existingPoData && existingPoData.length > 0) {
+                // 🔒 FIXED SYSTEM STATUS RECOVERY: Maintain 'draft' status so page reloads capture it perfectly
                 generatedPoUuid = existingPoData[0].id;
                 
-                // Update existing record status to ensure it reflects 'Pending' draft status
                 await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ status: 'Pending' })
+                    body: JSON.stringify({ status: 'draft' })
                 });
             }
         }
 
+        // Create a new parent document row record if it didn't exist previously
         if (!generatedPoUuid) {
             var parentPayload = {
                 po_number: poNumber,
                 supplier_name: supplierName,
-                status: 'Pending', 
+                status: 'draft', // 🌟 CRITICAL FIX: Stored as 'draft' to match your startup loader filters
                 total_items: filteredLines.length
             };
 
@@ -777,20 +778,24 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             generatedPoUuid = parentRowResultData[0].id;
         }
 
-        // Save lines into items table without touching inventory balances
+        // 2️⃣ 🛡️ SYSTEM PURGE SWEEP LAYER
+        // Look up alternative parents for these ingredients to remove legacy duplicate items before saving new ones
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
-            
-            // 🛡️ CLEAN ARCHIVE MOVE: Wipe this item out of any OTHER purchase orders 
-            // to ensure it doesn't leave lingering ghost rows on your old vendor cards.
             if (item.ingredient_name) {
+                // 🌟 TARGETED ERASE: Cleans the old supplier's items table lines based on name cross-referencing
                 await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
                     method: "DELETE",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
             }
+        }
 
-            // Check if item row link exists to prevent database clutter duplicates
+        // 3️⃣ SAVE OR UPDATE OPERATIONAL LINE ITEMS BINDINGS INDIVIDUALLY
+        for (var i = 0; i < filteredLines.length; i++) {
+            var item = filteredLines[i];
+            
+            // Check if item record entry links already exist under this parent PO ID token block setup
             const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
@@ -798,32 +803,31 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             var existingItemId = null;
             if (checkItemRes.ok) {
                 const itemData = await checkItemRes.json();
-                // 🌟 FIX: Explicitly target index zero of the query result array array
                 if (itemData && itemData.length > 0) {
-                    existingItemId = itemData[0].id;
+                    existingItemId = itemData[0].id; // 🔒 SECURITY ARRAY ACCESSOR
                 }
             }
 
+            // Map complete structured operational metrics data schema package payload rows
             var childPayload = {
                 po_id: generatedPoUuid,
                 ingredient_name: item.ingredient_name,
                 quantity_ordered: Math.ceil(item.approved_formats_quantity),
                 supplier_uom: item.supplier_uom || "Formato",
-                // 📥 Include metrics to prevent data scrambling
                 faltante_base: parseFloat(item.faltante_base || 0),
                 equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
                 recipe_uom: item.recipe_uom || "unidad"
             };
 
             if (existingItemId) {
-                // Row exists under this card: PATCH update it to capture modifications
+                // Item exists on this card container layout block entry: update metrics natively
                 await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify(childPayload)
                 });
             } else {
-                // Row is brand new to this card: POST insert it cleanly
+                // Brand new assignment entry row to this card workspace block target container cell layout: write data record
                 await fetch(API_URL + "purchase_order_items", {
                     method: "POST",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -844,15 +848,15 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         }
 
-        // Update local memory states so a manual reload mapping captures it perfectly
+        // Update local memory cache array state rows attributes values variables trackers dynamically to freeze changes context
         LOCAL_STAGED_ROWS.forEach(function(r) {
             if (r.supplier_name === supplierName) {
                 r.forced_po_number = poNumber;
-                r.db_saved_status = 'Pending';
+                r.db_saved_status = 'draft';
             }
         });
 
-        alert("💾 ¡Borrador guardado con éxito! Los datos de los ítems están completamente sincronizados en la nube.");
+        alert("💾 ¡Borrador guardado con éxito! El documento permanece guardado en la nube de forma persistente.");
 
     } catch (err) {
         console.error(err);
