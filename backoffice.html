@@ -3613,6 +3613,7 @@ async function commitProcessedDateToSystemSettings(newDateString) {
 // 📋 REAL-TIME REVO CSV SALES PIPELINE & UNIFIED REPLENISHMENT ENGINE
 // =======================================================================
 
+// 🛑 GATE 1 ENGINE: Local Sandbox Spreadsheet Validation Loop [Part 1 of 2]
 async function processDailySalesFileIngestion(event) {
     var fileInput = event.target;
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
@@ -3620,10 +3621,9 @@ async function processDailySalesFileIngestion(event) {
     var feedback = document.getElementById("procurement-wizard-feedback");
     if (feedback) {
         feedback.style.display = "block";
-        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo parámetros de red y ejecutando de-composición recursiva...</div>";
+        feedback.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Analizando sandbox local y validando integridades...</div>";
     }
 
-    // 🌟 FIX COMPLETED: Added index [0] to target the physical single file pointer securely!
     var file = fileInput.files[0]; 
     var reader = new FileReader();
 
@@ -3631,6 +3631,7 @@ async function processDailySalesFileIngestion(event) {
         try {
             var text = e.target.result;
 
+            // Fetch directories to run local structure cross-examination checks
             var results = await Promise.all([
                 fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
                 fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
@@ -3642,7 +3643,7 @@ async function processDailySalesFileIngestion(event) {
             var ingredients = results[2];
 
             if (!mappings || !recipes || !ingredients) {
-                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con los servidores de base de datos.</div>";
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con la base de datos.</div>";
                 return;
             }
 
@@ -3675,13 +3676,15 @@ async function processDailySalesFileIngestion(event) {
             }
 
             if (idxQty === -1 || idxProd === -1 || idxId === -1) {
-                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Revo requiere columnas: Cantidad, Producto, Id.</div>";
+                if (feedback) feedback.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Columnas requeridas: Cantidad, Producto, Id.</div>";
                 return;
             }
 
+            // Track missing recipes locally during parse phase
+            var missingRecipesMap = {};
+
             function explodeRecipeUsageRecursive(recipeId, salesQty) {
                 var parentRecipeId = String(recipeId).toLowerCase().trim();
-                
                 mappings.forEach(mapRow => {
                     if (String(mapRow.recipe_id).toLowerCase().trim() === parentRecipeId) {
                         var ingId = String(mapRow.ingredient_id).toLowerCase().trim();
@@ -3689,7 +3692,6 @@ async function processDailySalesFileIngestion(event) {
                         var scrapPct = parseFloat(mapRow.scrap_percentage || mapRow.scrap || 0);
                         
                         var baseConsumption = weightPerPortion * salesQty * (1 + (scrapPct / 100));
-                        
                         var subRecipeFound = recipes.find(r => String(r.id).toLowerCase().trim() === ingId);
                         var hasChildLines = mappings.some(m => String(m.recipe_id).toLowerCase().trim() === ingId);
 
@@ -3706,47 +3708,66 @@ async function processDailySalesFileIngestion(event) {
                 });
             }
 
+            // Loop: Core Parsing & Missing Recipe Catching Firewalls
             for (var l = 1; l < lines.length; l++) {
                 if (!lines[l].trim()) continue;
                 var columns = lines[l].split(",");
                 if (columns.length <= Math.max(idxQty, idxProd, idxId)) continue;
 
                 var rawQty = columns[idxQty].replace(/["']/g, "").trim();
-                var rawProdName = columns[idxProd].replace(/["']/g, "").trim().toLowerCase();
+                var rawProdName = columns[idxProd].replace(/["']/g, "").trim();
                 var rawRevoId = columns[idxId].replace(/["']/g, "").trim().toLowerCase();
 
                 var quantitySold = parseFloat(rawQty) || 0;
                 if (quantitySold <= 0) continue;
 
-                var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName];
+                var matchedRecipe = recMapByRevo[rawRevoId] || recMapByName[rawProdName.toLowerCase().trim()];
                 if (matchedRecipe) {
                     explodeRecipeUsageRecursive(matchedRecipe.id, quantitySold);
+                } else {
+                    missingRecipesMap[rawProdName] = (missingRecipesMap[rawProdName] || 0) + quantitySold;
                 }
             }
+            // 🚫 GATING FIREWALL A: If there are broken recipes, halt execution and lock buttons
+            var errorKeys = Object.keys(missingRecipesMap);
+            if (errorKeys.length > 0) {
+                var errHtml = `<div style="background:#fef2f2; border:1px solid #f87171; padding:15px; border-radius:8px; margin-bottom:15px; color:#991b1b;">`;
+                errHtml += `<strong>🛑 ALERTA DE CONFIGURACIÓN: El archivo contiene productos sin receta maestra asociada. Corrija estos enlaces antes de enviar:</strong><ul style="margin-top:8px; padding-left:20px;">`;
+                errorKeys.forEach(k => {
+                    errHtml += `<li>Producto: <b>${k}</b> (Ventas registradas: ${missingRecipesMap[k]} uds)</li>`;
+                });
+                errHtml += `</ul></div>`;
+                if (feedback) feedback.innerHTML = errHtml;
+                
+                var commitBtn = document.getElementById("btn-commit-all-orders") || document.getElementById("dispatch-to-manager-portal-btn");
+                if (commitBtn) {
+                    commitBtn.disabled = true;
+                    commitBtn.style.background = "#cbd5e1";
+                    commitBtn.style.cursor = "not-allowed";
+                    commitBtn.innerText = "🔒 Bloqueado por Errores de Recetas";
+                }
+                return;
+            }
 
+            // Clear configuration values
             TEMPORARY_STAGED_PURCHASE_LINES = [];
             let totalInsumosDeducidos = 0;
 
             ingredients.forEach(ing => {
                 var usageToday = GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0.0;
                 var currentStock = parseFloat(ing.std_inventory || 0);
-                
                 var pointOfOrder = parseFloat(ing.point_of_order || 0);
                 var stockMax = parseFloat(ing.stock_max || 0);
 
                 if (usageToday > 0) totalInsumosDeducidos++;
 
-                // Proyected Stock after today's shift (Before new purchases arrive)
                 var projectedStockAfterSales = currentStock - usageToday;
-                if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00; // Enforce physical zero-floor limit
+                if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00;
 
-                                // 🌟 FIX COMPLETED: Pulls the first authorized supplier name from your format tables to prevent 'unassigned' lockouts!
-                                // 🌟 FIX COMPLETED: Restored the flat array selector to clear the filter crash!
                 if (stockMax > 0 && projectedStockAfterSales <= pointOfOrder) {
                     var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
                     
                     if (purchaseQtyNeeded > 0) {
-                        // Scan your conversion mappings array cleanly to find authorized formats
                         var localizedFormatsMapList = [];
                         if (Array.isArray(mappings)) {
                             localizedFormatsMapList = mappings.filter(function(m) {
@@ -3754,7 +3775,6 @@ async function processDailySalesFileIngestion(event) {
                             });
                         }
 
-                        // Default to the first authorized supplier text name found, fallback to unassigned
                         var defaultSupplierNameKey = "unassigned";
                         if (localizedFormatsMapList.length > 0) {
                             const firstFormatRow = localizedFormatsMapList[0];
@@ -3779,20 +3799,22 @@ async function processDailySalesFileIngestion(event) {
                         });
                     }
                 }
-
-
             });
 
-            MASTER_INVENTORY_ITEMS = ingredients;
-
             if (feedback) {
-                feedback.innerHTML = `🎉 <b>Cálculo Completado:</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
+                feedback.innerHTML = `<div>🟢 <b>Pre-Cálculo Completado (Cero Errores):</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b>. El archivo está validado y listo para ser emitido.</div>`;
             }
             
-            var commitBtn = document.getElementById("btn-commit-all-orders");
-            if (commitBtn) commitBtn.style.display = "inline-flex";
+            // Unlock final commit button
+            var commitBtn = document.getElementById("btn-commit-all-orders") || document.getElementById("dispatch-to-manager-portal-btn");
+            if (commitBtn) {
+                commitBtn.disabled = false;
+                commitBtn.style.background = "var(--accent-green, #2ecc71)";
+                commitBtn.style.cursor = "pointer";
+                commitBtn.innerText = "🚀 Confirmar y Enviar a Gerente de Compras";
+                commitBtn.style.display = "inline-flex";
+            }
 
-                        // 🌟 FIX COMPLETED: Force a native pre-sort initialization block so the list pops up pre-sorted instantly!
             renderGroupedSupplierProcurementAccordion();
             if (typeof triggerManualSupplierListAlphabeticalSort === "function") {
                 triggerManualSupplierListAlphabeticalSort();
@@ -3809,8 +3831,9 @@ async function processDailySalesFileIngestion(event) {
 
 // Helper calculation alignment selector fallback function
 function purchasePurchaseQtyConstraintMatch(qty, id) {
-    return qty; // Keeps direct raw balance weights active
+    return qty; 
 }
+
 
 // =======================================================================
 // 📊 UNIFIED MASTER INTERFACE: ENHANCED DIRECT ID-BOUND ENGINE
@@ -4109,22 +4132,24 @@ function updateTemporaryProcurementLineFormatsQuantityById(ingId, val) {
     }
 }
 
-// ⚡ RESTORED CONVEYOR: Directly generates Stateful Draft POs and Items
+// ⚡ GATE 2 ENGINE: Remote Lock, Dynamic Recalculation & Cloud Broadcaster [Part 1 of 2]
 async function broadcastActiveCalculationsToPurchaseApp() {
-    var shipBtn = document.getElementById("dispatch-to-manager-portal-btn");
+    var shipBtn = document.getElementById("dispatch-to-manager-portal-btn") || document.getElementById("btn-commit-all-orders");
     
     if (typeof TEMPORARY_STAGED_PURCHASE_LINES === "undefined" || TEMPORARY_STAGED_PURCHASE_LINES.length === 0) {
         alert("⚠️ No hay líneas de cálculo activas. Primero procese el archivo de ventas Revo.");
         return;
     }
 
-    console.log("🚀 CORRECT GATEWAY: Entering broadcastActiveCalculationsToPurchaseApp...");
-    shipBtn.disabled = true;
-    shipBtn.style.background = "#64748b";
-    shipBtn.innerText = "⏳ Generando Órdenes...";
+    console.log("🚀 GATEWAY ACTIVE: Re-running live calculation snapshot and clearing old states...");
+    if (shipBtn) {
+        shipBtn.disabled = true;
+        shipBtn.style.background = "#64748b";
+        shipBtn.innerText = "⏳ Congelando Terminales y Transmitiendo...";
+    }
 
     try {
-                // 1️⃣ READ THE CURRENT SEQUENCE ID VALUE FROM SUPABASE [FIXED SEED ARRAY VALUE LOOKUP]
+        // 1️⃣ READ THE CURRENT SEQUENCE SEED ID VALUE FROM SUPABASE
         const seedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "GET", headers: { "apikey": API_KEY }
         });
@@ -4133,40 +4158,82 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         if (seedRes.ok) {
             const seedData = await seedRes.json();
             if (seedData && seedData.length > 0) {
-                // 🔒 SECURED ARRAY BINDING: Explicitly mapping to array element 0
                 var currentDatabaseSeedValue = seedData[0].value_numeric || seedData[0].value_text || 0;
                 nextShipmentIdNumber = parseInt(currentDatabaseSeedValue, 10) + 1;
             }
         }
         
         const informativeRefDate = document.getElementById("input-current-sales-date")?.value || "Sin Fecha";
-        console.log("⚙️ BROADCAST SEQUENCE ENGAGED - ASSIGNING SHIPMENT ID:", nextShipmentIdNumber);
 
-        // 2️⃣ WIPE TEMPORARY TABLES (Optional cleanup if you still read old stager rows anywhere)
-        await fetch(API_URL + "staged_order_calculations?ingredient_id=neq.null", { 
-            method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY } 
+        // =======================================================================
+        // 🧹 BACKOFFICE HIGH-SPEED PURGE ENGINE: Clear uncommitted legacy records
+        // =======================================================================
+        console.log("🧹 Sweeping legacy uncommitted records from cloud tables...");
+        const oldOrdersRes = await fetch(API_URL + "purchase_orders?status=neq.dispatched&select=id", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
 
+        if (oldOrdersRes.ok) {
+            const oldOrders = await oldOrdersRes.json();
+            if (oldOrders && oldOrders.length > 0) {
+                var oldIdsList = oldOrders.map(o => o.id).join(',');
+                
+                // Bulk delete old items and parent header logs simultaneously
+                await fetch(API_URL + "purchase_order_items?po_id=in.(" + oldIdsList + ")", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+
+                await fetch(API_URL + "purchase_orders?id=in.(" + oldIdsList + ")", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                console.log("✅ Cloud tables completely cleared of old uncommitted rows.");
+            }
+        }
+        // =======================================================================
+
+        // 2️⃣ DYNAMIC RE-CALCULATION LAYER: Re-read the latest real-time stock levels
+        console.log("📊 Pulling fresh stock snapshot to recalculate exact purchase requirements...");
+        const freshIngredientsRes = await fetch(API_URL + "ingredients?select=id,std_inventory", {
+            method: "GET", headers: { "apikey": API_KEY }
+        });
+
+        if (freshIngredientsRes.ok) {
+            const freshIngs = await freshIngredientsRes.json();
+            var latestStockMap = {};
+            freshIngs.forEach(ing => { latestStockMap[String(ing.id)] = parseFloat(ing.std_inventory || 0); });
+
+            // Apply the latest live snapshot data onto our temporary requirements list
+            TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
+                var currentLiveStock = latestStockMap[String(line.ingredient_id)] || 0;
+                var projectedStockAfterSales = currentLiveStock - parseFloat(line.consumption || 0);
+                if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00;
+
+                var stockMax = parseFloat(line.stock_max || 0);
+                var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
+
+                line.last_std_inventory = currentLiveStock;
+                line.actual_std_inventory = projectedStockAfterSales;
+                line.suggested_quantity = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
+                line.approved_quantity = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
+            });
+        }
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
-            
-            // 🔒 INSULATED LOOKUP ENGINE: Locate any authorized format rules matching ONLY this item ID
+            if (parseFloat(line.suggested_quantity || 0) <= 0) return; // Skip if no longer needs ordering due to stock updates
+
             const authorizedFormats = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") 
                 ? CACHED_CONVERSION_MAPPINGS.filter(m => String(m.ingredient_id).toLowerCase().trim() === String(line.ingredient_id).toLowerCase().trim()) 
                 : [];
                 
-            // 🌟 UPGRADED ENGINE: Look for the 'is_preferred' flag first among the authorized candidate formats
             var activeFormatRule = authorizedFormats.find(function(m) { 
                 return m.is_preferred === true || m.is_preferred === 'true'; 
             });
 
-            // Fallback: If no line was explicitly marked preferred, default back to the first available match
             if (!activeFormatRule && authorizedFormats.length > 0) {
                 activeFormatRule = authorizedFormats[0];
             }
 
-            // Resolve the final name cleanly by pulling the master rule directly
             var resolvedSupplier = "Proveedor No Asignado";
             if (activeFormatRule && activeFormatRule.provider_name && String(activeFormatRule.provider_name).trim() !== "") {
                 resolvedSupplier = String(activeFormatRule.provider_name).trim();
@@ -4178,13 +4245,8 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             
             var conversionFactor = activeFormatRule ? parseFloat(activeFormatRule.units_per_purchase || 1) : 1.0;
             var trueKitchenNetNeed = parseFloat(line.suggested_quantity || line.approved_quantity || 0);
-            var trueWholesaleSuggestedCount = parseFloat(line.suggested_formats_quantity || line.approved_formats_quantity || 0);
+            var trueWholesaleSuggestedCount = Math.ceil(trueKitchenNetNeed / conversionFactor);
 
-            if (trueWholesaleSuggestedCount === 0 && trueKitchenNetNeed > 0) {
-                trueWholesaleSuggestedCount = trueKitchenNetNeed;
-            }
-
-            // 🚀 THE FIX: Read the recipe uom directly out of the verified 'line.uom' payload property!
             var fundamentalRecipeUOM = line.uom || "unidad";
 
             supplierGroups[resolvedSupplier].push({
@@ -4194,8 +4256,6 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 pedido_sugerido: parseFloat(trueWholesaleSuggestedCount),
                 supplier_uom: activeFormatRule ? String(activeFormatRule.purchase_uom || "Formato") : String(fundamentalRecipeUOM),
                 conversion_factor: conversionFactor,
-                
-                // 🔒 Passed accurately directly into Step 4-B data writer payload
                 recipe_uom: String(fundamentalRecipeUOM).trim()
             });
         });
@@ -4205,11 +4265,11 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         for (var i = 0; i < uniqueSuppliers.length; i++) {
             var supplierName = uniqueSuppliers[i];
             var items = supplierGroups[supplierName];
+            if (items.length === 0) continue;
             
             var paddedIndex = String(i + 1).padStart(3, '0');
             var generatedPoNumber = "PO-SHIP-" + nextShipmentIdNumber + "-" + paddedIndex;
 
-            // A. Create master order document row matching your exact schema layout
             const poResponse = await fetch(API_URL + "purchase_orders", {
                 method: "POST",
                 headers: { 
@@ -4222,45 +4282,33 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                     po_number: generatedPoNumber,
                     supplier_name: supplierName,
                     status: 'draft',
-                    created_at: new Date().toISOString() // 🔒 Tracked securely in header
+                    created_at: new Date().toISOString()
                 })
             });
 
-                        if (!poResponse.ok) {
+            if (!poResponse.ok) {
                 const poErrLog = await poResponse.text();
                 throw new Error("Error guardando orden principal: " + poErrLog);
             }
 
             const createdPoData = await poResponse.json();
-            
-            // 🔒 THE CRITICAL ARCHITECTURAL FIX: Extract index [0] legally from the incoming response array
             const targetPoRow = Array.isArray(createdPoData) ? createdPoData[0] : createdPoData;
-            
-            // This reads the 'id' column from purchase_orders
             const databaseGeneratedPoId = targetPoRow?.id || null;
 
-            if (!databaseGeneratedPoId) {
-                console.error("⚠️ Payload response sample:", createdPoData);
-                throw new Error("No se pudo obtener el ID relacional de la orden generada.");
-            }
+            if (!databaseGeneratedPoId) throw new Error("No se pudo obtener el ID relacional de la orden generada.");
 
-                    // B. Bulk insert the child line items matching your exact database keys
             var itemPayloads = items.map(function(item) {
                 return {
                     po_id: databaseGeneratedPoId,
                     quantity_ordered: Math.ceil(item.pedido_sugerido),
                     ingredient_name: item.ingredient_name,
                     supplier_uom: item.supplier_uom, 
-                    
-                    // 🚀 DATABASE ROOT FIX: Writing correct structural metrics
                     faltante_base: parseFloat(item.faltante_base || 0),
                     equivalencia: parseFloat(item.conversion_factor || 1.0),
-                    recipe_uom: item.recipe_uom, // 🔒 SECURED: True recipe unit (e.g., "g", "Kg", "Unidad")
-                    
+                    recipe_uom: item.recipe_uom,
                     created_at: new Date().toISOString()
                 };
             });
-
 
             const itemsResponse = await fetch(API_URL + "purchase_order_items", {
                 method: "POST",
@@ -4273,28 +4321,36 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 throw new Error("Error guardando los ítems de la orden: " + itemErrLog);
             }
         }
-        // 5️⃣ STEP SEQUENCE COUNTER FORWARD
+
+        // 5️⃣ STEP SEQUENCE COUNTER FORWARD (Triggers Remote Lockout on active terminals instantly)
         await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ value_numeric: nextShipmentIdNumber })
         });
 
-        // 🚀 THE FIX: Commit the processed date milestone to Supabase and advance the DOM inputs
         console.log("📅 Automatically logging processed date checkpoint to cloud:", informativeRefDate);
-        await commitProcessedDateToSystemSettings(informativeRefDate);
+        if (typeof commitProcessedDateToSystemSettings === "function") {
+            await commitProcessedDateToSystemSettings(informativeRefDate);
+        }
 
-        shipBtn.innerText = "✅ Dispatch Complete";
-        alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " guardado como Borrador en la Nube con Éxito!");
+        if (shipBtn) {
+            shipBtn.innerText = "✅ Envío Completado";
+            shipBtn.style.background = "var(--accent-green, #2ecc71)";
+        }
+        alert("🚀 ¡Cargamento Logístico #" + nextShipmentIdNumber + " recalculado con inventario en tiempo real y emitido con éxito!");
 
     } catch (err) {
         console.error("Broadcast transmission halted error:", err);
         alert("❌ Error crítico en transmisión: " + err.message);
-        shipBtn.disabled = false;
-        shipBtn.style.background = "#ef4444";
-        shipBtn.innerText = "❌ Reintentar";
+        if (shipBtn) {
+            shipBtn.disabled = false;
+            shipBtn.style.background = "#ef4444";
+            shipBtn.innerText = "❌ Reintentar";
+        }
     }
 }
+
 // 📦 INTEGRATED AUTO-LOAD DATA WIRE: Wakes up data fetches instantly on sidebar selection
 document.addEventListener("click", function(event) {
     var item = event.target.closest(".nav-item");
