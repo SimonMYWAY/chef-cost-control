@@ -746,6 +746,13 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
 
         // 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('pending') without altering inventory stock
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
+    // Add this check block right at the beginning of saveSupplierOrderAsDraft:
+if (document.getElementById("terminal-breach-lockout-banner") || 
+   (document.getElementById("btn-cargar-ventas") && document.getElementById("btn-cargar-ventas").innerText.includes("Bloqueado"))) {
+    alert("❌ OPERACIÓN RECHAZADA: Esta terminal está congelada porque el Backoffice ha procesado un nuevo cargamento. Debe recargar la página.");
+    location.reload();
+    return;
+}
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -884,6 +891,13 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
 
 // ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once [Part 1 of 2]
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
+    // Add this check block right at the beginning of saveSupplierOrderAsDraft:
+if (document.getElementById("terminal-breach-lockout-banner") || 
+   (document.getElementById("btn-cargar-ventas") && document.getElementById("btn-cargar-ventas").innerText.includes("Bloqueado"))) {
+    alert("❌ OPERACIÓN RECHAZADA: Esta terminal está congelada porque el Backoffice ha procesado un nuevo cargamento. Debe recargar la página.");
+    location.reload();
+    return;
+}
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -1224,6 +1238,63 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.innerText = txt;
     slipContainer.style.display = "block";
 }
+// 🛡️ RE-ENFORCED INTERCEPTOR FIREWALL: Background tracking routine
+setInterval(async function enforceRemoteSequenceFirewall() {
+    if (typeof LOCAL_STAGED_ROWS === "undefined" || LOCAL_STAGED_ROWS.length === 0) return;
+    
+    var currentScreenShipId = "00";
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+        currentScreenShipId = String(LOCAL_STAGED_ROWS[0].shipment_id || "00");
+    }
+
+    try {
+        const checkSeedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+            method: "GET", headers: { "apikey": API_KEY }
+        });
+        
+        if (checkSeedRes.ok) {
+            const seedData = await checkSeedRes.json();
+            if (seedData && seedData.length > 0) {
+                var globalDatabaseShipId = String(seedData[0].value_numeric || seedData[0].value_text || "00");
+                
+                if (globalDatabaseShipId !== "00" && globalDatabaseShipId !== currentScreenShipId) {
+                    var workspace = document.getElementById("manager-grid-workspace");
+                    if (workspace && !document.getElementById("terminal-breach-lockout-banner")) {
+                        
+                        // 1. Inject lockout notification
+                        var lockBanner = document.createElement("div");
+                        lockBanner.id = "terminal-breach-lockout-banner";
+                        lockBanner.innerHTML = `
+                            <div style="background:#ef4444; color:white; padding:18px; border-radius:8px; font-weight:bold; text-align:center; margin-bottom:15px; font-size:1.1rem;">
+                                ⚠️ TERMINAL BLOQUEADA POR SEGURIDAD LOGÍSTICA<br>
+                                <span style="font-weight:400; font-size:0.9rem;">Se ha procesado un nuevo cargamento desde el Backoffice (#${globalDatabaseShipId}). Vista antigua desactivada.</span><br>
+                                <button onclick="location.reload()" style="margin-top:10px; background:white; color:#ef4444; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">🔄 Cargar Nuevo Embarque</button>
+                            </div>`;
+                        workspace.parentNode.insertBefore(lockBanner, workspace);
+                        
+                        // 2. Clear out local storage references so saves can't run
+                        LOCAL_STAGED_ROWS = []; 
+                        
+                        // 3. Complete structural click and selection lockout freeze
+                        document.querySelectorAll("select, input, button, .item-row").forEach(function(el) {
+                            el.disabled = true;
+                            el.style.opacity = "0.2";
+                            el.style.pointerEvents = "none"; // 🌟 CRITICAL: Destroys all clickability
+                        });
+                        
+                        workspace.style.filter = "blur(3px) grayscale(100%)";
+                        workspace.style.pointerEvents = "none";
+                        
+                        alert("⚠️ ¡Alerta Logística!\nEl Backoffice ha generado una nueva sugerencia. Esta terminal ha sido congelada para proteger el inventario.");
+                        location.reload();
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Sequence tracking skipped:", err);
+    }
+}, 3000); // Check frequency accelerated to 3 seconds for maximum security
 
     </script>
 </body>
