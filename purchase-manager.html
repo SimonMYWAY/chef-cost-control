@@ -140,7 +140,9 @@ async function pullActiveStagedCalculationFromCloud() {
 
         // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES [SEQUENCE-ISOLATED]
         // Fetches open drafts and strictly isolates the active workspace to the newest shipment sequence sequence
-        const targetFetchUrl = API_URL + "purchase_orders?status=eq.draft&order=po_number.desc";
+        // 🌟 REPAIRED STARTUP FETCH FILTER LAYER:
+        // Replace your old targetFetchUrl with this line to ensure modified drafts remain visible on reload:
+        const targetFetchUrl = API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc";
         const ordersRes = await fetch(targetFetchUrl, {
             method: "GET", 
             headers: { 
@@ -720,7 +722,8 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
                 }
             }
         }
-// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('pending') without altering inventory stock
+
+        // 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('pending') without altering inventory stock
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -747,6 +750,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         if (checkPoRes.ok) {
             const existingPoData = await checkPoRes.json();
             if (existingPoData && existingPoData.length > 0) {
+                // 🌟 FIX: Explicitly target index [0] to get the true ID field
                 generatedPoUuid = existingPoData[0].id;
                 
                 // Update header row to exact standard lowercase 'pending' status
@@ -774,7 +778,9 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
 
             if (!resParent.ok) throw new Error("No se pudo guardar la cabecera del borrador.");
             const parentRowResultData = await resParent.json();
-            generatedPoUuid = parentRowResultData[0].id;
+            if (parentRowResultData && parentRowResultData.length > 0) {
+                generatedPoUuid = parentRowResultData[0].id;
+            }
         }
 
         // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicate items from alternative PO documents
@@ -818,13 +824,13 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                 await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ childPayload })
+                    body: JSON.stringify(childPayload) // 🌟 FIX: Passed flat object without braces
                 });
             } else {
                 await fetch(API_URL + "purchase_order_items", {
                     method: "POST",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ childPayload })
+                    body: JSON.stringify(childPayload) // 🌟 FIX: Passed flat object without braces
                 });
             }
         }
