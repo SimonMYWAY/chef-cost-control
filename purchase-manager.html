@@ -585,6 +585,7 @@ function updateLiveRowApprovalToggleState(idx, state) {
     LOCAL_STAGED_ROWS[idx].is_approved = state;
     refreshAllActiveReceiptDisplays();
 }
+
 // ⚡ RESTORED FUNCTION: Handles moving items between supplier cards seamlessly when dropdown changes
 function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     if (!newSupplierName || newSupplierName === "Proveedor No Asignado") return;
@@ -595,10 +596,16 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     // 1. Update the local row's provider name in memory
     LOCAL_STAGED_ROWS[idx].supplier_name = newSupplierName;
 
+    // 🌟 TRANSLATION ENGINE REPAIR: Convert the row's string name into a valid database UUID hash string
+    var currentItemNameLower = String(currentItem.ingredient_name || "").toLowerCase().trim();
+    var resolvedIngredientUuid = (typeof masterNameToUuidMap !== "undefined") ? masterNameToUuidMap[currentItemNameLower] : "";
+
     // 2. Scan global formats to auto-update the purchase UOM and conversion factor for this specific vendor
     var matchedFormat = GLOBAL_SUPPLIER_FORMATS_LIST.find(function(f) {
-        return String(f.ingredient_id).trim() === String(currentItem.ingredient_id).trim() && 
-               String(f.provider_name).trim() === String(newSupplierName).trim();
+        var formatUuidKey = String(f.ingredient_id || "").toLowerCase().trim();
+        return formatUuidKey === resolvedIngredientUuid && 
+               resolvedIngredientUuid !== "" &&
+               String(f.provider_name).trim().toLowerCase() === String(newSupplierName).trim().toLowerCase();
     });
 
     // Capture the old multiplier to evaluate the scaling difference safely
@@ -613,13 +620,17 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         LOCAL_STAGED_ROWS[idx].supplier_uom = newSupplierUom;
         LOCAL_STAGED_ROWS[idx].conversion_factor = newMultiplier;
         LOCAL_STAGED_ROWS[idx].equivalencia = newMultiplier;
+        
+        console.log(`🎯 Match Found: ${currentItem.ingredient_name} -> ${newSupplierName} (${newSupplierUom}, Mult: ${newMultiplier})`);
     } else {
+        // Fallback safety defaults if no alternate link format was found
         LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
         LOCAL_STAGED_ROWS[idx].equivalencia = 1;
+        console.warn(`⚠️ No format entry found matching: ${currentItem.ingredient_name} (${resolvedIngredientUuid}) for vendor ${newSupplierName}`);
     }
 
-    // 🌟 NEW MATHEMATICAL REALIGNMENT ENGINE:
+    // 🌟 MATHEMATICAL REALIGNMENT ENGINE:
     // Convert the raw requirement back to kitchen UOM using old rules, then divide by the new factor!
     var baseFaltanteKitchenNeed = parseFloat(LOCAL_STAGED_ROWS[idx].faltante_base || 0);
     
@@ -693,7 +704,6 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         refreshAllActiveReceiptDisplays();
     }
 }
-
 
         function refreshAllActiveReceiptDisplays() {
             var blockDivs = document.getElementsByClassName("supplier-block");
