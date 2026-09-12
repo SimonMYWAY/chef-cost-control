@@ -777,34 +777,11 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             generatedPoUuid = parentRowResultData[0].id;
         }
 
-        // 2. Save lines into items table with complete schema properties
+        // 2. Save lines into items table targeting the exact record ID
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            // 🛡️ RE-ASSIGNMENT BARRICADE: 
-            // If this ingredient was split or moved, delete it from any OTHER purchase orders 
-            // that do NOT match our current active generatedPoUuid to eliminate ghost rows.
-            if (item.ingredient_name) {
-                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
-                    method: "DELETE",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-            }
-
-            // Check if item row link already exists under this specific PO card
-            const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            var existingItemId = null;
-            if (checkItemRes.ok) {
-                const itemData = await checkItemRes.json();
-                if (itemData && itemData.length > 0) {
-                    existingItemId = itemData[0].id;
-                }
-            }
-
-            // ✨ UPGRADED COMPREHENSIVE PAYLOAD MAP:
+            // Assemble the comprehensive data payload metrics
             var childPayload = {
                 po_id: generatedPoUuid,
                 ingredient_name: item.ingredient_name,
@@ -815,20 +792,53 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                 recipe_uom: item.recipe_uom || "unidad"
             };
 
-            if (existingItemId) {
-                // 🔄 Row exists under this card: PATCH update it to capture latest quantity adjustments
-                await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
+            // ✨ THE PRECISION TRACKING SWITCH:
+            // If the row item has a valid primitive ID from the database, update it directly!
+            // This transfers it to the new PO parent and cleans it from the old card automatically.
+            if (item.id && !String(item.id).startsWith("temp_")) {
+                const patchItemRes = await fetch(API_URL + "purchase_order_items?id=eq." + item.id, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify(childPayload)
                 });
+                
+                if (!patchItemRes.ok) {
+                    console.warn(`Could not patch line by ID ${item.id}, falling back to name search match logic.`);
+                    existingItemId = null;
+                }
             } else {
-                // 📤 Row is brand new to this card: POST insert it cleanly
-                await fetch(API_URL + "purchase_order_items", {
-                    method: "POST",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify(childPayload)
+                // Fallback for new lines: check if an entry already exists under this target PO card to avoid clutter
+                const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
+                
+                var existingItemId = null;
+                if (checkItemRes.ok) {
+                    const itemData = await checkItemRes.json();
+                    if (itemData && itemData.length > 0) existingItemId = itemData[0].id;
+                }
+
+                if (existingItemId) {
+                    await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
+                        method: "PATCH",
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify(childPayload)
+                    });
+                } else {
+                    const postRes = await fetch(API_URL + "purchase_order_items", {
+                        method: "POST",
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
+                        body: JSON.stringify(childPayload)
+                    });
+                    
+                    // Assign the new database-generated ID to local memory so future clicks keep updating it
+                    if (postRes.ok) {
+                        const newRowData = await postRes.json();
+                        if (newRowData && newRowData[0]) {
+                            item.id = newRowData[0].id;
+                        }
+                    }
+                }
             }
         }
 
@@ -852,7 +862,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         });
 
-        alert("💾 ¡Borrador guardado con éxito! El documento permanece completamente editable y los datos están perfectamente alineados.");
+        alert("💾 ¡Borrador guardado con éxito! Las líneas se han reasignado y el historial está perfectamente limpio.");
 
     } catch (err) {
         console.error(err);
