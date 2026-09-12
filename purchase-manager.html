@@ -619,7 +619,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         
         LOCAL_STAGED_ROWS[idx].supplier_uom = newSupplierUom;
         LOCAL_STAGED_ROWS[idx].conversion_factor = newMultiplier;
-        LOCAL_STAGED_ROWS[idx].equivalencia = newMultiplier;
+        LOCAL_STAGED_ROWS[idx].equivalencia = newMultiplier; // ✨ Sync both mapping tracking metrics securely
         
         console.log(`🎯 Match Found: ${currentItem.ingredient_name} -> ${newSupplierName} (${newSupplierUom}, Mult: ${newMultiplier})`);
     } else {
@@ -627,7 +627,6 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
         LOCAL_STAGED_ROWS[idx].equivalencia = 1;
-        console.warn(`⚠️ No format entry found matching: ${currentItem.ingredient_name} (${resolvedIngredientUuid}) for vendor ${newSupplierName}`);
     }
 
     // 🌟 MATHEMATICAL REALIGNMENT ENGINE:
@@ -645,7 +644,12 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         var recomputedWholesaleNeed = baseFaltanteKitchenNeed / newMultiplier;
         
         LOCAL_STAGED_ROWS[idx].pedido_sugerido = recomputedWholesaleNeed;
-        LOCAL_STAGED_ROWS[idx].approved_formats_quantity = recomputedWholesaleNeed;
+        
+        // 🌟 CRITICAL CALCULATION FIX: 
+        // Force the initial approved quantity to be an orderable WHOLE package unit (Math.ceil)
+        // just like the grid loops do, so that (Whole Approved Packages * Multiplier Factor) 
+        // yields the true full weight calculation value instantly on screen!
+        LOCAL_STAGED_ROWS[idx].approved_formats_quantity = Math.ceil(recomputedWholesaleNeed);
     }
 
     // 🌟 DYNAMIC PO PREFIX ISOLATION LAYER
