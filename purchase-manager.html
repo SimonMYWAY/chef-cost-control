@@ -1044,23 +1044,29 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
 
         if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho.");
 
-        // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER (Safely isolated here)
+        // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            // Resolve the item's true ingredient UUID from the translation dictionary if needed
-            var finalIngredientId = item.ingredient_id;
-            if ((!finalIngredientId || finalIngredientId.includes(" ")) && typeof masterNameToUuidMap !== "undefined") {
-                var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
-                finalIngredientId = masterNameToUuidMap[cleanNameLower] || finalIngredientId;
+            // 🌟 CRITICAL REPAIR: Safely isolate the true database UUID from the name mapping dictionary
+            var finalIngredientUuid = item.ingredient_id;
+            
+            // If the saved variable is missing or contains the text name instead of a UUID hash, look it up!
+            var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
+            if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap[cleanNameLower]) {
+                finalIngredientUuid = masterNameToUuidMap[cleanNameLower];
             }
 
-            const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientId, {
+            console.log(`📊 Processing stock change for: ${item.ingredient_name} using UUID: ${finalIngredientUuid}`);
+
+            // Direct dynamic endpoint fetch targeting ONLY the true verified UUID primary key
+            const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
             
             if (ingFetchRes.ok) {
                 const ingDataArray = await ingFetchRes.json();
+                // Extract row from response array legally
                 var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
                 
                 if (dbIngredient) {
@@ -1072,15 +1078,23 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                     if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
-                    // Patch increased stock level back onto master row
-                    await fetch(API_URL + "ingredients?id=eq." + finalIngredientId, {
+                    // Patch increased stock level back onto master row targeting the true UUID key
+                    const patchStockRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     });
+                    
+                    if (patchStockRes.ok) {
+                        console.log(`✅ Stock updated successfully for ${item.ingredient_name}: ${currentLiveDbStock} -> ${definitiveNewInventoryLevel.toFixed(2)}`);
+                    } else {
+                        console.error(`❌ Failed to patch stock for ${item.ingredient_name}`);
+                    }
                 }
+            } else {
+                console.error(`❌ Failed to fetch ingredient data row for UUID: ${finalIngredientUuid}`);
             }
         }
 
@@ -1098,7 +1112,7 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     </div>`;
             }
 
-            // Sink card layout to the bottom of the container
+            // Sink card layout to the bottom of the active spreadsheet container rows
             if (supplierCard.parentNode) {
                 supplierCard.parentNode.appendChild(supplierCard);
             }
