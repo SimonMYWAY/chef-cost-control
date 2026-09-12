@@ -180,9 +180,9 @@ async function pullActiveStagedCalculationFromCloud() {
         if (legacyOrdersToPurge.length > 0) {
             console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} abandoned legacy entries...`);
             
-            // Build explicit comma-separated lists for high-speed REST operations
-            var purgePoNumbersList = legacyOrdersToPurge.map(o => encodeURIComponent(o.po_number)).join(',');
-            var purgeIdsList = legacyOrdersToPurge.map(o => o.id).join(',');
+            // Extract raw properties lists without internal character transformations
+            var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
+            var purgePoNumbersList = legacyOrdersToPurge.map(function(o) { return o.po_number; }).join(',');
             
             // 1. Bulk delete matching child items rows concurrently using the parent ID string list
             await fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
@@ -190,6 +190,7 @@ async function pullActiveStagedCalculationFromCloud() {
             });
 
             // 2. Bulk delete matching parent order rows concurrently using the explicit PO Number text strings list
+            // 🌟 FIX: Commas are left raw so the Postgrest API parses the target set properly
             await fetch(API_URL + "purchase_orders?po_number=in.(" + purgePoNumbersList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
