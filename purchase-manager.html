@@ -739,7 +739,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     try {
         var generatedPoUuid = null;
         
-        // Check if header already exists in purchase_orders
+        // 1. Check if header already exists in purchase_orders
         const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -777,28 +777,53 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             generatedPoUuid = parentRowResultData[0].id;
         }
 
-        // Save lines into items table without touching inventory balances
+        // 2. Save lines into items table with complete schema properties
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            // Check if item row link exists to prevent database clutter duplicates
+            // 🛡️ RE-ASSIGNMENT BARRICADE: 
+            // If this ingredient was split or moved, delete it from any OTHER purchase orders 
+            // that do NOT match our current active generatedPoUuid to eliminate ghost rows.
+            if (item.ingredient_name) {
+                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
+                    method: "DELETE",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+            }
+
+            // Check if item row link already exists under this specific PO card
             const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
-            var itemExists = false;
+            
+            var existingItemId = null;
             if (checkItemRes.ok) {
                 const itemData = await checkItemRes.json();
-                if (itemData && itemData.length > 0) itemExists = true;
+                if (itemData && itemData.length > 0) {
+                    existingItemId = itemData[0].id;
+                }
             }
 
-            if (!itemExists) {
-                var childPayload = {
-                    po_id: generatedPoUuid,
-                    ingredient_name: item.ingredient_name,
-                    quantity_ordered: item.approved_formats_quantity,
-                    supplier_uom: item.supplier_uom
-                };
+            // ✨ UPGRADED COMPREHENSIVE PAYLOAD MAP:
+            var childPayload = {
+                po_id: generatedPoUuid,
+                ingredient_name: item.ingredient_name,
+                quantity_ordered: Math.ceil(item.approved_formats_quantity),
+                supplier_uom: item.supplier_uom || "Formato",
+                faltante_base: parseFloat(item.faltante_base || 0),
+                equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
+                recipe_uom: item.recipe_uom || "unidad"
+            };
 
+            if (existingItemId) {
+                // 🔄 Row exists under this card: PATCH update it to capture latest quantity adjustments
+                await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
+                    method: "PATCH",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify(childPayload)
+                });
+            } else {
+                // 📤 Row is brand new to this card: POST insert it cleanly
                 await fetch(API_URL + "purchase_order_items", {
                     method: "POST",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -827,7 +852,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         });
 
-        alert("💾 ¡Borrador guardado con éxito! El documento permanece completamente editable y el stock de inventario no ha sido modificado.");
+        alert("💾 ¡Borrador guardado con éxito! El documento permanece completamente editable y los datos están perfectamente alineados.");
 
     } catch (err) {
         console.error(err);
