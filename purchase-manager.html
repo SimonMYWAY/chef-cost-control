@@ -74,7 +74,7 @@
         var masterNameToUuidMap = {};
 
 
-// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Sequence Isolation Engine [Part 1 of 2]
+// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & Database Purge Engine [Part 1 of 2]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -84,13 +84,48 @@ async function pullActiveStagedCalculationFromCloud() {
         return;
     }
 
-    workspace.innerHTML = '<div class="loader-text">🔄 Descargando la bodega de carga activa del Backoffice...</div>';
+    workspace.innerHTML = '<div class="loader-text">🔄 Ejecutando purga y descargando la bodega de carga activa...</div>';
 
     try {
         LOCAL_STAGED_ROWS = [];
 
-                // 1. Fetch raw ingredients to build a unified Master Translation Dictionary [SCHEMA-ALIGNED]
-        // 🔒 FIXED: Changed select parameter to 'name_es' to match your database schema columns exactly
+        // =======================================================================
+        // 🧹 NEW: AUTOMATED DATABASE PURGE SWEEP ENGINE
+        // =======================================================================
+        console.log("🧹 Purge Engine engaged: Sweeping uncommitted legacy records...");
+        
+        // Step A: Fetch all active orders that are NOT marked as 'dispatched'
+        const pendingOrdersRes = await fetch(API_URL + "purchase_orders?status=neq.dispatched&select=id", {
+            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        });
+
+        if (pendingOrdersRes.ok) {
+            const ordersToPurge = await pendingOrdersRes.json();
+            
+            if (ordersToPurge && ordersToPurge.length > 0) {
+                console.log(`🧹 Found ${ordersToPurge.length} uncommitted orders to purge.`);
+                
+                for (var p = 0; p < ordersToPurge.length; p++) {
+                    var orderUuid = ordersToPurge[p].id;
+
+                    // 1. Delete all child items bound to this specific uncommitted order
+                    await fetch(API_URL + "purchase_order_items?po_id=eq." + orderUuid, {
+                        method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                    });
+
+                    // 2. Delete the parent order document header row record
+                    await fetch(API_URL + "purchase_orders?id=eq." + orderUuid, {
+                        method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                    });
+                }
+                console.log("✅ Database purge complete. All legacy draft states dropped.");
+            } else {
+                console.log("✨ No legacy uncommitted orders found to purge. Clipboard clean.");
+            }
+        }
+        // =======================================================================
+
+        // 1. Fetch raw ingredients to build a unified Master Translation Dictionary [SCHEMA-ALIGNED]
         const ingRes = await fetch(API_URL + "ingredients?select=id,name_es,uom", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -103,7 +138,6 @@ async function pullActiveStagedCalculationFromCloud() {
             ings.forEach(function(i) {
                 if (i.id) {
                     var cleanId = String(i.id).toLowerCase().trim();
-                    // 🔒 FIXED: Read property value out of 'name_es' to populate dictionary keys cleanly
                     var cleanName = i.name_es ? String(i.name_es).toLowerCase().trim() : "";
                     
                     recipeUnitsLookup[cleanId] = i.uom ? String(i.uom).trim() : "Kg";
@@ -117,12 +151,9 @@ async function pullActiveStagedCalculationFromCloud() {
 
         // 2. Fetch alternative definitions linked to ingredients via supplier_formats using pure database UUIDs
         var supplierFormatsLookup = {};
-        
-        // 🌟 UPGRADED PARAMETERS: Added 'is_preferred' to the downloaded properties list
         const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
-        
         if (formatsRes.ok) {
             GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
             GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
@@ -132,16 +163,14 @@ async function pullActiveStagedCalculationFromCloud() {
                         provider_name: format.provider_name ? String(format.provider_name).trim() : null,
                         purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
                         units_per_purchase: parseFloat(format.units_per_purchase || 1),
-                        is_preferred: format.is_preferred === true || format.is_preferred === 'true' // ✨ TRACK SELECTION
+                        is_preferred: format.is_preferred === true || format.is_preferred === 'true'
                     };
                 }
             });
         }
 
-        // 3. 🔍 DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES [SEQUENCE-ISOLATED]
-        // Fetches open drafts and strictly isolates the active workspace to the newest shipment sequence sequence
-        // 🌟 REPAIRED STARTUP FETCH FILTER LAYER:
-        // Replace your old targetFetchUrl with this line to ensure modified drafts remain visible on reload:
+        // 3. 🔍 DOWNLOAD ORDERS DIRECTLY FROM PERSISTENT TABLES
+        // Stays locked to the active shipment sequence loader filter we set yesterday
         const targetFetchUrl = API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc";
         const ordersRes = await fetch(targetFetchUrl, {
             method: "GET", 
@@ -155,6 +184,7 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!ordersRes.ok) throw new Error("Fallo al descargar las órdenes de compra activas.");
         const allDraftOrders = await ordersRes.json();
 
+    
         if (!allDraftOrders || allDraftOrders.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
             ACTIVE_SHIPMENT_TIMESTAMP = null;
