@@ -590,8 +590,6 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     if (!newSupplierName || newSupplierName === "Proveedor No Asignado") return;
 
     var currentItem = LOCAL_STAGED_ROWS[idx];
-    
-    // Extract the original PO string before changing the supplier name
     var originalPoString = currentItem.forced_po_number || currentItem.poNumber || "";
 
     // 1. Update the local row's provider name in memory
@@ -603,26 +601,50 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
                String(f.provider_name).trim() === String(newSupplierName).trim();
     });
 
+    // Capture the old multiplier to evaluate the scaling difference safely
+    var oldMultiplier = parseFloat(currentItem.equivalencia || currentItem.conversion_factor || 1.0);
+    var newMultiplier = 1.0;
+    var newSupplierUom = "Formato";
+
     if (matchedFormat) {
-        LOCAL_STAGED_ROWS[idx].supplier_uom = matchedFormat.purchase_uom ? String(matchedFormat.purchase_uom).trim() : "Formato";
-        LOCAL_STAGED_ROWS[idx].conversion_factor = parseFloat(matchedFormat.units_per_purchase || 1);
-        LOCAL_STAGED_ROWS[idx].equivalencia = parseFloat(matchedFormat.units_per_purchase || 1);
+        newSupplierUom = matchedFormat.purchase_uom ? String(matchedFormat.purchase_uom).trim() : "Formato";
+        newMultiplier = parseFloat(matchedFormat.units_per_purchase || 1);
+        
+        LOCAL_STAGED_ROWS[idx].supplier_uom = newSupplierUom;
+        LOCAL_STAGED_ROWS[idx].conversion_factor = newMultiplier;
+        LOCAL_STAGED_ROWS[idx].equivalencia = newMultiplier;
     } else {
         LOCAL_STAGED_ROWS[idx].supplier_uom = "Formato";
         LOCAL_STAGED_ROWS[idx].conversion_factor = 1;
         LOCAL_STAGED_ROWS[idx].equivalencia = 1;
     }
 
-    // 🌟 REPAIRED ARCHITECTURAL LAYER: Dynamic PO Prefix Isolation Engine
+    // 🌟 NEW MATHEMATICAL REALIGNMENT ENGINE:
+    // Convert the raw requirement back to kitchen UOM using old rules, then divide by the new factor!
+    var baseFaltanteKitchenNeed = parseFloat(LOCAL_STAGED_ROWS[idx].faltante_base || 0);
+    
+    // If faltante_base wasn't captured correctly, calculate it from existing count data
+    if (baseFaltanteKitchenNeed === 0 && oldMultiplier > 0) {
+        baseFaltanteKitchenNeed = parseFloat(LOCAL_STAGED_ROWS[idx].approved_formats_quantity || 0) * oldMultiplier;
+        LOCAL_STAGED_ROWS[idx].faltante_base = baseFaltanteKitchenNeed;
+    }
+
+    if (newMultiplier > 0) {
+        // Compute new wholesale counts needed for the new packaging size format
+        var recomputedWholesaleNeed = baseFaltanteKitchenNeed / newMultiplier;
+        
+        LOCAL_STAGED_ROWS[idx].pedido_sugerido = recomputedWholesaleNeed;
+        LOCAL_STAGED_ROWS[idx].approved_formats_quantity = recomputedWholesaleNeed;
+    }
+
+    // 🌟 DYNAMIC PO PREFIX ISOLATION LAYER
     var poPrefixBase = "PO-SHIP-0";
     if (originalPoString && originalPoString.includes("-SHIP-")) {
-        // Example: If original is "PO-SHIP-1-002", this splits it and extracts "PO-SHIP-1"
         var poParts = originalPoString.split("-");
         if (poParts.length >= 3) {
-            poPrefixBase = poParts[0] + "-" + poParts[1] + "-" + poParts[2]; // e.g. "PO-SHIP-1" or "PO-SHIP-12"
+            poPrefixBase = poParts[0] + "-" + poParts[1] + "-" + poParts[2]; 
         }
     } else if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        // Fallback to array element 0 mapping accessor if original PO string was missing
         var baseRow = LOCAL_STAGED_ROWS[0];
         var shipId = baseRow.shipment_id || "0";
         poPrefixBase = "PO-SHIP-" + shipId;
@@ -631,19 +653,15 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
     var existingPoNumberForNewSupplier = null;
     var highestPoIndexUsed = 0;
 
-    // Scan memory matrix rows to analyze active allocations and calculate maximum trailing index digits
     LOCAL_STAGED_ROWS.forEach(function(row, loopIdx) {
-        // 🔒 SAFETY: Skip the current item we are modifying so we don't look at its old PO record assignment
-        if (loopIdx === idx) return;
+        if (loopIdx === idx) return; // Skip item currently being modified
 
         var poStr = row.forced_po_number || row.poNumber || "";
         
-        // A. Check if the newly selected supplier already has an active card group open on canvas
         if (row.supplier_name === newSupplierName && poStr !== "") {
             existingPoNumberForNewSupplier = poStr;
         }
 
-        // B. Parse out the numeric suffix out of your exact tracking string structure
         if (poStr.includes("-SHIP-")) {
             var parts = poStr.split("-");
             var lastPart = parseInt(parts[parts.length - 1], 10);
@@ -653,21 +671,18 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         }
     });
 
-    // Enforce distinct or matching sequence tracking attributes
     if (existingPoNumberForNewSupplier) {
-        // Target card already exists: adopt its unique PO string matrix properties
         LOCAL_STAGED_ROWS[idx].poNumber = existingPoNumberForNewSupplier;
         LOCAL_STAGED_ROWS[idx].forced_po_number = existingPoNumberForNewSupplier;
     } else {
-        // Brand new card target layout: generate a completely clean advanced index suffix string
         var nextPoSuffixDigit = String(highestPoIndexUsed + 1).padStart(3, '0');
         var brandNewUniquePoNumber = poPrefixBase + "-" + nextPoSuffixDigit;
         
         LOCAL_STAGED_ROWS[idx].poNumber = brandNewUniquePoNumber;
         LOCAL_STAGED_ROWS[idx].forced_po_number = brandNewUniquePoNumber;
-        LOCAL_STAGED_ROWS[idx].db_saved_status = null; // Reset draft state for new target workspace block
+        LOCAL_STAGED_ROWS[idx].db_saved_status = null; 
         
-        console.log("✨ Successfully allocated distinct PO sequence: " + brandNewUniquePoNumber);
+        console.log("✨ Re-allocated unique conversion PO sequence: " + brandNewUniquePoNumber);
     }
 
     // 3. Re-render the grid layout so the item visually snaps into its new supplier group block
@@ -678,6 +693,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
         refreshAllActiveReceiptDisplays();
     }
 }
+
 
         function refreshAllActiveReceiptDisplays() {
             var blockDivs = document.getElementsByClassName("supplier-block");
