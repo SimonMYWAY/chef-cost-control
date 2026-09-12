@@ -720,7 +720,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
                 }
             }
         }
-// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('draft') without altering inventory stock
+// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('pending') without altering inventory stock
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -739,7 +739,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     try {
         var generatedPoUuid = null;
         
-        // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS IN PERSISTENT ORDER REGISTRY TABLES
+        // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS
         const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -747,23 +747,22 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         if (checkPoRes.ok) {
             const existingPoData = await checkPoRes.json();
             if (existingPoData && existingPoData.length > 0) {
-                // 🔒 FIXED SYSTEM STATUS RECOVERY: Maintain 'draft' status so page reloads capture it perfectly
                 generatedPoUuid = existingPoData[0].id;
                 
+                // Update header row to exact standard lowercase 'pending' status
                 await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ status: 'draft' })
+                    body: JSON.stringify({ status: 'pending' })
                 });
             }
         }
 
-        // Create a new parent document row record if it didn't exist previously
         if (!generatedPoUuid) {
             var parentPayload = {
                 po_number: poNumber,
                 supplier_name: supplierName,
-                status: 'draft', // 🌟 CRITICAL FIX: Stored as 'draft' to match your startup loader filters
+                status: 'pending', 
                 total_items: filteredLines.length
             };
 
@@ -778,12 +777,10 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             generatedPoUuid = parentRowResultData[0].id;
         }
 
-        // 2️⃣ 🛡️ SYSTEM PURGE SWEEP LAYER
-        // Look up alternative parents for these ingredients to remove legacy duplicate items before saving new ones
+        // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicate items from alternative PO documents
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             if (item.ingredient_name) {
-                // 🌟 TARGETED ERASE: Cleans the old supplier's items table lines based on name cross-referencing
                 await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
                     method: "DELETE",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -791,11 +788,10 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         }
 
-        // 3️⃣ SAVE OR UPDATE OPERATIONAL LINE ITEMS BINDINGS INDIVIDUALLY
+        // 3️⃣ SAVE OR UPDATE OPERATIONAL LINE ITEMS
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            // Check if item record entry links already exist under this parent PO ID token block setup
             const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
@@ -804,11 +800,10 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             if (checkItemRes.ok) {
                 const itemData = await checkItemRes.json();
                 if (itemData && itemData.length > 0) {
-                    existingItemId = itemData[0].id; // 🔒 SECURITY ARRAY ACCESSOR
+                    existingItemId = itemData[0].id;
                 }
             }
 
-            // Map complete structured operational metrics data schema package payload rows
             var childPayload = {
                 po_id: generatedPoUuid,
                 ingredient_name: item.ingredient_name,
@@ -820,43 +815,39 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             };
 
             if (existingItemId) {
-                // Item exists on this card container layout block entry: update metrics natively
                 await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify(childPayload)
+                    body: JSON.stringify({ childPayload })
                 });
             } else {
-                // Brand new assignment entry row to this card workspace block target container cell layout: write data record
                 await fetch(API_URL + "purchase_order_items", {
                     method: "POST",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify(childPayload)
+                    body: JSON.stringify({ childPayload })
                 });
             }
         }
 
-        // Apply a soft blue visual feedback layout to the active layout card container
         if (supplierCard) {
             supplierCard.style.borderLeft = "5px solid #3b82f6";
             var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
             if (targetContainer) {
                 targetContainer.innerHTML = `
                     <div class="status-indicator state-draft" style="background: #3b82f6; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
-                        💾 Borrador Guardado Exitosamente (Editable)
+                        💾 Borrador Guardado (Modificado/Editable)
                     </div>`;
             }
         }
 
-        // Update local memory cache array state rows attributes values variables trackers dynamically to freeze changes context
         LOCAL_STAGED_ROWS.forEach(function(r) {
             if (r.supplier_name === supplierName) {
                 r.forced_po_number = poNumber;
-                r.db_saved_status = 'draft';
+                r.db_saved_status = 'pending';
             }
         });
 
-        alert("💾 ¡Borrador guardado con éxito! El documento permanece guardado en la nube de forma persistente.");
+        alert("💾 ¡Borrador guardado con éxito como PENDIENTE! Las líneas se han reasignado y permanecen editables.");
 
     } catch (err) {
         console.error(err);
@@ -864,7 +855,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     }
 }
 
-// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once
+// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once [Part 1 of 2]
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
@@ -887,22 +878,17 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var generatedPoUuid = null;
 
         if (!isAlreadySaved) {
-            // 🔍 CHECK IF PO NUMBER ALREADY EXISTS IN DATABASE (Robust check covering array and object styles)
             const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
-                method: "GET",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
             
             if (checkPoRes.ok) {
                 const existingPoData = await checkPoRes.json();
                 if (existingPoData && existingPoData.length > 0) {
                     generatedPoUuid = existingPoData[0].id;
-                } else if (existingPoData && existingPoData.id) {
-                    generatedPoUuid = existingPoData.id;
                 }
             }
 
-                        // If it doesn't exist, create a clean new document header row
             if (!generatedPoUuid) {
                 var parentPayload = {
                     po_number: poNumber,
@@ -913,90 +899,72 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
                 const resParent = await fetch(API_URL + "purchase_orders", {
                     method: "POST",
-                    headers: {
-                        "apikey": API_KEY,
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json",
-                        "Prefer": "return=representation"
-                    },
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
                     body: JSON.stringify(parentPayload)
                 });
 
-                if (!resParent.ok) throw new Error("El servidor rechazó el almacenamiento de la cabecera del documento.");
+                if (!resParent.ok) throw new Error("Error al guardar la cabecera.");
                 const parentRowResultData = await resParent.json();
-                
-                // 🔒 CRITICAL CORRECTION: Extract id out of index zero of the array response payload cleanly
-                if (parentRowResultData && parentRowResultData.length > 0) {
                 generatedPoUuid = parentRowResultData[0].id;
-                } else if (parentRowResultData && parentRowResultData.id) {
-                generatedPoUuid = parentRowResultData.id;
-                }
-
+            } else {
+                // Update parent status to frozen whatsapp checkpoint state
+                await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
+                    method: "PATCH",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: 'saved_pending_whatsapp' })
+                });
             }
 
-            // Loop through lines to save itemization rows AND update stock levels
+            // Save child item rows natively
             for (var i = 0; i < filteredLines.length; i++) {
                 var item = filteredLines[i];
                 
+                // Clear old items from any alternative headers to prevent duplicate entries on split cards
+                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+
+                const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
+                    method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+                
+                var existingItemId = null;
+                if (checkItemRes.ok) {
+                    const itemData = await checkItemRes.json();
+                    if (itemData && itemData.length > 0) existingItemId = itemData[0].id;
+                }
+
                 var childPayload = {
                     po_id: generatedPoUuid,
                     ingredient_name: item.ingredient_name,
-                    quantity_ordered: item.approved_formats_quantity,
-                    supplier_uom: item.supplier_uom
+                    quantity_ordered: Math.ceil(item.approved_formats_quantity),
+                    supplier_uom: item.supplier_uom || "Formato",
+                    faltante_base: parseFloat(item.faltante_base || 0),
+                    equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
+                    recipe_uom: item.recipe_uom || "unidad"
                 };
 
-                await fetch(API_URL + "purchase_order_items", {
-                    method: "POST",
-                    headers: {
-                        "apikey": API_KEY,
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(childPayload)
-                });
-
-                // Fetch current inventory directly
-                const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
-                    method: "GET",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-                
-                if (ingFetchRes.ok) {
-                    const ingDataArray = await ingFetchRes.json();
-                    var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
-                    
-                    if (dbIngredient) {
-                        var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
-                        var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
-                        var conversionFactor = parseFloat(item.conversion_factor || 1);
-                        
-                        var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
-                        var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
-                        if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
-
-                        // Patch increased stock level back onto master row
-                        await fetch(API_URL + "ingredients?id=eq." + item.ingredient_id, {
-                            method: "PATCH",
-                            headers: {
-                                "apikey": API_KEY,
-                                "Authorization": "Bearer " + API_KEY,
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
-                            })
-                        });
-                    }
+                if (existingItemId) {
+                    await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
+                        method: "PATCH", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify(childPayload)
+                    });
+                } else {
+                    await fetch(API_URL + "purchase_order_items", {
+                        method: "POST", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify(childPayload)
+                    });
                 }
+                
+                // 🛑 INVENTORY REMOVED FROM HERE FOR SECURITY 
+                // Stock updates do not execute during clipboard tracking phases anymore!
             }
-            console.log("💾 Base de datos e inventario registrados de manera limpia.");
+            console.log("💾 Base de datos congelada exitosamente. Listos para despacho.");
         }
-
-
         // --- STEP 2: FORMAT & CLIPBOARD COPY ---
         var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
         filteredLines.forEach(function(item) {
-            msg += "▫️ *" + item.approved_formats_quantity + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
+            msg += "▫️ *" + Math.ceil(item.approved_formats_quantity) + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
         });
         msg += "\nPor favor confirmar recepción y fecha de entrega estimada. Adjunto comprobante de recibo visual.";
 
@@ -1005,30 +973,27 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
-            supplierCard.style.borderLeft = "5px solid #f1c40f"; // Distinct yellow border anchor
+            supplierCard.style.borderLeft = "5px solid #f1c40f"; 
             
             var targetContainer = supplierCard.querySelector(".status-indicator-placeholder");
             if (targetContainer) {
                 targetContainer.innerHTML = `
                     <div class="status-indicator state-pending-delivery" style="background: #f1c40f; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
                         📝 Guardado - Pendiente de enviar en WhatsApp
-                    </div>
-                `;
+                    </div>`;
             }
 
             var confirmationCheckboxNode = supplierCard.querySelector(".final-dispatch-gate");
             if (confirmationCheckboxNode) {
-                confirmationCheckboxNode.style.display = "flex"; // Match layout structural type
+                confirmationCheckboxNode.style.display = "flex"; 
             }
 
-            // 🔒 CRITICAL FIX: Freeze all dropdown menus, input fields, and approval checkboxes
             supplierCard.querySelectorAll("select, input[type='number'], input[type='checkbox']:not([onchange*='markSupplierOrderAsDispatched'])").forEach(function(input) {
                 input.disabled = true;
                 input.style.background = "#f1f5f9";
                 input.style.color = "#64748b";
             });
 
-            // 🔒 CRITICAL FIX: Disable both action buttons to prevent accidental duplicate execution submissions
             supplierCard.querySelectorAll(".main-actions button").forEach(function(btn) {
                 btn.disabled = true;
                 btn.style.opacity = "0.4";
@@ -1036,49 +1001,22 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             });
         }
 
-        if (!isAlreadySaved) {
-            alert("💾 ¡Datos guardados en Supabase, inventario incrementado y orden copiada al portapapeles! Abre WhatsApp para enviar.");
-        } else {
-            alert("📋 ¡Texto copiado de nuevo al portapapeles de manera segura sin alterar inventario!");
-        }
-        
-       
+        LOCAL_STAGED_ROWS.forEach(function(r) {
+            if (r.supplier_name === supplierName) {
+                r.forced_po_number = poNumber;
+                r.db_saved_status = 'saved_pending_whatsapp';
+            }
+        });
+
+        alert("📋 ¡Orden guardada en la nube y copiada al portapapeles! El stock de inventario se mantendrá intacto hasta confirmar el despacho en el chat.");
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
-        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso en Supabase: " + err.message);
+        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso: " + err.message);
     }
 }
 
-// ⚡ LIFE-CYCLE RECOVERY: Checks if terminal queue is empty and releases button states cleanly
-function verifyAndReleaseShipmentLock() {
-    // 1. If lines are still left to process, keep terminal locked down
-    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) return;
-
-    // 2. All items clear! Destroy the sales reference meta banner
-    var existingHeader = document.getElementById("terminal-cargo-meta-header");
-    if (existingHeader) {
-        existingHeader.remove();
-    }
-
-    // 3. Clear global tracking values
-    ACTIVE_SHIPMENT_TIMESTAMP = null;
-
-    // 4. Restore the core sync load button back to active status
-    var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
-    if (loadButton) {
-        loadButton.disabled = false;
-        loadButton.style.opacity = "1";
-        loadButton.style.cursor = "pointer";
-        loadButton.innerText = "📥 Cargar Ventas Procesadas del Día";
-    }
-
-    var workspace = document.getElementById("manager-grid-workspace");
-    if (workspace) {
-        workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
-    }
-}
-
+// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
     var poNumber = "PO-SYSTEM";
@@ -1087,23 +1025,60 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
 
+    // Filter lines belonging to this supplier to run inventory operations
+    var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
+
     try {
-        // 🔒 RELATIONAL TRANSITION: Update the row state inside Supabase directly using the PO identity signature
+        // 1️⃣ RELATIONAL TRANSITION: Update order status to dispatched in Supabase
         const patchRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
             method: "PATCH",
-            headers: {
-                "apikey": API_KEY,
-                "Authorization": "Bearer " + API_KEY,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                status: 'dispatched'
-            })
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ status: 'dispatched' })
         });
 
         if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho.");
 
-        // Apply visual updates locally to sink the card
+        // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER (Safely isolated here)
+        for (var i = 0; i < filteredLines.length; i++) {
+            var item = filteredLines[i];
+            
+            // Resolve the item's true ingredient UUID from the translation dictionary if needed
+            var finalIngredientId = item.ingredient_id;
+            if ((!finalIngredientId || finalIngredientId.includes(" ")) && typeof masterNameToUuidMap !== "undefined") {
+                var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
+                finalIngredientId = masterNameToUuidMap[cleanNameLower] || finalIngredientId;
+            }
+
+            const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientId, {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
+            
+            if (ingFetchRes.ok) {
+                const ingDataArray = await ingFetchRes.json();
+                var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
+                
+                if (dbIngredient) {
+                    var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
+                    var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
+                    var conversionFactor = parseFloat(item.conversion_factor || item.equivalencia || 1);
+                    
+                    var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
+                    var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
+                    if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
+
+                    // Patch increased stock level back onto master row
+                    await fetch(API_URL + "ingredients?id=eq." + finalIngredientId, {
+                        method: "PATCH",
+                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
+                        })
+                    });
+                }
+            }
+        }
+
+        // 3️⃣ Apply visual updates locally to sink the card
         if (supplierCard) {
             supplierCard.style.opacity = "0.35";
             supplierCard.style.filter = "grayscale(100%) blur(0.5px)";
@@ -1117,13 +1092,20 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     </div>`;
             }
 
-            // Sink card to the bottom of the workspace
+            // Sink card layout to the bottom of the container
             if (supplierCard.parentNode) {
                 supplierCard.parentNode.appendChild(supplierCard);
             }
         }
+
+        LOCAL_STAGED_ROWS.forEach(function(r) {
+            if (r.supplier_name === supplierName) {
+                r.db_saved_status = 'dispatched';
+                r.db_status = 'dispatched';
+            }
+        });
         
-        alert("⚫ ¡Orden marcada como DESPACHADA con éxito en la base de datos!");
+        alert("✅ ¡Orden finalizada! El documento se ha cerrado y el stock de inventario se ha incrementado correctamente.");
 
     } catch (err) {
         console.error("Dispatch Error:", err);
