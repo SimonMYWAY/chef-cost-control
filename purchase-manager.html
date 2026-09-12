@@ -1238,13 +1238,17 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.innerText = txt;
     slipContainer.style.display = "block";
 }
-// 🛡️ RE-ENFORCED INTERCEPTOR FIREWALL: Background tracking routine
+
+// 🛡️ RE-ENFORCED INTERCEPTOR FIREWALL: Background tracking routine (Fixed Infinite Loop)
 setInterval(async function enforceRemoteSequenceFirewall() {
-    if (typeof LOCAL_STAGED_ROWS === "undefined" || LOCAL_STAGED_ROWS.length === 0) return;
+    // 🌟 Ensure data exists and is a valid populated collection array before scanning
+    if (typeof LOCAL_STAGED_ROWS === "undefined" || !Array.isArray(LOCAL_STAGED_ROWS) || LOCAL_STAGED_ROWS.length === 0) return;
     
     var currentScreenShipId = "00";
-    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        currentScreenShipId = String(LOCAL_STAGED_ROWS[0].shipment_id || "00");
+    if (LOCAL_STAGED_ROWS.length > 0) {
+        // 🌟 FIXED ACCESSOR INDEX: Legally pull the metric out of element index zero!
+        var baseRowReference = LOCAL_STAGED_ROWS[0];
+        currentScreenShipId = String(baseRowReference.shipment_id || "00");
     }
 
     try {
@@ -1257,7 +1261,8 @@ setInterval(async function enforceRemoteSequenceFirewall() {
             if (seedData && seedData.length > 0) {
                 var globalDatabaseShipId = String(seedData[0].value_numeric || seedData[0].value_text || "00");
                 
-                if (globalDatabaseShipId !== "00" && globalDatabaseShipId !== currentScreenShipId) {
+                // 🚫 ALARM CONDITION: Real difference detected between active database index and current screen index
+                if (globalDatabaseShipId !== "00" && currentScreenShipId !== "00" && globalDatabaseShipId !== currentScreenShipId) {
                     var workspace = document.getElementById("manager-grid-workspace");
                     if (workspace && !document.getElementById("terminal-breach-lockout-banner")) {
                         
@@ -1265,7 +1270,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
                         var lockBanner = document.createElement("div");
                         lockBanner.id = "terminal-breach-lockout-banner";
                         lockBanner.innerHTML = `
-                            <div style="background:#ef4444; color:white; padding:18px; border-radius:8px; font-weight:bold; text-align:center; margin-bottom:15px; font-size:1.1rem;">
+                            <div style="background:#ef4444; color:white; padding:18px; border-radius:8px; font-weight:bold; text-align:center; margin-bottom:15px; font-size:1.1rem; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
                                 ⚠️ TERMINAL BLOQUEADA POR SEGURIDAD LOGÍSTICA<br>
                                 <span style="font-weight:400; font-size:0.9rem;">Se ha procesado un nuevo cargamento desde el Backoffice (#${globalDatabaseShipId}). Vista antigua desactivada.</span><br>
                                 <button onclick="location.reload()" style="margin-top:10px; background:white; color:#ef4444; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">🔄 Cargar Nuevo Embarque</button>
@@ -1279,7 +1284,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
                         document.querySelectorAll("select, input, button, .item-row").forEach(function(el) {
                             el.disabled = true;
                             el.style.opacity = "0.2";
-                            el.style.pointerEvents = "none"; // 🌟 CRITICAL: Destroys all clickability
+                            el.style.pointerEvents = "none";
                         });
                         
                         workspace.style.filter = "blur(3px) grayscale(100%)";
@@ -1294,7 +1299,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
     } catch (err) {
         console.warn("Sequence tracking skipped:", err);
     }
-}, 3000); // Check frequency accelerated to 3 seconds for maximum security
+}, 4000); // Check every 4 seconds to balance performance and reaction timing
 
     </script>
 </body>
