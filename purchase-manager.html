@@ -1239,24 +1239,36 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.style.display = "block";
 }
 
-// 🛡️ SECURITY INTERCEPTOR FIREWALL: Direct UI Selector Tracking Engine (Fixed Selector Collision)
+// 🛡️ SECURITY INTERCEPTOR FIREWALL: Pure Memory Mapping Engine (Fixed Element Zero Alignment)
 setInterval(async function enforceRemoteSequenceFirewall() {
-    // 1. Locate the master meta-header container on your layout
-    var headerNode = document.getElementById("terminal-cargo-meta-header");
-    if (!headerNode) return; 
+    // 1️⃣ PRE-CONDITION FIREWALL: Skip the check if there is no data array active on the screen layout
+    if (typeof LOCAL_STAGED_ROWS === "undefined" || !Array.isArray(LOCAL_STAGED_ROWS) || LOCAL_STAGED_ROWS.length === 0) return;
 
-    // 🌟 FIX: Explicitly target the strong tag inside the first div to capture ONLY the Shipment ID numbers
-    var firstDiv = headerNode.querySelector("div");
-    if (!firstDiv) return;
+    // 2️⃣ EXTRACT VALUE DIRECTLY FROM ACTIVE SYSTEM RECORD MEMORY CORES
+    var currentScreenShipId = 0;
     
-    var strongElement = firstDiv.querySelector("strong");
-    if (!strongElement) return;
-    
-    var currentScreenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
-    if (isNaN(currentScreenShipId)) return;
+    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+        // Read out the sequence number from our verified index element zero snapshot row
+        var baseRowReference = LOCAL_STAGED_ROWS[0];
+        currentScreenShipId = parseInt(baseRowReference.shipment_id || baseRowReference.forced_po_number?.split("-SHIP-")?.[1]?.split("-")?.[0] || 0, 10);
+    }
+
+    // Secondary fallback: If memory arrays are processing a redraw shift, pull and parse from text node elements
+    if (currentScreenShipId === 0) {
+        var headerNode = document.getElementById("terminal-cargo-meta-header");
+        if (headerNode) {
+            var strongElement = headerNode.querySelector("strong");
+            if (strongElement) {
+                // Strip away emojis, words, and text symbols to extract ONLY pure integers
+                currentScreenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
+            }
+        }
+    }
+
+    if (!currentScreenShipId || isNaN(currentScreenShipId) || currentScreenShipId === 0) return;
 
     try {
-        // Read the global master sequence number from the database setting key
+        // 3️⃣ READ THE MASTER REVOLUTION VERSION VALUE DIRECTLY FROM THE DATABASE
         const checkSeedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "GET", headers: { "apikey": API_KEY }
         });
@@ -1267,19 +1279,20 @@ setInterval(async function enforceRemoteSequenceFirewall() {
                 // Isolate the numeric column property natively
                 var globalDatabaseShipId = parseInt(seedData[0].value_numeric || seedData[0].value_text, 10);
                 
-                // Diagnostic log
-                console.log(`🔍 [FIREWALL TICK] Screen Ship ID: ${currentScreenShipId} | Database Cloud ID: ${globalDatabaseShipId}`);
+                // Diagnostic live tracking ticker console logs
+                console.log(`🔍 [FIREWALL TICK] Active Screen Layout: #${currentScreenShipId} | Cloud Ledger: #${globalDatabaseShipId}`);
 
+                // 4️⃣ INTERCEPT LOCKOUT GATE
                 if (!isNaN(globalDatabaseShipId) && globalDatabaseShipId !== currentScreenShipId) {
-                    console.error("🚨 SECURITY BREACH INTERCEPTED: Obsolete screen version detected. Triggering absolute lockdown.");
+                    console.error(`🚨 FIREWALL LOCKOUT ENGAGED: Screen version #${currentScreenShipId} is obsolete vs Cloud #${globalDatabaseShipId}`);
                     
-                    // 1. Clear array memory parameters immediately so user events cannot parse records
+                    // Clear array memory parameters immediately so user events cannot parse records
                     LOCAL_STAGED_ROWS = []; 
                     
-                    // 2. Inject an absolute full-screen invisible barrier to kill all clickability instantly
                     if (!document.getElementById("terminal-breach-lockout-banner")) {
                         var bodyNode = document.body;
                         
+                        // Drop full-screen blurred lockout shield over user workspace input fields
                         var lockBanner = document.createElement("div");
                         lockBanner.id = "terminal-breach-lockout-banner";
                         lockBanner.style = "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15, 23, 42, 0.7); z-index:99999999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(5px); pointer-events:all !important;";
@@ -1292,17 +1305,20 @@ setInterval(async function enforceRemoteSequenceFirewall() {
                             </div>`;
                         bodyNode.appendChild(lockBanner);
                         
-                        // 3. Absolute structural click and selector freeze barrier properties
+                        // Complete structural click and selector freeze barrier properties
                         document.querySelectorAll("select, input, button, .item-row, .mini-btn").forEach(function(el) {
                             el.disabled = true;
                             el.style.opacity = "0.1";
                             el.style.pointerEvents = "none"; 
                         });
                         
-                        workspace.style.filter = "blur(4px) grayscale(100%)";
-                        workspace.style.pointerEvents = "none";
+                        var workspace = document.getElementById("manager-grid-workspace");
+                        if (workspace) {
+                            workspace.style.filter = "blur(4px) grayscale(100%)";
+                            workspace.style.pointerEvents = "none";
+                        }
                         
-                        alert(`⚠️ ¡Embarque Obsoleto!\n\nEl terminal ha detectado un nuevo cargamento (#${globalDatabaseShipId}) procesado desde el Backoffice. Esta pantalla ha sido bloqueada de manera segura.`);
+                        alert(`⚠️ ¡Embarque Obsoleto!\nSe ha detectado un nuevo cargamento (#${globalDatabaseShipId}) procesado desde el Backoffice. Esta pantalla ha sido bloqueada de manera segura.`);
                         location.reload();
                     }
                 }
