@@ -491,15 +491,21 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 }
             });
 
-                    // 🚀 THE MATHEMATICAL SYNC
+            // --- THE MATHEMATICAL SYNC ---
             var baseMissingQty = parseFloat(item.faltante_base || 0);
             var approvedCount = parseFloat(item.approved_formats_quantity || item.pedido_sugerido || 0);
             var equivalenceMultiplier = parseFloat(item.equivalencia || 1.0);
             
-            // 🔥 FIXED CRITICAL FORMULA: Approved Formats Quantity * Conversion Factor (Multiplier)
+            // 🌟 FIXED PERMANENT STARTING POINT ENGINE:
+            // Calculate the true wholesale suggested amount from the immutable raw kitchen shortfall deficit!
+            var permanentSuggestedPackages = 0;
+            if (equivalenceMultiplier > 0) {
+                permanentSuggestedPackages = Math.ceil(baseMissingQty / equivalenceMultiplier);
+            } else {
+                permanentSuggestedPackages = Math.ceil(item.pedido_sugerido || 0);
+            }
+
             var currentEquivalenceWeightValue = (approvedCount * equivalenceMultiplier).toFixed(2);
-            
-            // 🔥 FIXED CRITICAL UNIT DISPLAY: Use the real database field string
             var displayRecipeUOM = item.recipe_uom || "unidad";
 
             blockHtml += `
@@ -508,7 +514,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
-                            <!-- 🚀 FIXED UNITS -->
                             <div class="box-val">${baseMissingQty.toFixed(2)} ${displayRecipeUOM}</div>
                         </div>
                         <div class="data-box">
@@ -523,10 +528,14 @@ function renderInteractiveManagerSpreadsheetGrid() {
                                 </select>
                             </div>
                         </div>
+                        
+                        <!-- 🌟 UPGRADED: Permanent Sugerido Display Anchor Box -->
                         <div class="data-box">
                             <div class="box-label">Pedido Sugerido</div>
-                            <div class="box-val" style="color:var(--muted);">${Math.ceil(item.pedido_sugerido || 0)} ${item.supplier_uom || 'Unidad'}</div>
+                            <!-- Displays the immutable baseline recommendation regardless of what the user manually approves! -->
+                            <div class="box-val" style="color:var(--muted);">${permanentSuggestedPackages} ${item.supplier_uom || 'Unidad'}</div>
                         </div>
+
                         <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
                             <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
                             <div class="box-val" style="margin-top:2px;">
@@ -536,7 +545,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
                             <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
                             <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">
-                                <!-- 🚀 FIXED CALCULATIONS & UNITS -->
                                 <strong>${currentEquivalenceWeightValue} ${displayRecipeUOM}</strong> (Factor: 1x ${equivalenceMultiplier})
                             </div>
                         </div>
