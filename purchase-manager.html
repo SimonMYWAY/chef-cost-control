@@ -1239,36 +1239,50 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.style.display = "block";
 }
 
-// 🛡️ SECURITY INTERCEPTOR FIREWALL: Pure Memory Mapping Engine (Fixed Element Zero Alignment)
+// 🛡️ SECURITY INTERCEPTOR FIREWALL: Pure Memory Mapping Engine (Fixed & Restored)
 setInterval(async function enforceRemoteSequenceFirewall() {
-    // 1️⃣ PRE-CONDITION FIREWALL: Skip the check if there is no data array active on the screen layout
+    // 1️⃣ Check if there is an active cargo collection currently on screen
     if (typeof LOCAL_STAGED_ROWS === "undefined" || !Array.isArray(LOCAL_STAGED_ROWS) || LOCAL_STAGED_ROWS.length === 0) return;
 
-    // 2️⃣ EXTRACT VALUE DIRECTLY FROM ACTIVE SYSTEM RECORD MEMORY CORES
     var currentScreenShipId = 0;
     
-    if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-        // Read out the sequence number from our verified index element zero snapshot row
-        var baseRowReference = LOCAL_STAGED_ROWS[0];
-        currentScreenShipId = parseInt(baseRowReference.shipment_id || baseRowReference.forced_po_number?.split("-SHIP-")?.[1]?.split("-")?.[0] || 0, 10);
+    try {
+        var firstRow = LOCAL_STAGED_ROWS[0];
+        if (firstRow) {
+            // Read shipment_id if explicitly stored
+            if (firstRow.shipment_id && !isNaN(parseInt(firstRow.shipment_id, 10))) {
+                currentScreenShipId = parseInt(firstRow.shipment_id, 10);
+            } else {
+                // Fallback: Extract digits cleanly out of the active PO text string "PO-SHIP-48-001"
+                var activePoStr = firstRow.forced_po_number || firstRow.poNumber || "";
+                if (activePoStr.includes("-SHIP-")) {
+                    var poParts = activePoStr.split("-"); // ["PO", "SHIP", "48", "001"]
+                    if (poParts.length >= 3) {
+                        currentScreenShipId = parseInt(poParts[2], 10);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Internal memory parsing catch:", e);
     }
 
-    // Secondary fallback: If memory arrays are processing a redraw shift, pull and parse from text node elements
-    if (currentScreenShipId === 0) {
+    // Final fallback: If memory variables are shifting during a redraw, parse numbers from the visual header element text
+    if (!currentScreenShipId || isNaN(currentScreenShipId) || currentScreenShipId === 0) {
         var headerNode = document.getElementById("terminal-cargo-meta-header");
         if (headerNode) {
             var strongElement = headerNode.querySelector("strong");
             if (strongElement) {
-                // Strip away emojis, words, and text symbols to extract ONLY pure integers
                 currentScreenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
             }
         }
     }
 
+    // Safety brake: If the active screen ship ID cannot be determined yet, skip this tick loop
     if (!currentScreenShipId || isNaN(currentScreenShipId) || currentScreenShipId === 0) return;
 
     try {
-        // 3️⃣ READ THE MASTER REVOLUTION VERSION VALUE DIRECTLY FROM THE DATABASE
+        // 2️⃣ READ THE MASTER REVOLUTION VERSION VALUE DIRECTLY FROM THE DATABASE
         const checkSeedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "GET", headers: { "apikey": API_KEY }
         });
@@ -1276,23 +1290,22 @@ setInterval(async function enforceRemoteSequenceFirewall() {
         if (checkSeedRes.ok) {
             const seedData = await checkSeedRes.json();
             if (seedData && seedData.length > 0) {
-                // Isolate the numeric column property natively
                 var globalDatabaseShipId = parseInt(seedData[0].value_numeric || seedData[0].value_text, 10);
                 
-                // Diagnostic live tracking ticker console logs
-                console.log(`🔍 [FIREWALL TICK] Active Screen Layout: #${currentScreenShipId} | Cloud Ledger: #${globalDatabaseShipId}`);
+                // 🔍 LIVE MONITOR DICTIONARY: Prints states clearly every 3 seconds to your developer console (F12)
+                console.log(`🔍 [FIREWALL TICK] Screen Layout: #${currentScreenShipId} | Cloud Ledger: #${globalDatabaseShipId}`);
 
-                // 4️⃣ INTERCEPT LOCKOUT GATE
+                // 3️⃣ INTERCEPT LOCKOUT GATE: Trigger freeze when a true version difference is caught
                 if (!isNaN(globalDatabaseShipId) && globalDatabaseShipId !== currentScreenShipId) {
-                    console.error(`🚨 FIREWALL LOCKOUT ENGAGED: Screen version #${currentScreenShipId} is obsolete vs Cloud #${globalDatabaseShipId}`);
+                    console.error(`🚨 FIREWALL LOCKOUT ENGAGED: Obsolete screen version #${currentScreenShipId} vs Cloud #${globalDatabaseShipId}`);
                     
-                    // Clear array memory parameters immediately so user events cannot parse records
+                    // Clear the array cache instantly so background saves cannot fetch records
                     LOCAL_STAGED_ROWS = []; 
                     
                     if (!document.getElementById("terminal-breach-lockout-banner")) {
                         var bodyNode = document.body;
                         
-                        // Drop full-screen blurred lockout shield over user workspace input fields
+                        // Drop a full-screen blurred lockout shield over input fields
                         var lockBanner = document.createElement("div");
                         lockBanner.id = "terminal-breach-lockout-banner";
                         lockBanner.style = "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15, 23, 42, 0.7); z-index:99999999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(5px); pointer-events:all !important;";
@@ -1305,7 +1318,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
                             </div>`;
                         bodyNode.appendChild(lockBanner);
                         
-                        // Complete structural click and selector freeze barrier properties
+                        // Disable buttons, dropdown values, and checkboxes completely
                         document.querySelectorAll("select, input, button, .item-row, .mini-btn").forEach(function(el) {
                             el.disabled = true;
                             el.style.opacity = "0.1";
