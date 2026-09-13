@@ -4202,7 +4202,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             var latestStockMap = {};
             freshIngs.forEach(ing => { latestStockMap[String(ing.id)] = parseFloat(ing.std_inventory || 0); });
 
-            // Apply the latest live snapshot data onto our temporary requirements list
+                        // Apply the latest live snapshot data onto our temporary requirements list
             TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
                 var currentLiveStock = latestStockMap[String(line.ingredient_id)] || 0;
                 var projectedStockAfterSales = currentLiveStock - parseFloat(line.consumption || 0);
@@ -4211,11 +4211,18 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 var stockMax = parseFloat(line.stock_max || 0);
                 var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
 
+                // 🌟 FIXED NET DEFICIT CALCULATIONS GATEway:
+                var definitiveNetFaltanteBase = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
+
                 line.last_std_inventory = currentLiveStock;
                 line.actual_std_inventory = projectedStockAfterSales;
-                line.suggested_quantity = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
-                line.approved_quantity = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
+                
+                // 🔒 SCHEMA CORRECTION: Force faltante_base to explicitly calculate (Stock Max - Inventory)
+                line.faltante_base = definitiveNetFaltanteBase; 
+                line.suggested_quantity = definitiveNetFaltanteBase;
+                line.approved_quantity = definitiveNetFaltanteBase;
             });
+
         }
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
