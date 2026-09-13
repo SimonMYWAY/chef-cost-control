@@ -744,15 +744,43 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
             }
         }
 
-        // 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft ('pending') without altering inventory stock
+// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
-    // Add this check block right at the beginning of saveSupplierOrderAsDraft:
-if (document.getElementById("terminal-breach-lockout-banner") || 
-   (document.getElementById("btn-cargar-ventas") && document.getElementById("btn-cargar-ventas").innerText.includes("Bloqueado"))) {
-    alert("❌ OPERACIÓN RECHAZADA: Esta terminal está congelada porque el Backoffice ha procesado un nuevo cargamento. Debe recargar la página.");
-    location.reload();
-    return;
-}
+    
+    // =======================================================================
+    // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE WRITING
+    // =======================================================================
+    try {
+        var headerNode = document.getElementById("terminal-cargo-meta-header");
+        if (headerNode) {
+            var strongElement = headerNode.querySelector("div strong");
+            if (strongElement) {
+                // Extract exactly what ship number is currently printed on the screen card
+                var screenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
+                
+                // Query the true master sequence status from Supabase
+                const seedCheck = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+                    method: "GET", headers: { "apikey": API_KEY }
+                });
+                
+                if (seedCheck.ok) {
+                    const seedData = await seedCheck.json();
+                    if (seedData && seedData.length > 0) {
+                        var trueCloudShipId = parseInt(seedData[0].value_numeric || seedData[0].value_text, 10);
+                        
+                        // 🚨 INTERCEPT BARRIER: If a new ship has arrived, reject the transaction!
+                        if (!isNaN(trueCloudShipId) && trueCloudShipId !== screenShipId) {
+                            alert(`🚨 OPERACIÓN BLOQUEADA POR SEGURIDAD:\n\nEl Backoffice ha emitido un nuevo embarque (#${trueCloudShipId}). Esta terminal está mostrando un embarque obsoleto (#${screenShipId}).\n\nNo se guardó ningún cambio. La página se recargará para descargar el nuevo pedido.`);
+                            location.reload();
+                            return; // Halt function execution completely
+                        }
+                    }
+                }
+            }
+        }
+    } catch (firewallErr) {
+        console.warn("Logistics security checkpoint bypassed or failed:", firewallErr);
+    }
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -889,15 +917,40 @@ if (document.getElementById("terminal-breach-lockout-banner") ||
     }
 }
 
-// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text, and update UI state at once [Part 1 of 2]
+// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
-    // Add this check block right at the beginning of saveSupplierOrderAsDraft:
-if (document.getElementById("terminal-breach-lockout-banner") || 
-   (document.getElementById("btn-cargar-ventas") && document.getElementById("btn-cargar-ventas").innerText.includes("Bloqueado"))) {
-    alert("❌ OPERACIÓN RECHAZADA: Esta terminal está congelada porque el Backoffice ha procesado un nuevo cargamento. Debe recargar la página.");
-    location.reload();
-    return;
-}
+
+    // =======================================================================
+    // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE EXECUTION
+    // =======================================================================
+    try {
+        var headerNode = document.getElementById("terminal-cargo-meta-header");
+        if (headerNode) {
+            var strongElement = headerNode.querySelector("div strong");
+            if (strongElement) {
+                var screenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
+                
+                const seedCheck = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
+                    method: "GET", headers: { "apikey": API_KEY }
+                });
+                
+                if (seedCheck.ok) {
+                    const seedData = await seedCheck.json();
+                    if (seedData && seedData.length > 0) {
+                        var trueCloudShipId = parseInt(seedData[0].value_numeric || seedData[0].value_text, 10);
+                        
+                        if (!isNaN(trueCloudShipId) && trueCloudShipId !== screenShipId) {
+                            alert(`🚨 ENVIÓ RECHAZADO POR SEGURIDAD:\n\nEl Backoffice ha emitido un nuevo embarque (#${trueCloudShipId}). Los datos en esta pantalla corresponden al embarque antiguo (#${screenShipId}) y ya no son válidos.\n\nLa terminal se actualizará de inmediato.`);
+                            location.reload();
+                            return; // Halt function execution completely
+                        }
+                    }
+                }
+            }
+        }
+    } catch (firewallErr) {
+        console.warn("Logistics security checkpoint bypassed or failed:", firewallErr);
+    }
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
