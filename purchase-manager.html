@@ -1239,19 +1239,31 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     slipContainer.style.display = "block";
 }
 
-// 🛡️ RE-ENFORCED INTERCEPTOR FIREWALL: Background tracking routine (Fixed Infinite Loop)
+// 🛡️ RE-ENFORCED INTERCEPTOR FIREWALL: Direct UI Selector Tracking Engine (With Ghost-Blur Fix)
 setInterval(async function enforceRemoteSequenceFirewall() {
-    // 🌟 Ensure data exists and is a valid populated collection array before scanning
-    if (typeof LOCAL_STAGED_ROWS === "undefined" || !Array.isArray(LOCAL_STAGED_ROWS) || LOCAL_STAGED_ROWS.length === 0) return;
+    // 1. Locate the master meta-header container on your active window layout
+    var headerNode = document.getElementById("terminal-cargo-meta-header");
+    if (!headerNode) return; // Skip if no shipment is loaded on canvas
+
+    // 🌟 EXTRACT VALUE DIRECTLY FROM SCREEN: Isolate the text number inside the <strong> tag
+    var strongElement = headerNode.querySelector("strong");
+    if (!strongElement) return;
     
-    var currentScreenShipId = "00";
-    if (LOCAL_STAGED_ROWS.length > 0) {
-        // 🌟 FIXED ACCESSOR INDEX: Legally pull the metric out of element index zero!
-        var baseRowReference = LOCAL_STAGED_ROWS[0];
-        currentScreenShipId = String(baseRowReference.shipment_id || "00");
+    var currentScreenShipId = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+    if (!currentScreenShipId) return;
+
+    // 🌟 EXTRA FIX: Automatically strip away any accidental legacy blur filters if a lockout hasn't actually fired
+    var workspace = document.getElementById("manager-grid-workspace");
+    if (workspace && !document.getElementById("terminal-breach-lockout-banner")) {
+        if (workspace.style.filter.includes("blur")) {
+            workspace.style.filter = "none";
+            workspace.style.pointerEvents = "auto";
+            console.log("🧹 Visual Patch: Stripped accidental background ghost blur from layout container.");
+        }
     }
 
     try {
+        // Read the global master sequence number from the database setting key
         const checkSeedRes = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
             method: "GET", headers: { "apikey": API_KEY }
         });
@@ -1259,47 +1271,49 @@ setInterval(async function enforceRemoteSequenceFirewall() {
         if (checkSeedRes.ok) {
             const seedData = await checkSeedRes.json();
             if (seedData && seedData.length > 0) {
-                var globalDatabaseShipId = String(seedData[0].value_numeric || seedData[0].value_text || "00");
+                var globalDatabaseShipId = String(seedData.value_numeric || seedData.value_text || "").trim();
                 
-                // 🚫 ALARM CONDITION: Real difference detected between active database index and current screen index
-                if (globalDatabaseShipId !== "00" && currentScreenShipId !== "00" && globalDatabaseShipId !== currentScreenShipId) {
-                    var workspace = document.getElementById("manager-grid-workspace");
+                // 🚨 INTERCEPT LOCKOUT GATE: Real difference detected between screen layer and cloud ledger
+                if (globalDatabaseShipId !== "" && currentScreenShipId !== "" && globalDatabaseShipId !== currentScreenShipId) {
+                    console.warn(`🚨 LOGISTICS SECURITY VIOLATION: Obsolete View #${currentScreenShipId} vs Active Cloud #${globalDatabaseShipId}`);
+                    
                     if (workspace && !document.getElementById("terminal-breach-lockout-banner")) {
                         
-                        // 1. Inject lockout notification
+                        // 1. Inject an overlay block to cover user input areas completely
                         var lockBanner = document.createElement("div");
                         lockBanner.id = "terminal-breach-lockout-banner";
+                        lockBanner.style = "position:sticky; top:10px; z-index:999999;";
                         lockBanner.innerHTML = `
-                            <div style="background:#ef4444; color:white; padding:18px; border-radius:8px; font-weight:bold; text-align:center; margin-bottom:15px; font-size:1.1rem; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
-                                ⚠️ TERMINAL BLOQUEADA POR SEGURIDAD LOGÍSTICA<br>
-                                <span style="font-weight:400; font-size:0.9rem;">Se ha procesado un nuevo cargamento desde el Backoffice (#${globalDatabaseShipId}). Vista antigua desactivada.</span><br>
-                                <button onclick="location.reload()" style="margin-top:10px; background:white; color:#ef4444; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">🔄 Cargar Nuevo Embarque</button>
+                            <div style="background:#ef4444; color:white; padding:20px; border-radius:12px; font-weight:bold; text-align:center; margin-bottom:20px; font-size:1.15rem; box-shadow:0 20px 25px -5px rgba(0,0,0,0.15);">
+                                ⚠️ TERMINAL CONGELADA POR ACTUALIZACIÓN<br>
+                                <span style="font-weight:400; font-size:0.95rem;">El Backoffice ha emitido un nuevo embarque (#${globalDatabaseShipId}). Esta sesión antigua (#${currentScreenShipId}) ha sido desactivada automáticamente para proteger el inventario.</span><br>
+                                <button onclick="location.reload()" style="margin-top:12px; background:white; color:#ef4444; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">🔄 Cargar Nuevo Embarque</button>
                             </div>`;
                         workspace.parentNode.insertBefore(lockBanner, workspace);
                         
-                        // 2. Clear out local storage references so saves can't run
+                        // 2. Clear array memory parameters immediately so user events cannot parse records
                         LOCAL_STAGED_ROWS = []; 
                         
-                        // 3. Complete structural click and selection lockout freeze
-                        document.querySelectorAll("select, input, button, .item-row").forEach(function(el) {
+                        // 3. Absolute structural click and selector freeze barrier properties
+                        document.querySelectorAll("select, input, button, .item-row, .mini-btn").forEach(function(el) {
                             el.disabled = true;
-                            el.style.opacity = "0.2";
-                            el.style.pointerEvents = "none";
+                            el.style.opacity = "0.15";
+                            el.style.pointerEvents = "none"; // Removes all link interactions
                         });
                         
-                        workspace.style.filter = "blur(3px) grayscale(100%)";
+                        workspace.style.filter = "blur(4px) grayscale(100%)";
                         workspace.style.pointerEvents = "none";
                         
-                        alert("⚠️ ¡Alerta Logística!\nEl Backoffice ha generado una nueva sugerencia. Esta terminal ha sido congelada para proteger el inventario.");
+                        alert(`⚠️ ¡Embarque Obsoleto!\n\nEl terminal ha detectado un nuevo cargamento (#${globalDatabaseShipId}) procesado desde el Backoffice. Esta pantalla ha sido bloqueada de manera segura.`);
                         location.reload();
                     }
                 }
             }
         }
     } catch (err) {
-        console.warn("Sequence tracking skipped:", err);
+        console.warn("Sequence firewall verification tick skipped:", err);
     }
-}, 4000); // Check every 4 seconds to balance performance and reaction timing
+}, 3000); // Check frequency optimized to 3 seconds
 
     </script>
 </body>
