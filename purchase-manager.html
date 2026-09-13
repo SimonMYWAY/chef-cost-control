@@ -751,13 +751,20 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE WRITING
     // =======================================================================
     try {
-        var headerNode = document.getElementById("terminal-cargo-meta-header");
-        if (headerNode) {
-            var strongElement = headerNode.querySelector("div strong");
-            if (strongElement) {
-                // Extract exactly what ship number is currently printed on the screen card
-                var screenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
-                
+        if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+            // 🌟 DIRECT MEMORY SELECTION: Read the ship ID straight from the local array cache
+            var firstStagedRow = LOCAL_STAGED_ROWS[0];
+            var screenShipId = parseInt(firstStagedRow.shipment_id || 0, 10);
+
+            // Fallback parsing engine if shipment_id wasn't saved explicitly on the row object
+            if (screenShipId === 0 && firstStagedRow.forced_po_number) {
+                var poParts = firstStagedRow.forced_po_number.split("-SHIP-");
+                if (poParts.length > 1) {
+                    screenShipId = parseInt(poParts[1].split("-")[0], 10);
+                }
+            }
+
+            if (screenShipId > 0) {
                 // Query the true master sequence status from Supabase
                 const seedCheck = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
                     method: "GET", headers: { "apikey": API_KEY }
@@ -924,12 +931,19 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE EXECUTION
     // =======================================================================
     try {
-        var headerNode = document.getElementById("terminal-cargo-meta-header");
-        if (headerNode) {
-            var strongElement = headerNode.querySelector("div strong");
-            if (strongElement) {
-                var screenShipId = parseInt(strongElement.innerText.replace(/[^0-9]/g, "").trim(), 10);
-                
+        if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
+            // 🌟 DIRECT MEMORY SELECTION: Read the ship ID straight from the local array cache
+            var firstStagedRow = LOCAL_STAGED_ROWS[0];
+            var screenShipId = parseInt(firstStagedRow.shipment_id || 0, 10);
+
+            if (screenShipId === 0 && firstStagedRow.forced_po_number) {
+                var poParts = firstStagedRow.forced_po_number.split("-SHIP-");
+                if (poParts.length > 1) {
+                    screenShipId = parseInt(poParts[1].split("-")[0], 10);
+                }
+            }
+
+            if (screenShipId > 0) {
                 const seedCheck = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
                     method: "GET", headers: { "apikey": API_KEY }
                 });
