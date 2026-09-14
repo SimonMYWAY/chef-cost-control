@@ -2476,106 +2476,142 @@ fetch(API_URL + "supplier_formats", {
             }).then(function(res) { if (res.ok) { alert("✅ ¡Proveedor añadido!"); document.getElementById("provider-form").reset(); renderProvidersTable(); } });
         }
 
-                // 🟢 PRODUCTION APPROVAL PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
-                // 🔑 APPROVAL MATRIX VALVE: Authorizes pending chef inputs and synchronizes sub-recipe units cleanly
-        function approveRecipe(id) {
-            var el = document.getElementById("recipe-row-" + id);
-            if (el) el.style.opacity = "0.3";
+// 🟢 PRODUCTION APPROVAL PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
+// 🔑 APPROVAL MATRIX VALVE: Authorizes pending chef inputs and synchronizes sub-recipe units cleanly
+function approveRecipe(id) {
+    var el = document.getElementById("recipe-row-" + id);
+    if (el) el.style.opacity = "0.3";
+    
+    // 1. Fetch the full recipe metadata details first to check its category parameters
+    fetch(API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
+    .then(function(res) { return res.json(); })
+    .then(function(recipeData) {
+        if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
+        
+        // 🌟 FIXED ACCESSOR LAYER: Explicitly target index zero of the incoming database collection array
+        var recipe = recipeData[0]; 
+        
+        // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
+        return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
+        .then(function(res) { return res.json(); })
+        .then(function(recipeIngredients) {
             
-            // 1. Fetch the full recipe metadata details first to check its category parameters
-            fetch(API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
+            return fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
             .then(function(res) { return res.json(); })
-            .then(function(recipeData) {
-                if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
-                var recipe = recipeData[0]; 
+            .then(function(masterIngredients) {
                 
-                // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
-                return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
-                .then(function(res) { return res.json(); })
-                .then(function(recipeIngredients) {
-                    
-                    return fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } })
-                    .then(function(res) { return res.json(); })
-                    .then(function(masterIngredients) {
-                        
-                        var totalRecipeCostMath = 0;
-                        if (Array.isArray(recipeIngredients) && Array.isArray(masterIngredients)) {
-                            recipeIngredients.forEach(function(ri) {
-                                var match = masterIngredients.find(function(i) { return String(i.id) === String(ri.ingredient_id); });
-                                if (match) {
-                                    var ingCost = parseFloat(match.std_cost_per_unit) || 0;
-                                    var ingQty = parseFloat(ri.quantity) || 0;
-                                    var scrapFactor = 1 + (parseFloat(ri.scrap_percentage || 0) / 100);
-                                    totalRecipeCostMath += (ingQty * ingCost * scrapFactor);
-                                }
-                            });
+                var totalRecipeCostMath = 0;
+                if (Array.isArray(recipeIngredients) && Array.isArray(masterIngredients)) {
+                    recipeIngredients.forEach(function(ri) {
+                        var match = masterIngredients.find(function(i) { return String(i.id) === String(ri.ingredient_id); });
+                        if (match) {
+                            var ingCost = parseFloat(match.std_cost_per_unit) || 0;
+                            var ingQty = parseFloat(ri.quantity) || 0;
+                            var scrapFactor = 1 + (parseFloat(ri.scrap_percentage || 0) / 100);
+                            totalRecipeCostMath += (ingQty * ingCost * scrapFactor);
                         }
-
-                        // Divide total recipe cost by the yield divisor factor
-                        var yieldDivisor = parseFloat(recipe.servings) || 1;
-                        if (recipe.category !== 'tier2') yieldDivisor = 1; 
-                        
-                        var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
-
-                        // 3. Patch valid table columns, including your brand new cost_per_serving column asset
-                        return fetch(API_URL + "recipes?id=eq." + id, { 
-                            method: "PATCH", 
-                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
-                            body: JSON.stringify({ 
-                                is_approved: true, 
-                                status: "approved",
-                                cost_per_serving: calculatedCostPerUnit
-                            }) 
-                        })
-                        .then(function(res) {
-                            if (!res.ok) throw new Error("Failed to patch recipe approval status.");
-                            
-                            // 4. If the recipe is Tier 2, preserve its existing shadow row unit inside your ingredients catalog
-                            if (recipe.category === "tier2") {
-                                var rawName = recipe.name || "Receta Sub-Base Tier 2";
-                                var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
-
-                                // Extract the existing unit directly from your master ingredients dataset copy
-                                var currentShadowUnit = "gramos"; // Default fallback
-                                if (Array.isArray(masterIngredients)) {
-                                    var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
-                                    if (existingShadowItem && existingShadowItem.uom) {
-                                        currentShadowUnit = existingShadowItem.uom; // 🌟 Locks your custom choice like "cucharada"!
-                                    }
-                                }
-
-                                var ingPayload = {
-                                    id: id,
-                                    name_es: nameClean,
-                                    name_en: nameClean,
-                                    std_cost_per_unit: calculatedCostPerUnit,
-                                    uom: currentShadowUnit, // Maintains your true custom text unit
-                                    status: "pending"
-                                };
-
-                                // Execute direct PATCH update to synchronize your existing shadow row perfectly
-                                return fetch(API_URL + "ingredients?id=eq." + id, {
-                                    method: "PATCH",
-                                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                                    body: JSON.stringify(ingPayload)
-                                });
-                            }
-                        });
                     });
-                });
-            })
-            .then(function() { 
-                alert("✅ ¡Fórmula autorizada con éxito e inyectada al catálogo maestro con su costo real y unidad corregida!"); 
-                if (typeof loadMasterCatalog === "function") loadMasterCatalog();
-                if (typeof loadQueue === "function") loadQueue(); 
-            })
-            .catch(function(err) { 
-                console.error("Ecosystem bridging track fault:", err);
-                alert("❌ Error al procesar la aprobación de la fórmula.");
-                if (typeof loadQueue === "function") loadQueue();
-            });
-        }
+                }
 
+                // Divide total recipe cost by the yield divisor factor
+                var yieldDivisor = parseFloat(recipe.servings) || 1;
+                if (recipe.category !== 'tier2') yieldDivisor = 1; 
+                
+                var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
+
+                // =======================================================================
+                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (FIXED ACCESSOR)
+                // =======================================================================
+                var targetUomToPersist = "gramos"; // Default fallback
+
+                if (recipe.category === "tier2" && Array.isArray(masterIngredients)) {
+                    var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
+                    
+                    if (existingShadowItem && existingShadowItem.uom) {
+                        targetUomToPersist = existingShadowItem.uom; // Default to old unit
+                        
+                        var oldUomClean = String(existingShadowItem.uom).trim().toLowerCase();
+                        var newUomClean = String(recipe.uom || recipe.yield_uom || "gramos").trim().toLowerCase();
+
+                        // Detect if a modification to the yield's unit occurred
+                        if (oldUomClean !== newUomClean) {
+                            console.log(`⚠️ UOM Change caught in memory: "${oldUomClean}" vs "${newUomClean}"`);
+                            
+                            // Trigger interactive confirm dialog selection layer
+                            var adminChoiceConfirm = confirm(
+                                `⚠️ ADVERTENCIA DE CAMBIO DE UNIDAD (TIER 2):\n\n` +
+                                `Has cambiado la Unidad de Medida (UOM) de esta sub-receta de "${existingShadowItem.uom}" a "${recipe.uom || recipe.yield_uom}".\n\n` +
+                                `Esto afectará los cálculos de todas las recetas superiores (padres) que utilicen este ingrediente.\n\n` +
+                                `¿Deseas PROCEDER con la aprobación y alinear el catálogo?\n\n` +
+                                `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${newUomClean}") y se actualizará el costo. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
+                                `• PRESIONA [Cancelar]: No se guardará nada. Podrás marcar la receta como "Rechazada" para mantener las métricas antiguas.`
+                            );
+
+                            if (adminChoiceConfirm) {
+                                // Admin forces override: Adopt the new UOM parameter text layout
+                                targetUomToPersist = recipe.uom || recipe.yield_uom || "gramos";
+                                console.log("🔥 Admin forced change override. Aligning UOM fields to: " + targetUomToPersist);
+                            } else {
+                                // Admin cancels: Abort full pipeline loop immediately
+                                if (el) el.style.opacity = "1";
+                                if (typeof loadQueue === "function") loadQueue();
+                                return; // Stop executing any database mutations
+                            }
+                        }
+                    }
+                }
+                // =======================================================================
+
+                // 🚀 MUTATION PIPELINE EXECUTION: Write updates safely to Supabase
+                return fetch(API_URL + "recipes?id=eq." + id, { 
+                    method: "PATCH", 
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" }, 
+                    body: JSON.stringify({ 
+                        is_approved: true, 
+                        status: "approved",
+                        cost_per_serving: calculatedCostPerUnit
+                    }) 
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Failed to patch recipe approval status.");
+                    
+                    // If the recipe is Tier 2, sync its companion inventory shadow row record properties
+                    if (recipe.category === "tier2") {
+                        var rawName = recipe.name || "Receta Sub-Base Tier 2";
+                        var nameClean = rawName.includes("||") ? rawName.split("||")[0].trim() : rawName.trim();
+
+                        var ingPayload = {
+                            id: id,
+                            name_es: nameClean,
+                            name_en: nameClean,
+                            std_cost_per_unit: calculatedCostPerUnit,
+                            uom: targetUomToPersist, // ✨ Dynamic assignment: Either preserved or aligned based on selection
+                            status: "pending"
+                        };
+
+                        return fetch(API_URL + "ingredients?id=eq." + id, {
+                            method: "PATCH",
+                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+                            body: JSON.stringify(ingPayload)
+                        });
+                    }
+                });
+            });
+        });
+    })
+    .then(function(res) { 
+        if (res !== undefined) {
+            alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
+            if (typeof loadMasterCatalog === "function") loadMasterCatalog();
+            if (typeof loadQueue === "function") loadQueue(); 
+        }
+    })
+    .catch(function(err) { 
+        console.error("Ecosystem bridging track fault:", err);
+        alert("❌ Error al procesar la aprobación de la fórmula.");
+        if (typeof loadQueue === "function") loadQueue();
+    });
+}
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
 
