@@ -2491,20 +2491,8 @@ function approveRecipe(id) {
         // Target index zero of the incoming database collection array cleanly
         var recipe = recipeData[0]; 
 
-        // 🌟 LIVE INTERFACE EXTRACTION: Safely grab the text currently typed on screen
+        // 🌟 CLOUD METRIC CAPTURE: Read exactly what unit is saved on this pending recipe draft row
         var liveUomText = String(recipe.uom || recipe.yield_uom || "gr").trim();
-        if (el) {
-            // Find the physical input tracking your unit variables inside the accordion row card container
-            var uomInputNode = el.querySelector("input[id*='uom']") || 
-                               el.querySelector(".recipe-uom-input") || 
-                               el.querySelector("input[name*='uom']") ||
-                               el.querySelector(".edit-uom-field") ||
-                               el.querySelector("select[id*='uom']");
-                               
-            if (uomInputNode && uomInputNode.value.trim() !== "") {
-                liveUomText = uomInputNode.value.trim();
-            }
-        }
         
         // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
         return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
@@ -2535,7 +2523,7 @@ function approveRecipe(id) {
                 var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                 // =======================================================================
-                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (REALIGNED PAIRS)
+                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (REALIGNED ARCHITECTURE)
                 // =======================================================================
                 var targetUomToPersist = liveUomText; 
 
@@ -2543,11 +2531,11 @@ function approveRecipe(id) {
                     var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
                     
                     if (existingShadowItem && existingShadowItem.uom) {
-                        // 🌟 CORRECTED PAIRING ASSIGNMENT ENGINE:
+                        // Isolate the clean comparison values from the database fields
                         var oldUomClean = String(existingShadowItem.uom).trim().toLowerCase();
                         var newUomClean = String(liveUomText).trim().toLowerCase();
 
-                        // Detect if a modification to the yield's unit occurred between history and screen
+                        // Detect if a modification to the yield's unit occurred between history and the new draft
                         if (oldUomClean !== newUomClean) {
                             console.log(`⚠️ UOM Change caught: "${oldUomClean}" vs "${newUomClean}"`);
                             
@@ -2558,7 +2546,7 @@ function approveRecipe(id) {
                                 `Esto afectará los cálculos de todas las recetas superiores (padres) que utilicen este ingrediente.\n\n` +
                                 `¿Deseas PROCEDER con la aprobación y alinear el catálogo?\n\n` +
                                 `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${liveUomText}") en el catálogo de insumos. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
-                                `• PRESIONA [Cancelar]: No se guardará nada. Podrás marcar la receta como "Rechazada" para mantener las métricas antiguas.`
+                                `• PRESIONA [Cancelar]: No se guardará nada. Podrás mantener las métricas antiguas.`
                             );
 
                             if (adminChoiceConfirm) {
@@ -2570,7 +2558,6 @@ function approveRecipe(id) {
                                 return; // Stop executing any database mutations
                             }
                         } else {
-                            // No change detected: Default to the existing UOM parameter text layout
                             targetUomToPersist = existingShadowItem.uom;
                         }
                     }
@@ -2585,7 +2572,6 @@ function approveRecipe(id) {
                         is_approved: true, 
                         status: "approved",
                         cost_per_serving: calculatedCostPerUnit
-                        // 🌟 FIXED: Removed the illegal 'uom' field property column allocation from this parent endpoint!
                     }) 
                 })
                 .then(function(res) {
@@ -2601,13 +2587,14 @@ function approveRecipe(id) {
                             name_es: nameClean,
                             name_en: nameClean,
                             std_cost_per_unit: calculatedCostPerUnit,
-                            uom: targetUomToPersist, // ✨ Correctly synchronized to your ingredients table column schema
+                            uom: targetUomToPersist, 
                             status: "pending"
                         };
 
+                        // 🌟 FIXED HEADER NAME TYPO: Changed "Prefer=return" to "Prefer"
                         return fetch(API_URL + "ingredients?id=eq." + id, {
                             method: "PATCH",
-                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer=return": "minimal" },
+                            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                             body: JSON.stringify(ingPayload)
                         });
                     }
@@ -2624,7 +2611,8 @@ function approveRecipe(id) {
     })
     .catch(function(err) { 
         console.error("Ecosystem bridging track fault:", err);
-        alert("❌ Error al procesar la aprobación de la fórmula.");
+        alert("❌ Error al procesar la aprobación de la fórmula: " + err.message);
+        if (el) el.style.opacity = "1";
         if (typeof loadQueue === "function") loadQueue();
     });
 }
