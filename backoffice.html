@@ -3752,6 +3752,8 @@ async function processDailySalesFileIngestion(event) {
             // Clear configuration values
             TEMPORARY_STAGED_PURCHASE_LINES = [];
             let totalInsumosDeducidos = 0;
+            // 🌟 TRACK LOGISTICAL FORMAT GAPS
+            let missingLogisticalFormatsCount = 0;
 
             ingredients.forEach(ing => {
                 var usageToday = GLOBAL_DAILY_CONSUMPTION_LEDGER[String(ing.id)] || 0.0;
@@ -3783,6 +3785,11 @@ async function processDailySalesFileIngestion(event) {
                             defaultSupplierNameKey = ing.default_provider_id || ing.provider_id;
                         }
 
+                        // 🌟 CHECK ENGINE: Track if this triggered purchase warning has no logistical format linking
+                        if (defaultSupplierNameKey === "unassigned" || defaultSupplierNameKey === "Proveedor No Asignado") {
+                            missingLogisticalFormatsCount++;
+                        }
+
                         TEMPORARY_STAGED_PURCHASE_LINES.push({
                             ingredient_id: ing.id,
                             ingredient_name: ing.name_es || ing.name,
@@ -3801,8 +3808,21 @@ async function processDailySalesFileIngestion(event) {
                 }
             });
 
+            // 🌟 UPGRADED SMART FEEDBACK SYSTEM WITH LOGISTICAL GAP DETECTION
             if (feedback) {
-                feedback.innerHTML = `<div>🟢 <b>Pre-Cálculo Completado (Cero Errores):</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b>. El archivo está validado y listo para ser emitido.</div>`;
+                var baseSummaryText = `🟢 <b>Pre-Cálculo Completado (Cero Errores):</b> Consumos deducidos en <b>${totalInsumosDeducidos} insumos básicos</b>. Se detectaron <b>${TEMPORARY_STAGED_PURCHASE_LINES.length} alertas críticas</b> por debajo del Punto de Pedido.`;
+                
+                if (missingLogisticalFormatsCount > 0) {
+                    // Display a distinct warning box if any required ingredient has no layout format rules matching it
+                    feedback.innerHTML = `
+                        <div style="background: #fffbeb; border: 1px solid #fef08a; padding: 12px; border-radius: 8px; color: #854d0e; margin-bottom: 10px;">
+                            ${baseSummaryText}<br><br>
+                            ⚠️ <b>ATENCIÓN:</b> Se detectaron <b>${missingLogisticalFormatsCount} insumos sin formato de compra o proveedor definido</b>. Revisa la lista abajo ("sin formato de compra") para resolverlos antes de emitir a la app de compras.
+                        </div>`;
+                } else {
+                    // Keep the clean message if all assets map natively
+                    feedback.innerHTML = `<div>${baseSummaryText} El archivo está completamente validado y listo para ser emitido.</div>`;
+                }
             }
             
             // Unlock final commit button
