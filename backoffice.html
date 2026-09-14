@@ -3752,7 +3752,6 @@ async function processDailySalesFileIngestion(event) {
             // Clear configuration values
             TEMPORARY_STAGED_PURCHASE_LINES = [];
             let totalInsumosDeducidos = 0;
-            // 🌟 TRACK LOGISTICAL FORMAT GAPS
             let missingLogisticalFormatsCount = 0;
 
             ingredients.forEach(ing => {
@@ -3770,23 +3769,30 @@ async function processDailySalesFileIngestion(event) {
                     var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
                     
                     if (purchaseQtyNeeded > 0) {
+                        // 🌟 FIX: Look inside your true vendor supplier format cache (CACHED_CONVERSION_MAPPINGS)
+                        // instead of looking inside the menu mappings array!
                         var localizedFormatsMapList = [];
-                        if (Array.isArray(mappings)) {
-                            localizedFormatsMapList = mappings.filter(function(m) {
+                        var masterFormatsSource = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") ? CACHED_CONVERSION_MAPPINGS : [];
+                        
+                        if (Array.isArray(masterFormatsSource)) {
+                            localizedFormatsMapList = masterFormatsSource.filter(function(m) {
                                 return String(m.ingredient_id).toLowerCase().trim() === String(ing.id).toLowerCase().trim();
                             });
                         }
 
                         var defaultSupplierNameKey = "unassigned";
                         if (localizedFormatsMapList.length > 0) {
-                            const firstFormatRow = localizedFormatsMapList[0];
-                            defaultSupplierNameKey = firstFormatRow.provider_name || firstFormatRow.provider_id || "unassigned";
+                            // Find preferred first
+                            var preferredRule = localizedFormatsMapList.find(function(f) { return f.is_preferred === true || f.is_preferred === 'true'; });
+                            var activeFormatRow = preferredRule || localizedFormatsMapList[0];
+                            
+                            defaultSupplierNameKey = activeFormatRow.provider_name || "unassigned";
                         } else if (ing.default_provider_id || ing.provider_id) {
                             defaultSupplierNameKey = ing.default_provider_id || ing.provider_id;
                         }
 
-                        // 🌟 CHECK ENGINE: Track if this triggered purchase warning has no logistical format linking
-                        if (defaultSupplierNameKey === "unassigned" || defaultSupplierNameKey === "Proveedor No Asignado") {
+                        // 🔒 CORRECTED COUNTER GATE: Only increments if the ingredient TRULY has no vendor rules
+                        if (defaultSupplierNameKey === "unassigned" || defaultSupplierNameKey === "unassigned" || defaultSupplierNameKey === "Proveedor No Asignado") {
                             missingLogisticalFormatsCount++;
                         }
 
@@ -3807,6 +3813,7 @@ async function processDailySalesFileIngestion(event) {
                     }
                 }
             });
+
 
             // 🌟 UPGRADED SMART FEEDBACK SYSTEM WITH LOGISTICAL GAP DETECTION
             if (feedback) {
