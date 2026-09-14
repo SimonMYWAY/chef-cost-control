@@ -2477,7 +2477,7 @@ fetch(API_URL + "supplier_formats", {
         }
 
 // 🟢 PRODUCTION APPROVAL PIPELINE: Natively calculates recipe costs and mirrors Tier 2 items to ingredients directory
-// 🔑 APPROVAL MATRIX VALVE: Authorizes pending chef inputs and synchronizes sub-recipe units cleanly
+// 🔑 APPROVAL MATRIX VALVE: Authorizes pending chef inputs and synchronizes sub-recipe units cleanly using recipe_uom as a staging sandbox
 function approveRecipe(id) {
     var el = document.getElementById("recipe-row-" + id);
     if (el) el.style.opacity = "0.3";
@@ -2487,12 +2487,7 @@ function approveRecipe(id) {
     .then(function(res) { return res.json(); })
     .then(function(recipeData) {
         if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
-        
-        // Target index zero of the incoming database collection array cleanly
         var recipe = recipeData[0]; 
-
-        // 🌟 CLOUD METRIC CAPTURE: Read exactly what unit is saved on this pending recipe draft row
-        var liveUomText = String(recipe.uom || recipe.yield_uom || "gr").trim();
         
         // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
         return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
@@ -2523,42 +2518,47 @@ function approveRecipe(id) {
                 var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                 // =======================================================================
-                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (REALIGNED ARCHITECTURE)
+                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (STAGING SANDBOX ENGINE)
                 // =======================================================================
-                var targetUomToPersist = liveUomText; 
+                var targetUomToPersist = "gr"; // Default fallback
 
                 if (recipe.category === "tier2" && Array.isArray(masterIngredients)) {
                     var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
                     
-                    if (existingShadowItem && existingShadowItem.uom) {
-                        // Isolate the clean comparison values from the database fields
-                        var oldUomClean = String(existingShadowItem.uom).trim().toLowerCase();
-                        var newUomClean = String(liveUomText).trim().toLowerCase();
+                    if (existingShadowItem) {
+                        // 🌟 READ DIRECTLY FROM THE DATABASE FIELDS:
+                        // oldUomClean = the live, un-altered unit currently used by your parent recipes
+                        var oldUomClean = String(existingShadowItem.uom || "gr").trim();
+                        
+                        // newUomClean = the temporary staging field where the chef wrote their new suggestion
+                        var newUomClean = String(existingShadowItem.recipe_uom || oldUomClean).trim();
 
-                        // Detect if a modification to the yield's unit occurred between history and the new draft
-                        if (oldUomClean !== newUomClean) {
-                            console.log(`⚠️ UOM Change caught: "${oldUomClean}" vs "${newUomClean}"`);
+                        targetUomToPersist = oldUomClean; // Default to old unit until approved
+
+                        // Detect if a modification to the unit occurred in the staging sandbox
+                        if (oldUomClean.toLowerCase() !== newUomClean.toLowerCase()) {
+                            console.log(`⚠️ Staging Firewall caught UOM change: "${oldUomClean}" vs "${newUomClean}"`);
                             
                             // Trigger interactive confirm dialog selection layer
                             var adminChoiceConfirm = confirm(
                                 `⚠️ ADVERTENCIA DE CAMBIO DE UNIDAD (TIER 2):\n\n` +
-                                `Has cambiado la Unidad de Medida (UOM) de esta sub-receta de "${existingShadowItem.uom}" a "${liveUomText}".\n\n` +
+                                `El chef propone cambiar la Unidad de Medida (UOM) de esta sub-receta de "${oldUomClean}" a "${newUomClean}".\n\n` +
                                 `Esto afectará los cálculos de todas las recetas superiores (padres) que utilicen este ingrediente.\n\n` +
-                                `¿Deseas PROCEDER con la aprobación y alinear el catálogo?\n\n` +
-                                `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${liveUomText}") en el catálogo de insumos. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
-                                `• PRESIONA [Cancelar]: No se guardará nada. Podrás mantener las métricas antiguas.`
+                                `¿Deseas PROCEDER con la aprobación y actualizar el catálogo?\n\n` +
+                                `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${newUomClean}") copiándolo al catálogo de insumos vivo. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
+                                `• PRESIONA [Cancelar]: No se guardará nada. Podrás marcar la receta como "Rechazada" para mantener las métricas antiguas.`
                             );
 
                             if (adminChoiceConfirm) {
-                                targetUomToPersist = liveUomText;
-                                console.log("🔥 Admin forced change override. Aligning UOM fields to: " + targetUomToPersist);
+                                // 🌟 COPY SANDBOX TO LIVE FIELD: Admin accepts, so the new unit replaces the old one!
+                                targetUomToPersist = newUomClean;
+                                console.log("🔥 Admin forced change override. Synchronizing staging UOM fields to: " + targetUomToPersist);
                             } else {
+                                // Admin cancels: Abort full pipeline loop immediately without writing to database
                                 if (el) el.style.opacity = "1";
                                 if (typeof loadQueue === "function") loadQueue();
-                                return; // Stop executing any database mutations
+                                return; 
                             }
-                        } else {
-                            targetUomToPersist = existingShadowItem.uom;
                         }
                     }
                 }
@@ -2587,11 +2587,10 @@ function approveRecipe(id) {
                             name_es: nameClean,
                             name_en: nameClean,
                             std_cost_per_unit: calculatedCostPerUnit,
-                            uom: targetUomToPersist, 
+                            uom: targetUomToPersist, // ✨ Synchronizes live uom to match our approved choice!
                             status: "pending"
                         };
 
-                        // 🌟 FIXED HEADER NAME TYPO: Changed "Prefer=return" to "Prefer"
                         return fetch(API_URL + "ingredients?id=eq." + id, {
                             method: "PATCH",
                             headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
@@ -2616,7 +2615,6 @@ function approveRecipe(id) {
         if (typeof loadQueue === "function") loadQueue();
     });
 }
-
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
 
