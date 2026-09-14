@@ -2482,14 +2482,34 @@ function approveRecipe(id) {
     var el = document.getElementById("recipe-row-" + id);
     if (el) el.style.opacity = "0.3";
     
+    // 🌟 LIVE INTERFACE EXTRACTION LAYER: Read the exact text string currently typed inside the screen input fields
+    var liveUomText = ""; 
+    if (el) {
+        // Scans your row template for common UOM input boxes or custom selectors
+        var uomInputNode = el.querySelector("input[id*='uom']") || 
+                           el.querySelector(".recipe-uom-input") || 
+                           el.querySelector("input[name*='uom']") ||
+                           el.querySelector(".edit-uom-field") ||
+                           el.querySelector("select[id*='uom']");
+                           
+        if (uomInputNode) {
+            liveUomText = uomInputNode.value ? uomInputNode.value.trim() : uomInputNode.value;
+        }
+    }
+
     // 1. Fetch the full recipe metadata details first to check its category parameters
     fetch(API_URL + "recipes?id=eq." + id, { headers: { "apikey": API_KEY } })
     .then(function(res) { return res.json(); })
     .then(function(recipeData) {
         if (!recipeData || recipeData.length === 0) throw new Error("Recipe tracking record missing.");
         
-        // 🌟 FIXED ACCESSOR LAYER: Explicitly target index zero of the incoming database collection array
+        // Target index zero of the incoming collection array cleanly
         var recipe = recipeData[0]; 
+
+        // If the DOM scraper didn't catch an input node class, fall back to whatever was saved in the cloud ledger
+        if (!liveUomText) {
+            liveUomText = recipe.uom || recipe.yield_uom || "gramos";
+        }
         
         // 2. Fetch the ingredient rows bound to this specific recipe to run the direct cost math
         return fetch(API_URL + "recipe_ingredients?recipe_id=eq." + id, { headers: { "apikey": API_KEY } })
@@ -2520,36 +2540,34 @@ function approveRecipe(id) {
                 var calculatedCostPerUnit = parseFloat((totalRecipeCostMath / yieldDivisor).toFixed(4)) || 0;
 
                 // =======================================================================
-                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (FIXED ACCESSOR)
+                // 🛑 SCENARIO B: UOM INTERACTION INTERCEPTOR (LIVE SCREEN COMPARISON)
                 // =======================================================================
-                var targetUomToPersist = "gramos"; // Default fallback
+                var targetUomToPersist = liveUomText; // Default to the live selection
 
                 if (recipe.category === "tier2" && Array.isArray(masterIngredients)) {
                     var existingShadowItem = masterIngredients.find(function(i) { return String(i.id) === String(id); });
                     
                     if (existingShadowItem && existingShadowItem.uom) {
-                        targetUomToPersist = existingShadowItem.uom; // Default to old unit
-                        
                         var oldUomClean = String(existingShadowItem.uom).trim().toLowerCase();
-                        var newUomClean = String(recipe.uom || recipe.yield_uom || "gramos").trim().toLowerCase();
+                        var newUomClean = String(liveUomText).trim().toLowerCase();
 
-                        // Detect if a modification to the yield's unit occurred
+                        // Detect if a modification to the yield's unit occurred between screen and database history
                         if (oldUomClean !== newUomClean) {
-                            console.log(`⚠️ UOM Change caught in memory: "${oldUomClean}" vs "${newUomClean}"`);
+                            console.log(`⚠️ UOM Change caught: "${oldUomClean}" vs "${newUomClean}"`);
                             
                             // Trigger interactive confirm dialog selection layer
                             var adminChoiceConfirm = confirm(
                                 `⚠️ ADVERTENCIA DE CAMBIO DE UNIDAD (TIER 2):\n\n` +
-                                `Has cambiado la Unidad de Medida (UOM) de esta sub-receta de "${existingShadowItem.uom}" a "${recipe.uom || recipe.yield_uom}".\n\n` +
+                                `Has cambiado la Unidad de Medida (UOM) de esta sub-receta de "${existingShadowItem.uom}" a "${liveUomText}".\n\n` +
                                 `Esto afectará los cálculos de todas las recetas superiores (padres) que utilicen este ingrediente.\n\n` +
                                 `¿Deseas PROCEDER con la aprobación y alinear el catálogo?\n\n` +
-                                `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${newUomClean}") y se actualizará el costo. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
+                                `• PRESIONA [Aceptar]: Se forzará el cambio al nuevo formato ("${liveUomText}") en la receta e ingrediente. DEBERÁS abrir manualmente las recetas padre para corregir sus cantidades.\n` +
                                 `• PRESIONA [Cancelar]: No se guardará nada. Podrás marcar la receta como "Rechazada" para mantener las métricas antiguas.`
                             );
 
                             if (adminChoiceConfirm) {
-                                // Admin forces override: Adopt the new UOM parameter text layout
-                                targetUomToPersist = recipe.uom || recipe.yield_uom || "gramos";
+                                // Admin forces override: Adopt the newly typed string text layout
+                                targetUomToPersist = liveUomText;
                                 console.log("🔥 Admin forced change override. Aligning UOM fields to: " + targetUomToPersist);
                             } else {
                                 // Admin cancels: Abort full pipeline loop immediately
@@ -2569,7 +2587,8 @@ function approveRecipe(id) {
                     body: JSON.stringify({ 
                         is_approved: true, 
                         status: "approved",
-                        cost_per_serving: calculatedCostPerUnit
+                        cost_per_serving: calculatedCostPerUnit,
+                        uom: targetUomToPersist // 🌟 CRITICAL FIX: Explicitly update the recipe row UOM column as well
                     }) 
                 })
                 .then(function(res) {
@@ -2585,7 +2604,7 @@ function approveRecipe(id) {
                             name_es: nameClean,
                             name_en: nameClean,
                             std_cost_per_unit: calculatedCostPerUnit,
-                            uom: targetUomToPersist, // ✨ Dynamic assignment: Either preserved or aligned based on selection
+                            uom: targetUomToPersist, // ✨ Aligned based on your selection
                             status: "pending"
                         };
 
@@ -2612,6 +2631,7 @@ function approveRecipe(id) {
         if (typeof loadQueue === "function") loadQueue();
     });
 }
+
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
 
