@@ -1044,7 +1044,7 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
         
         rowsTarget.innerHTML = "";
         
-        // 🚀 SHADOW LOOKUP EXPANSION: Cross-examine your ingredients list to find the true UOM 
+                // 🚀 SHADOW LOOKUP EXPANSION: Cross-examine your ingredients list to find the true UOM 
         var activeUnitLabel = inputUOM;
         if (Array.isArray(masterIngredients)) {
             var shadowMatch = masterIngredients.find(function(i) { 
@@ -1054,7 +1054,7 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
             if (shadowMatch) {
                 isTier2Preparation = true; 
                 if (activeUnitLabel === "porciones" || activeUnitLabel === "") {
-                    // ✨ UPGRADED: Read the chef's pending staging unit ('recipe_uom') first, fallback to live 'uom'
+                    // 🌟 CRITICAL REPAIR: Read the pending staging sandbox column ('recipe_uom') first!
                     activeUnitLabel = String(shadowMatch.recipe_uom || shadowMatch.uom || "gr").trim();
                 }
             }
@@ -2601,27 +2601,37 @@ function approveRecipe(id) {
             });
         });
     })
+        // ... [Inside the final resolution layer of approveRecipe(id)] ...
     .then(function(res) { 
         if (res !== undefined) {
             
-            // 🌟 STEP 2 UPGRADE: Force update your local application memory cache array maps instantly!
+            // 🌟 EXTRACT AND INJECT DIRECTLY INTO EVERY RELEVANT LOCAL STATE VARIABLE SNAPSHOT
+            // This forces your grids to update instantly in memory without requiring a page refresh!
             if (typeof masterIngredients !== "undefined" && Array.isArray(masterIngredients)) {
-                var localMatch = masterIngredients.find(function(i) { return String(i.id) === String(id); });
-                if (localMatch) {
-                    console.log("⚡ Synchronizing local memory state arrays with fresh approved parameters...");
-                    localMatch.std_cost_per_unit = calculatedCostPerUnit;
-                    localMatch.uom = targetUomToPersist; // Transfer from sandbox to active field row
-                    localMatch.recipe_uom = targetUomToPersist; // Keep sync clean
+                var matchA = masterIngredients.find(function(i) { return String(i.id) === String(id); });
+                if (matchA) {
+                    matchA.std_cost_per_unit = calculatedCostPerUnit;
+                    matchA.uom = targetUomToPersist; // Transfer staging to live uom
+                    matchA.recipe_uom = targetUomToPersist;
+                }
+            }
+
+            if (typeof DB_INGREDIENTS !== "undefined" && Array.isArray(DB_INGREDIENTS)) {
+                var matchB = DB_INGREDIENTS.find(function(i) { return String(i.id) === String(id); });
+                if (matchB) {
+                    matchB.std_cost_per_unit = calculatedCostPerUnit;
+                    matchB.uom = targetUomToPersist; // Transfer staging to live uom
+                    matchB.recipe_uom = targetUomToPersist;
                 }
             }
 
             alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
             
-            // Re-trigger layout draws immediately
+            // Re-trigger your native master catalog and grid redraw components right now!
             if (typeof loadMasterCatalog === "function") loadMasterCatalog();
             if (typeof loadQueue === "function") loadQueue(); 
             
-            // 🚀 Force your Ingredients Grid UI component to re-render using the updated variables right now!
+            // Invoke whatever function draws your ingredients grid view component layout
             if (typeof renderIngredientsGrid === "function") {
                 renderIngredientsGrid();
             } else if (typeof displayMasterCatalogGrid === "function") {
@@ -2629,6 +2639,7 @@ function approveRecipe(id) {
             }
         }
     })
+
     .catch(function(err) { 
         console.error("Ecosystem bridging track fault:", err);
         alert("❌ Error al procesar la aprobación de la fórmula: " + err.message);
