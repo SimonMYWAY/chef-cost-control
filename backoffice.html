@@ -1017,55 +1017,43 @@ function loadQueue() {
         }
 
 
-// Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits [SCHEMA-ALIGNED]
+// Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits [REPAIRED FOR REALTIME]
 function viewRecipeDetails(recipeId, name, category, servings, uom) {
-    // Standardize incoming parameters safely
-    var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
     var cleanCategory = String(category || "").replace(/\s+/g, "").toLowerCase().trim();
-    
-    // 🌟 THE DUAL DETECTOR GATES: Detect if it is Tier 2 via string name OR via historical boolean tracking checks
     var isTier2Preparation = (cleanCategory === "tier2" || cleanCategory === "true" || category === true);
 
     document.getElementById("modal-recipe-name").innerText = name || "Fórmula";
-    document.getElementById("modal-recipe-meta").innerText = "Categoría: " + (category || "N/A") + " | Rendimiento: " + servings + " " + inputUOM;
     
     var rowsTarget = document.getElementById("modal-table-rows");
     rowsTarget.innerHTML = "<tr><td colspan='4' style='color:var(--text-muted); text-align:center;'>⏳ Buscando detalles...</td></tr>";
     document.getElementById("recipe-modal").style.display = "flex";
     
-    // Fetch components and live master ingredients in parallel
+    // 🌟 UNIFIED DIRECT FIREWALL HANDSHAKE: Fetch exactly this specific ingredient row record from the database live
     Promise.all([
         fetch(API_URL + "recipe_ingredients?recipe_id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()),
-        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
+        fetch(API_URL + "ingredients?id=eq." + recipeId, { headers: { "apikey": API_KEY } }).then(r => r.json()), // 👈 Fresh single record row
+        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()) // Full lookup map for rows
     ])
     .then(function(results) {
         var lines = results[0];
-        var masterIngredients = results[1];
+        var specificTier2IngMatch = results[1];
+        var allMasterIngredientsList = results[2];
         
         rowsTarget.innerHTML = "";
         
-                // 🚀 SHADOW LOOKUP EXPANSION: Cross-examine your ingredients list to find the true UOM 
-        var activeUnitLabel = inputUOM;
-        if (Array.isArray(masterIngredients)) {
-            var shadowMatch = masterIngredients.find(function(i) { 
-                return String(i.id).toLowerCase().trim() === String(recipeId).toLowerCase().trim(); 
-            });
-            
-            if (shadowMatch) {
-                isTier2Preparation = true; 
-                if (activeUnitLabel === "porciones" || activeUnitLabel === "") {
-                    // 🌟 CRITICAL REPAIR: Read the pending staging sandbox column ('recipe_uom') first!
-                    activeUnitLabel = String(shadowMatch.recipe_uom || shadowMatch.uom || "gr").trim();
-                }
-            }
-        }
+        // 🌟 LIVE CLOUD RESOLUTION: Extract the new typed unit directly out of the fresh server single-row array
+        var activeUnitLabel = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
         
-        // Final fallback rule for sub-recipes if column was completely empty
-        if (activeUnitLabel === "porciones" && isTier2Preparation) {
+        if (specificTier2IngMatch && specificTier2IngMatch.length > 0) {
+            var targetShadowItem = specificTier2IngMatch[0];
+            isTier2Preparation = true;
+            // Capture the chef's pending staging sandbox unit 'recipe_uom', fallback onto production 'uom'
+            activeUnitLabel = String(targetShadowItem.recipe_uom || targetShadowItem.uom || "gr").trim();
+        } else if (activeUnitLabel === "porciones" && isTier2Preparation) {
             activeUnitLabel = "gr";
         }
 
-        // Dynamically update the header subtitle once data handshakes return clear values
+        // Dynamically update the header subtitle with the true real-time metric choice
         document.getElementById("modal-recipe-meta").innerText = "Categoría: " + (category || "N/A") + " | Rendimiento: " + servings + " " + activeUnitLabel;
         
         if (!lines || lines.length === 0 || lines.message) { 
@@ -1074,8 +1062,8 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
         }
         
         var localIngMap = {};
-        if (Array.isArray(masterIngredients)) {
-            masterIngredients.forEach(function(ing) {
+        if (Array.isArray(allMasterIngredientsList)) {
+            allMasterIngredientsList.forEach(function(ing) {
                 localIngMap[String(ing.id).toLowerCase().trim()] = ing;
             });
         }
@@ -1088,7 +1076,6 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
             
             var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
             var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
-            
             var unitStandardCost = dbItem ? (parseFloat(dbItem.std_cost_per_unit || dbItem.cost) || 0) : 0;
             
             var lineQty = parseFloat(line.quantity || 0);
@@ -1100,7 +1087,6 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
             
             var tr = document.createElement("tr");
             tr.style.borderBottom = "1px solid var(--border-color)";
-            
             tr.innerHTML = "<td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "</td>" +
                            "<td style='padding:8px; text-align:center; font-family:monospace;'> " + lineQty.toFixed(2) + " " + resolvedIngUOM + "</td>" +
                            "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + scrapPct + "%</td>" +
@@ -1111,24 +1097,20 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
         
         var parsedServingsCount = parseFloat(servings) || 1;
         var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
-        
         var leftBlockHTML = "";
         
         if (isTier2Preparation) {
-            // Displays production cost per true weight/volume unit using our dynamic label!
             leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Por Unidad Real</div>" +
                             "<div style='font-size:0.9rem; margin-top:2px;'>Costo por " + activeUnitLabel + ": <span style='color:#007afb;'>$" + singleUnitProductionCost.toFixed(2) + "</span></div>";
         } else {
             var standardPricingTargetMultiplier = 3.2; 
             var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
-            
             leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
                             "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>";
         }
         
         var footerSummaryTr = document.createElement("tr");
         footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
-        
         footerSummaryTr.innerHTML = 
             "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" + leftBlockHTML + "</td>" +
             "<td colspan='2' style='padding:12px; text-align:right; color:var(--text-main);'>" +
@@ -2601,17 +2583,16 @@ function approveRecipe(id) {
             });
         });
     })
-        // ... [Inside the final resolution layer of approveRecipe(id)] ...
-    .then(function(res) { 
+    // ... [Scroll to the very bottom success layer inside your approveRecipe function] ...
+    .then(async function(res) { 
         if (res !== undefined) {
             
-            // 🌟 EXTRACT AND INJECT DIRECTLY INTO EVERY RELEVANT LOCAL STATE VARIABLE SNAPSHOT
-            // This forces your grids to update instantly in memory without requiring a page refresh!
+            // 🌟 FORCE REALTIME GLOBAL ARRAY VARIABLE ALIGNMENTS
             if (typeof masterIngredients !== "undefined" && Array.isArray(masterIngredients)) {
                 var matchA = masterIngredients.find(function(i) { return String(i.id) === String(id); });
                 if (matchA) {
                     matchA.std_cost_per_unit = calculatedCostPerUnit;
-                    matchA.uom = targetUomToPersist; // Transfer staging to live uom
+                    matchA.uom = targetUomToPersist; 
                     matchA.recipe_uom = targetUomToPersist;
                 }
             }
@@ -2620,18 +2601,23 @@ function approveRecipe(id) {
                 var matchB = DB_INGREDIENTS.find(function(i) { return String(i.id) === String(id); });
                 if (matchB) {
                     matchB.std_cost_per_unit = calculatedCostPerUnit;
-                    matchB.uom = targetUomToPersist; // Transfer staging to live uom
+                    matchB.uom = targetUomToPersist; 
                     matchB.recipe_uom = targetUomToPersist;
                 }
             }
 
             alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
             
-            // Re-trigger your native master catalog and grid redraw components right now!
-            if (typeof loadMasterCatalog === "function") loadMasterCatalog();
-            if (typeof loadQueue === "function") loadQueue(); 
+            // 🌟 SYNCHRONOUS FLOW CORRECTION:
+            // Force the system to completely finish downloading the new database data BEFORE letting the grid draw!
+            if (typeof loadMasterCatalog === "function") {
+                await loadMasterCatalog(); // ✨ Added await to guarantee data delivery completion
+            }
+            if (typeof loadQueue === "function") {
+                await loadQueue(); // ✨ Added await
+            } 
             
-            // Invoke whatever function draws your ingredients grid view component layout
+            // Now that data is 100% downloaded, paint it on the canvas safely!
             if (typeof renderIngredientsGrid === "function") {
                 renderIngredientsGrid();
             } else if (typeof displayMasterCatalogGrid === "function") {
