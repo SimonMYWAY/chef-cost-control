@@ -382,6 +382,23 @@
                     }
                 }
                 calculateTotals();
+                 // =======================================================================
+                // 🛡️ RE-ENFORCED ROUTER CHECKPOINT: FORCE YIELD SYNC ON RECALL
+                // =======================================================================
+                if (typeof enforceYieldProtection === 'function') {
+                    // Let your core rule evaluate category and baseline parameters natively
+                    enforceYieldProtection();
+                }
+
+                // 🔒 FINAL OVERRIDE: If the cloud master record is ALREADY approved, freeze the input completely!
+                if (match && (match.status === 'approved' || match.is_approved === true)) {
+                    if (servingsInput) {
+                        servingsInput.disabled = true;
+                        servingsInput.style.backgroundColor = '#f4f4f5';
+                        servingsInput.style.cursor = 'not-allowed';
+                    }
+                }
+                // =======================================================================
             } catch (err) { console.error("Failed to recall draft ingredient layers:", err); }
 
             }

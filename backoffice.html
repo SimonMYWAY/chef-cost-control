@@ -1017,7 +1017,7 @@ function loadQueue() {
         }
 
 
-        // Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits
+// Phase 3: Interactive formula inspector popup modal with dynamic live cost margin audits [SCHEMA-ALIGNED]
 function viewRecipeDetails(recipeId, name, category, servings, uom) {
     // Standardize incoming parameters safely
     var inputUOM = (uom && String(uom).trim() !== "" && String(uom) !== "undefined") ? String(uom).trim() : "porciones";
@@ -1052,10 +1052,10 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
             });
             
             if (shadowMatch) {
-                // If a matching ingredient entry exists, it means this IS a Tier 2 sub-recipe component!
                 isTier2Preparation = true; 
-                if (shadowMatch.uom && (activeUnitLabel === "porciones" || activeUnitLabel === "")) {
-                    activeUnitLabel = String(shadowMatch.uom).trim(); // Locks onto your custom choice ("ml", "gr", etc.)
+                if (activeUnitLabel === "porciones" || activeUnitLabel === "") {
+                    // ✨ UPGRADED: Read the chef's pending staging unit ('recipe_uom') first, fallback to live 'uom'
+                    activeUnitLabel = String(shadowMatch.recipe_uom || shadowMatch.uom || "gr").trim();
                 }
             }
         }
@@ -1077,71 +1077,71 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
         if (Array.isArray(masterIngredients)) {
             masterIngredients.forEach(function(ing) {
                 localIngMap[String(ing.id).toLowerCase().trim()] = ing;
-                    });
-                }
-                
-                var totalRecipeAccumulatedCost = 0;
-                
-                lines.forEach(function(line) {
-                    var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
-                    var dbItem = localIngMap[cleanIngId];
-                    
-                    var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
-                    var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
-                    
-                    var unitStandardCost = dbItem ? (parseFloat(dbItem.std_cost_per_unit || dbItem.cost) || 0) : 0;
-                    
-                    var lineQty = parseFloat(line.quantity || 0);
-                    var scrapPct = parseFloat(line.scrap_percentage || 0);
-                    var wasteFactor = 1 + (scrapPct / 100);
-                    
-                    var lineCalculatedFinancialCost = lineQty * unitStandardCost * wasteFactor;
-                    totalRecipeAccumulatedCost += lineCalculatedFinancialCost;
-                    
-                    var tr = document.createElement("tr");
-                    tr.style.borderBottom = "1px solid var(--border-color)";
-                    
-                    tr.innerHTML = "<td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "</td>" +
-                                   "<td style='padding:8px; text-align:center; font-family:monospace;'> " + lineQty.toFixed(2) + " " + resolvedIngUOM + "</td>" +
-                                   "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + scrapPct + "%</td>" +
-                                   "<td style='padding:8px; text-align:right; font-weight:600; font-family:monospace;'>$" + lineCalculatedFinancialCost.toFixed(2) + "</td>";
-                                   
-                    rowsTarget.appendChild(tr);
-                });
-                
-                var parsedServingsCount = parseFloat(servings) || 1;
-                var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
-                
-                var leftBlockHTML = "";
-                
-                if (isTier2Preparation) {
-                    // Displays production cost per true weight/volume unit using our dynamic label!
-                    leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Por Unidad Real</div>" +
-                                    "<div style='font-size:0.9rem; margin-top:2px;'>Costo por " + activeUnitLabel + ": <span style='color:#007afb;'>$" + singleUnitProductionCost.toFixed(2) + "</span></div>";
-                } else {
-                    var standardPricingTargetMultiplier = 3.2; 
-                    var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
-                    
-                    leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
-                                    "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>";
-                }
-                
-                var footerSummaryTr = document.createElement("tr");
-                footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
-                
-                footerSummaryTr.innerHTML = 
-                    "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" + leftBlockHTML + "</td>" +
-                    "<td colspan='2' style='padding:12px; text-align:right; color:var(--text-main);'>" +
-                        "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Acumulado Total</div>" +
-                        "<div style='font-size:0.9rem; margin-top:2px;'>Total Ficha: <span style='color:#007afb;'>$" + totalRecipeAccumulatedCost.toFixed(2) + "</span></div>" +
-                    "</td>";
-                    
-                rowsTarget.appendChild(footerSummaryTr);
-            })
-            .catch(function(err) {
-                console.error("Inspector popup network calculation breakdown:", err);
-                rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; padding:10px;'>❌ Error al calcular la ficha.</td></tr>";
             });
+        }
+        
+        var totalRecipeAccumulatedCost = 0;
+        
+        lines.forEach(function(line) {
+            var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+            var dbItem = localIngMap[cleanIngId];
+            
+            var ingNameClean = dbItem ? (dbItem.name_es || dbItem.name_en || "Ingrediente") : "Desconocido";
+            var resolvedIngUOM = dbItem && dbItem.uom ? dbItem.uom.trim() : "g"; 
+            
+            var unitStandardCost = dbItem ? (parseFloat(dbItem.std_cost_per_unit || dbItem.cost) || 0) : 0;
+            
+            var lineQty = parseFloat(line.quantity || 0);
+            var scrapPct = parseFloat(line.scrap_percentage || 0);
+            var wasteFactor = 1 + (scrapPct / 100);
+            
+            var lineCalculatedFinancialCost = lineQty * unitStandardCost * wasteFactor;
+            totalRecipeAccumulatedCost += lineCalculatedFinancialCost;
+            
+            var tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid var(--border-color)";
+            
+            tr.innerHTML = "<td style='padding:8px; font-weight:600; text-align:left;'>" + ingNameClean + "</td>" +
+                           "<td style='padding:8px; text-align:center; font-family:monospace;'> " + lineQty.toFixed(2) + " " + resolvedIngUOM + "</td>" +
+                           "<td style='padding:8px; text-align:right; color:var(--text-muted);'>" + scrapPct + "%</td>" +
+                           "<td style='padding:8px; text-align:right; font-weight:600; font-family:monospace;'>$" + lineCalculatedFinancialCost.toFixed(2) + "</td>";
+                           
+            rowsTarget.appendChild(tr);
+        });
+        
+        var parsedServingsCount = parseFloat(servings) || 1;
+        var singleUnitProductionCost = totalRecipeAccumulatedCost / parsedServingsCount;
+        
+        var leftBlockHTML = "";
+        
+        if (isTier2Preparation) {
+            // Displays production cost per true weight/volume unit using our dynamic label!
+            leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Por Unidad Real</div>" +
+                            "<div style='font-size:0.9rem; margin-top:2px;'>Costo por " + activeUnitLabel + ": <span style='color:#007afb;'>$" + singleUnitProductionCost.toFixed(2) + "</span></div>";
+        } else {
+            var standardPricingTargetMultiplier = 3.2; 
+            var suggestedSellingRetailPrice = singleUnitProductionCost * standardPricingTargetMultiplier;
+            
+            leftBlockHTML = "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Estrategia Comercial</div>" +
+                            "<div style='font-size:0.9rem; margin-top:2px;'>Precio Venta Sugerido (PVP): <span style='color:#22c55e;'>$" + suggestedSellingRetailPrice.toFixed(2) + "</span></div>";
+        }
+        
+        var footerSummaryTr = document.createElement("tr");
+        footerSummaryTr.setAttribute("style", "background-color:rgba(0,122,251,0.04); font-weight:700; border-top:2px solid var(--border-color);");
+        
+        footerSummaryTr.innerHTML = 
+            "<td colspan='2' style='padding:12px; text-align:left; color:var(--text-main);'>" + leftBlockHTML + "</td>" +
+            "<td colspan='2' style='padding:12px; text-align:right; color:var(--text-main);'>" +
+                "<div style='font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;'>Costo Acumulado Total</div>" +
+                "<div style='font-size:0.9rem; margin-top:2px;'>Total Ficha: <span style='color:#007afb;'>$" + totalRecipeAccumulatedCost.toFixed(2) + "</span></div>" +
+            "</td>";
+            
+        rowsTarget.appendChild(footerSummaryTr);
+    })
+    .catch(function(err) {
+        console.error("Inspector popup network calculation breakdown:", err);
+        rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; padding:10px;'>❌ Error al calcular la ficha.</td></tr>";
+    });
 }
 
 // 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
@@ -2603,9 +2603,30 @@ function approveRecipe(id) {
     })
     .then(function(res) { 
         if (res !== undefined) {
+            
+            // 🌟 STEP 2 UPGRADE: Force update your local application memory cache array maps instantly!
+            if (typeof masterIngredients !== "undefined" && Array.isArray(masterIngredients)) {
+                var localMatch = masterIngredients.find(function(i) { return String(i.id) === String(id); });
+                if (localMatch) {
+                    console.log("⚡ Synchronizing local memory state arrays with fresh approved parameters...");
+                    localMatch.std_cost_per_unit = calculatedCostPerUnit;
+                    localMatch.uom = targetUomToPersist; // Transfer from sandbox to active field row
+                    localMatch.recipe_uom = targetUomToPersist; // Keep sync clean
+                }
+            }
+
             alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
+            
+            // Re-trigger layout draws immediately
             if (typeof loadMasterCatalog === "function") loadMasterCatalog();
             if (typeof loadQueue === "function") loadQueue(); 
+            
+            // 🚀 Force your Ingredients Grid UI component to re-render using the updated variables right now!
+            if (typeof renderIngredientsGrid === "function") {
+                renderIngredientsGrid();
+            } else if (typeof displayMasterCatalogGrid === "function") {
+                displayMasterCatalogGrid();
+            }
         }
     })
     .catch(function(err) { 
