@@ -1124,22 +1124,26 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
     });
 }
 
-// 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved)
-function renderMasterIngredientsTable() {
+// 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved) [ASYNCHRONOUS PROMISE UPGRADE]
+async function renderMasterIngredientsTable() {
     var container = document.getElementById("ingredients-table-rows");
     if (!container) return;
     
-    // Parallel fetch to obtain active ingredients and formula mapping links to build delete shields
-    Promise.all([
-        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-        fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
-    ])
-    .then(function(results) {
-        // ✨ FIXED SLOT INDEX EXTRACTION MATRIX:
+    // 🌟 FORCE REAL-TIME FRESH SNAPSHOT:
+    // Break browser network caching so the very latest approved units and costs load instantly
+    try {
+        const results = await Promise.all([
+            fetch(API_URL + "ingredients", { 
+                headers: { "apikey": API_KEY, "Cache-Control": "no-cache, no-store, must-revalidate" } 
+            }).then(r => r.json()),
+            fetch(API_URL + "recipe_ingredients", { 
+                headers: { "apikey": API_KEY, "Cache-Control": "no-cache, no-store, must-revalidate" } 
+            }).then(r => r.json())
+        ]);
+
         var data = results[0];
         var formulaLinks = results[1];
         
-        // 🌟 FIX: Secure your formula links batch data array safely inside our global memory register!
         _masterIngredientsLookupArray = Array.isArray(formulaLinks) ? formulaLinks : [];
         
         container.innerHTML = "";
@@ -1176,7 +1180,7 @@ function renderMasterIngredientsTable() {
                         "<input type='text' id='ing-name-en-" + item.id + "' value='" + (item.name_en || "").replace(/'/g, "&apos;") + "' style='padding:4px; width:95%; font-size:0.8rem; color:var(--text-muted);' placeholder='English'> " +
                     "</div> " +
                 "</td> " +
-                "<td style='text-align:center; color:var(--text-muted); font-size:0.85rem; font-weight:600;'>" + (item.uom || 'N/A') + "</td> " +
+                "<td style='text-align:center; color:var(--text-main); font-size:0.85rem; font-weight:700;'>" + (item.uom || 'N/A') + "</td> " +
                 "<td style='text-align:center; width:110px;'>  " +
                     "<div style='display:flex; align-items:center; justify-content:center; gap:2px;'> " +
                         "<span style='font-size:0.85rem; font-weight:600; color:var(--text-muted);'>$</span> " +
@@ -1197,7 +1201,9 @@ function renderMasterIngredientsTable() {
                 
             container.appendChild(tr);
         });
-    }).catch(function(err) { console.error("Ingredients compilation fault:", err); });
+    } catch(err) {
+        console.error("Ingredients compilation fault:", err);
+    }
 }
 
 // 🔍 Direct dynamic endpoint check to list recipes using this specific asset
@@ -2584,42 +2590,19 @@ function approveRecipe(id) {
     // ... [Scroll to the very bottom success layer inside your approveRecipe function] ...
     .then(async function(res) { 
         if (res !== undefined) {
-            
-            // 🌟 FORCE REALTIME GLOBAL ARRAY VARIABLE ALIGNMENTS
-            if (typeof masterIngredients !== "undefined" && Array.isArray(masterIngredients)) {
-                var matchA = masterIngredients.find(function(i) { return String(i.id) === String(id); });
-                if (matchA) {
-                    matchA.std_cost_per_unit = calculatedCostPerUnit;
-                    matchA.uom = targetUomToPersist; 
-                    matchA.recipe_uom = targetUomToPersist;
-                }
-            }
-
-            if (typeof DB_INGREDIENTS !== "undefined" && Array.isArray(DB_INGREDIENTS)) {
-                var matchB = DB_INGREDIENTS.find(function(i) { return String(i.id) === String(id); });
-                if (matchB) {
-                    matchB.std_cost_per_unit = calculatedCostPerUnit;
-                    matchB.uom = targetUomToPersist; 
-                    matchB.recipe_uom = targetUomToPersist;
-                }
-            }
-
             alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
             
-            // 🌟 SYNCHRONOUS FLOW CORRECTION:
-            // Force the system to completely finish downloading the new database data BEFORE letting the grid draw!
+            // 🌟 FORCE SYNCHRONOUS TABLE RE-PAINTS:
+            // This tells the UI to execute your fresh async fetch loop immediately
+            if (typeof renderMasterIngredientsTable === "function") {
+                await renderMasterIngredientsTable(); // ✨ Added await to guarantee instant redraw!
+            }
+            
             if (typeof loadMasterCatalog === "function") {
-                await loadMasterCatalog(); // ✨ Added await to guarantee data delivery completion
+                loadMasterCatalog(); 
             }
             if (typeof loadQueue === "function") {
-                await loadQueue(); // ✨ Added await
-            } 
-            
-            // Now that data is 100% downloaded, paint it on the canvas safely!
-            if (typeof renderIngredientsGrid === "function") {
-                renderIngredientsGrid();
-            } else if (typeof displayMasterCatalogGrid === "function") {
-                displayMasterCatalogGrid();
+                loadQueue(); 
             }
         }
     })
