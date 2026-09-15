@@ -756,25 +756,24 @@ function loadQueue() {
                 var shadowMatch = masterIngredients.find(function(i) { 
                     return String(i.id).toLowerCase().trim() === String(recipe.id).toLowerCase().trim(); 
                 });
-                if (shadowMatch && shadowMatch.uom) {
-                    queueUOM = String(shadowMatch.uom).trim();
+                
+                // 🌟 STRUCTURAL REPAIR ANCHOR:
+                // Look for the chef's pending staging column ('recipe_uom') first, fallback onto active 'uom'
+                if (shadowMatch) {
+                    queueUOM = String(shadowMatch.recipe_uom || shadowMatch.uom || "porciones").trim();
                 }
             }
             
             row.setAttribute("style", "display:flex; justify-content:space-between; align-items:center; padding:15px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:8px; background-color:var(--bg-surface); width:100%; box-sizing:border-box;");
             
             row.innerHTML = "<div style='flex:1; text-align:left;'>" +
-                                "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;' CONTAINER;'>" + nameClean + "</div>" +
+                                "<div style='font-weight:600; color:var(--text-main); font-size:0.95rem;'>" + nameClean + "</div>" +
                                 "<div style='font-size:0.8rem; color:var(--text-muted); margin-top:4px;'>Categoría: " + (recipe.category || 'N/A') + " | Rendimiento Base: " + (recipe.servings || 4) + " (" + queueUOM + ")</div>" +
                             "</div>" +
                             "<div style='display:flex; align-items:center; gap:12px; margin-left:15px;'>" +
                                 "<button class='btn btn-blue' style='padding:6px 12px; font-size:0.85rem;' onclick=\"viewRecipeDetails('" + recipe.id + "', '" + escapeHtml(nameClean) + "', '" + recipe.category + "', " + (recipe.servings || 4) + ", '" + queueUOM + "')\">Ver Detalles</button>" +
-                                // Button 2: Aprobar (🟢 Green Success Styling - Triggers your real approveRecipe logic!)
                                 "<button class='btn' style='background-color:#10b981; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; font-weight:600; cursor:pointer;' onclick=\"approveRecipe('" + recipe.id + "')\">Aprobar</button>" +
-                                
-                                // Button 3: Rechazar (🟠 Warning Orange Styling - Triggers your real releaseRecipeToDraft rejection logic!)
                                 "<button class='btn' style='background-color:#f59e0b; color:white; padding:6px 12px; font-size:0.85rem; border:none; border-radius:4px; font-weight:600; cursor:pointer;' onclick=\"releaseRecipeToDraft('" + recipe.id + "')\">Rechazar</button>" +
-
                             "</div>";
                                     
             container.appendChild(row);
@@ -786,11 +785,10 @@ function loadQueue() {
     });
 }
 
-
                 // 🛡️ RESTRUCTURING BLACKLIST SYSTEM
         var _deletedRecipeIds = [];
 
-                // 📋 MASTER DIRECTORY ENGINE: Displays all recipes with synchronized catalog status badges (A to Z)
+        // 📋 MASTER DIRECTORY ENGINE: Displays all recipes with synchronized catalog status badges (A to Z)
         function loadMasterCatalog() {
             var container = document.getElementById("master-catalog-container");
             if (!container) return;
