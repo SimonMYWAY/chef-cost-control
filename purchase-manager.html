@@ -1451,7 +1451,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
     }
 }, 3000); // Check frequency optimized to 3 seconds
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Parallel Link Mapping & Filtering [Part 1 of 2]
+// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2]
 var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; // Stores historical records locally for real-time search filtering
 
 async function toggleHistoricalArchiveOnDemandEngine() {
@@ -1478,39 +1478,58 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     contentRack.style.display = "flex";
 
     try {
-        // 1️⃣ Parallel fetch request loops to optimize data extraction windows
-        const [ordersRes, itemsRes] = await Promise.all([
-            fetch(API_URL + "purchase_orders?status=eq.dispatched&order=created_at.desc", {
-                headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
-            }).then(r => r.json()),
-            fetch(API_URL + "purchase_order_items?order=created_at.desc", {
-                headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
-            }).then(r => r.json())
-        ]);
+        // 🌟 NESTED JOIN QUERY: Pull parent orders and their inner child lines together in one network fetch step
+        // By embedding purchase_order_items(*), we bypass default table limit bottlenecks completely!
+        const response = await fetch(API_URL + "purchase_orders?status=eq.dispatched&select=*,purchase_order_items(*)&order=created_at.desc", {
+            headers: { 
+                "apikey": API_KEY, 
+                "Cache-Control": "no-cache",
+                "Prefer": "count=exact"
+            }
+        });
 
-        if (!Array.isArray(ordersRes) || !Array.isArray(itemsRes)) {
-            throw new Error("No se pudo obtener una respuesta válida de las tablas históricas.");
+        if (!response.ok) throw new Error("Fallo al conectar con las tablas históricas.");
+        const relationalOrdersBatch = await response.json();
+
+        if (!Array.isArray(relationalOrdersBatch)) {
+            throw new Error("No se obtuvo una colección de datos válida.");
         }
 
         GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
 
-        // 2️⃣ Relational cross-examination array mapper link loop
-        ordersRes.forEach(function(order) {
-            var matchingLines = itemsRes.filter(item => String(item.po_id) === String(order.id));
+        // 🌟 UNPACK RELATIONAL PLIABLE GRAPH NEST: Extract data arrays cleanly
+        relationalOrdersBatch.forEach(function(order) {
+            // Read the child rows nested directly inside this parent document row
+            var innerChildLinesList = order.purchase_order_items || [];
             
-            matchingLines.forEach(function(line) {
+            if (innerChildLinesList.length === 0) {
+                // Defensive fallback: Display an empty card holder shell if the PO has no rows
                 GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
                     po_id: order.id,
                     po_number: order.po_number || "PO-DESPACHADA",
-                    supplier_name: order.supplier_name || "Proveedor",
+                    supplier_name: order.supplier_name || "Proveedor No Asignado",
                     created_at: order.created_at,
-                    ingredient_name: line.ingredient_name || "Insumo",
-                    supplier_uom: line.supplier_uom || "Unidad",
-                    quantity_ordered: parseFloat(line.quantity_ordered || 0),
-                    faltante_base: parseFloat(line.faltante_base || 0),
-                    recipe_uom: line.recipe_uom || "UOM"
+                    ingredient_name: "Sin ítems registrados",
+                    supplier_uom: "-",
+                    quantity_ordered: 0,
+                    faltante_base: 0,
+                    recipe_uom: "-"
                 });
-            });
+            } else {
+                innerChildLinesList.forEach(function(line) {
+                    GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
+                        po_id: order.id,
+                        po_number: order.po_number || "PO-DESPACHADA",
+                        supplier_name: order.supplier_name || "Proveedor No Asignado",
+                        created_at: order.created_at,
+                        ingredient_name: line.ingredient_name || "Insumo",
+                        supplier_uom: line.supplier_uom || "Unidad",
+                        quantity_ordered: parseFloat(line.quantity_ordered || 0),
+                        faltante_base: parseFloat(line.faltante_base || 0),
+                        recipe_uom: line.recipe_uom || "UOM"
+                    });
+                });
+            }
         });
 
         actionBtn.innerHTML = "🔒 Ocultar Historial";
