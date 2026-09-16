@@ -50,11 +50,45 @@
 </head>
 <body>
 
+        <!-- 🎛️ CONTROL TERMINAL BOARD OVERHAUL: Dual Action Launcher Gates -->
     <header>
         <h1>📋 Panel de Control de Compras</h1>
         <p class="subtitle">Verificación interactiva de pedidos sincronizados con la lógica de Backoffice.</p>
-        <button class="btn" onclick="pullActiveStagedCalculationFromCloud()">🔄 Cargar Ventas Procesadas del Día</button>
+        
+        <div class="control-actions-row-wrapper" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:15px; flex-wrap:wrap;">
+            <!-- Your original loading button remains fully active -->
+            <button class="btn" onclick="pullActiveStagedCalculationFromCloud()">
+                🔄 Cargar Ventas Procesadas del Día
+            </button>
+
+            <!-- 🌟 NEW: THE HISTORICAL RETRIEVAL CONTROLLER BUTTON -->
+            <button id="btn-recall-historical-archive" class="btn" onclick="toggleHistoricalArchiveOnDemandEngine()" style="background-color:#4f46e5 !important; color:white !important; font-weight:600; padding:10px 16px; border:none; border-radius:6px; cursor:pointer;">
+                📜 Ver Historial de Despachos
+            </button>
+        </div>
     </header>
+
+    <!-- 🌟 NEW: INTERACTIVE ARCHIVE RACK & DYNAMIC SEARCH FILTER GRID -->
+    <div id="historical-archive-search-panel-rack" style="display:none; background:#f8fafc; border:1px solid #e2e8f0; padding:15px; border-radius:8px; margin: 15px auto; max-width:1200px; box-sizing:border-box;">
+        <div style="font-weight:700; color:#1e293b; font-size:0.95rem; margin-bottom:10px; display:flex; align-items:center; gap:6px; text-align:left;">🔍 Filtros de Búsqueda Histórica</div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; text-align:left;">
+            <div>
+                <label style="font-size:0.75rem; font-weight:700; color:#64748b; text-transform:uppercase; display:block;">Proveedor</label>
+                <input type="text" id="filter-hist-supplier" oninput="applyLiveHistoricalSearchMatrixFilters()" placeholder="Ej: Frutería..." style="width:100%; padding:6px; border:1px solid #cbd5e1; border-radius:4px; margin-top:4px; font-size:0.85rem; box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="font-size:0.75rem; font-weight:700; color:#64748b; text-transform:uppercase; display:block;">Insumo / Artículo</label>
+                <input type="text" id="filter-hist-ingredient" oninput="applyLiveHistoricalSearchMatrixFilters()" placeholder="Ej: Zucchini..." style="width:100%; padding:6px; border:1px solid #cbd5e1; border-radius:4px; margin-top:4px; font-size:0.85rem; box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="font-size:0.75rem; font-weight:700; color:#64748b; text-transform:uppercase; display:block;">Número de Orden (PO)</label>
+                <input type="text" id="filter-hist-po" oninput="applyLiveHistoricalSearchMatrixFilters()" placeholder="Ej: PO-SHIP..." style="width:100%; padding:6px; border:1px solid #cbd5e1; border-radius:4px; margin-top:4px; font-size:0.85rem; box-sizing:border-box;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Container target slot where recalled blurry records render sequentially -->
+    <div id="historical-archive-workspace-rack" style="display:none; flex-direction:column; gap:12px; margin:20px auto; max-width:1200px; width:100%; box-sizing:border-box;"></div>
 
     <main id="manager-grid-workspace">
         <div class="loader-text">Haga clic en el botón superior para descargar la matriz de cálculo activa de hoy.</div>
@@ -1416,6 +1450,169 @@ setInterval(async function enforceRemoteSequenceFirewall() {
         console.warn("Sequence firewall verification tick skipped:", err);
     }
 }, 3000); // Check frequency optimized to 3 seconds
+
+// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Parallel Link Mapping & Filtering [Part 1 of 2]
+var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; // Stores historical records locally for real-time search filtering
+
+async function toggleHistoricalArchiveOnDemandEngine() {
+    var panelRack = document.getElementById("historical-archive-search-panel-rack");
+    var contentRack = document.getElementById("historical-archive-workspace-rack");
+    var actionBtn = document.getElementById("btn-recall-historical-archive");
+
+    if (!panelRack || !contentRack) return;
+
+    // Collapsible Toggle Valve State Check
+    if (panelRack.style.display === "block" || panelRack.style.display === "grid") {
+        panelRack.style.display = "none";
+        contentRack.style.display = "none";
+        actionBtn.innerHTML = "📜 Ver Historial de Despachos";
+        actionBtn.style.backgroundColor = "#4f46e5";
+        return;
+    }
+
+    actionBtn.innerHTML = "⏳ Descargando Historial...";
+    actionBtn.style.backgroundColor = "#64748b";
+    contentRack.innerHTML = '<div style="text-align:center; padding:30px; font-style:italic; color:#64748b;">🔄 Consultando registros históricos cerrados en Supabase...</div>';
+    
+    panelRack.style.display = "block";
+    contentRack.style.display = "flex";
+
+    try {
+        // 1️⃣ Parallel fetch request loops to optimize data extraction windows
+        const [ordersRes, itemsRes] = await Promise.all([
+            fetch(API_URL + "purchase_orders?status=eq.dispatched&order=created_at.desc", {
+                headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
+            }).then(r => r.json()),
+            fetch(API_URL + "purchase_order_items?order=created_at.desc", {
+                headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
+            }).then(r => r.json())
+        ]);
+
+        if (!Array.isArray(ordersRes) || !Array.isArray(itemsRes)) {
+            throw new Error("No se pudo obtener una respuesta válida de las tablas históricas.");
+        }
+
+        GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
+
+        // 2️⃣ Relational cross-examination array mapper link loop
+        ordersRes.forEach(function(order) {
+            var matchingLines = itemsRes.filter(item => String(item.po_id) === String(order.id));
+            
+            matchingLines.forEach(function(line) {
+                GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
+                    po_id: order.id,
+                    po_number: order.po_number || "PO-DESPACHADA",
+                    supplier_name: order.supplier_name || "Proveedor",
+                    created_at: order.created_at,
+                    ingredient_name: line.ingredient_name || "Insumo",
+                    supplier_uom: line.supplier_uom || "Unidad",
+                    quantity_ordered: parseFloat(line.quantity_ordered || 0),
+                    faltante_base: parseFloat(line.faltante_base || 0),
+                    recipe_uom: line.recipe_uom || "UOM"
+                });
+            });
+        });
+
+        actionBtn.innerHTML = "🔒 Ocultar Historial";
+        actionBtn.style.backgroundColor = "#ef4444";
+        
+        // Render the processed data rows cleanly using our filtration paint loop
+        applyLiveHistoricalSearchMatrixFilters();
+
+    } catch (err) {
+        console.error("Historical recall failure:", err);
+        contentRack.innerHTML = `<div style="color:#ef4444; text-align:center; padding:20px; font-weight:bold;">❌ Error al cargar historial: ${err.message}</div>`;
+        actionBtn.innerHTML = "❌ Reintentar Historial";
+        actionBtn.style.backgroundColor = "#ef4444";
+    }
+}
+// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2]
+function applyLiveHistoricalSearchMatrixFilters() {
+    var contentRack = document.getElementById("historical-archive-workspace-rack");
+    if (!contentRack) return;
+
+    // 1️⃣ Gather the text keyword strings from the UI inputs
+    var supplierFilter = document.getElementById("filter-hist-supplier")?.value.trim().toLowerCase() || "";
+    var ingredientFilter = document.getElementById("filter-hist-ingredient")?.value.trim().toLowerCase() || "";
+    var poFilter = document.getElementById("filter-hist-po")?.value.trim().toLowerCase() || "";
+
+    // 2️⃣ Filter the raw master memory array checklist matrix
+    var filteredRows = GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.filter(function(row) {
+        var matchSupplier = String(row.supplier_name).toLowerCase().includes(supplierFilter);
+        var matchIngredient = String(row.ingredient_name).toLowerCase().includes(ingredientFilter);
+        var matchPo = String(row.po_number).toLowerCase().includes(poFilter);
+        return matchSupplier && matchIngredient && matchPo;
+    });
+
+    if (filteredRows.length === 0) {
+        contentRack.innerHTML = '<div style="text-align:center; padding:30px; font-style:italic; color:#64748b;">🔍 No se encontraron registros históricos que coincidan con los filtros ingresados.</div>';
+        return;
+    }
+
+    // 3️⃣ Group rows into discrete PO documents to reconstruct the manager cards layout
+    var cardGroups = {};
+    filteredRows.forEach(function(row) {
+        var key = row.po_number;
+        if (!cardGroups[key]) {
+            cardGroups[key] = {
+                po_number: row.po_number,
+                supplier_name: row.supplier_name,
+                created_at: row.created_at,
+                items: []
+            };
+        }
+        cardGroups[key].items.push(row);
+    });
+
+    contentRack.innerHTML = "";
+
+    // 4️⃣ Loop and draw the exact same visual spreadsheet layout cards (Blurred State)
+    var uniquePoKeys = Object.keys(cardGroups);
+    uniquePoKeys.forEach(function(poKey, idx) {
+        var group = cardGroups[poKey];
+        var formattedDate = group.created_at ? new Date(group.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit' }) : "Sin Fecha";
+
+        var cardDiv = document.createElement("div");
+        cardDiv.className = "supplier-card historical-blurry-card-state";
+        
+        // 🎨 BLURRY STATE VISUAL ANCHOR: Applies a beautiful background-faded glass look to past logs
+        cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); filter: opacity(0.7) blur(0.3px) grayscale(20%); pointer-events: none; transition: filter 0.2s;");
+
+        // Build the inner spreadsheet data lines matching your active card row layout
+        var itemsHtml = "";
+        group.items.forEach(function(item) {
+            itemsHtml += `
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 6px 0; font-size: 0.88rem;">
+                    <div style="font-weight: 600; color: #334155; flex: 2; text-align: left;">${item.ingredient_name}</div>
+                    <div style="color: #64748b; flex: 1; text-align: center;">${item.faltante_base.toFixed(2)} ${item.recipe_uom}</div>
+                    <div style="font-weight: 700; color: #1e293b; flex: 1; text-align: right;">${item.quantity_ordered} ${item.supplier_uom}</div>
+                </div>`;
+        });
+
+        // Exact match mapping for the wrapper text labels
+        cardDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px;">
+                <div style="text-align: left;">
+                    <h3 style="margin: 0; font-size: 1.05rem; color: #0f172a; font-weight: 700;">${group.supplier_name}</h3>
+                    <span style="font-size: 0.78rem; color: #64748b; font-family: monospace;">${group.po_number}</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="font-size: 0.75rem; font-weight: 700; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 12px; text-transform: uppercase;">📦 DESPACHADO</span>
+                    <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">${formattedDate}</div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 6px;">
+                <div style="flex: 2; text-align: left;">Insumo</div>
+                <div style="flex: 1; text-align: center;">Faltante Base</div>
+                <div style="flex: 1; text-align: right;">Cant Pedida</div>
+            </div>
+            <div>
+                ${itemsHtml}
+            </div>`;
+
+        contentRack.appendChild(cardDiv);
+    });
+}
 
     </script>
 </body>
