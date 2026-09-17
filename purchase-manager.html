@@ -1048,39 +1048,38 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
-            // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Unified Fixed Monospace Ticket Format) ---
+    // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Unified Compact Mobile Format) ---
     try {
         var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+        var shortDate = timeStampStr.split(",")[0];
         
-        // 🌟 THE WHATSAPP MONOSPACE BINDING GATE: 
-        // We wrap the receipt layout inside triple backticks (```) so WhatsApp locks its visual width!
         var msg = "Hola " + supplierName + ",\n" +
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
                   "```\n" +
-                  "========================================\n" +
-                  "       ORDEN DE COMPRA: " + poNumber + "\n" +
-                  "========================================\n" +
-                  "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
-                  "EMITIDO   : " + timeStampStr + "\n" +
-                  "ESTADO    : APROBADO Y CONFIRMADO\n" +
-                  "----------------------------------------\n";
+                  "==============================\n" +
+                  "    ORDEN DE COMPRA: " + poNumber + "\n" +
+                  "==============================\n" +
+                  "PROV. : " + supplierName.toUpperCase() + "\n" +
+                  "FECHA : " + shortDate + "\n" +
+                  "ESTADO: APROBADO\n" +
+                  "------------------------------\n";
 
         filteredLines.forEach(function(item) {
-            // Apply identical pad length criteria to align quantities and formats cleanly
             var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
-            var displayUOM = String(item.supplier_uom).padEnd(12); 
+            var displayUOM = String(item.supplier_uom).substring(0, 10).padEnd(10); 
             
-            msg += "[ ] " + displayQty + " " + displayUOM + " - " + item.ingredient_name + "\n";
+            // 🌟 COMPACT TWO-LINE FORMAT MATCH: Drops legacy check brackets and stacks labels cleanly
+            msg += "▶ " + displayQty + " " + displayUOM + "\n" +
+                   "  " + item.ingredient_name + "\n\n";
         });
 
-        msg += "----------------------------------------\n" +
-               "Por favor confirmar recepción y despacho.\n" +
-               "========================================\n" +
-               "```"; // Closes your secure unalterable monospace wrapper text box
+        msg += "------------------------------\n" +
+               "Por favor confirmar recepción.\n" +
+               "==============================\n" +
+               "```"; 
 
-        // Execute clipboard assignment instantly inside your core user-gesture window
         await navigator.clipboard.writeText(msg);
-        console.log("📋 Unified Receipt Slip pushed to clipboard cleanly.");
+        console.log("📋 Unified Mobile Receipt Slip pushed to clipboard cleanly.");
 
         // 🌟 CRITICAL REPAIR: Execute the clipboard write immediately inside the user-gesture window!
         await navigator.clipboard.writeText(msg);
@@ -1364,13 +1363,12 @@ function verifyAndReleaseShipmentLock() {
 }
 
 
-        // ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen
+// ⚡ THE MISSING LINK: Function to compile and display the digital text receipt slip on-screen [MOBILE-OPTIMIZED]
 function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     var blockKey = supplierName.replace(/\s+/g, '-');
     var slipContainer = document.getElementById("receipt-slip-node-" + blockKey);
     if (!slipContainer) return;
 
-    // Filter down to the exact rows active for this provider card box
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -1380,26 +1378,27 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
 
     var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
     var txt = 
-        "========================================\n" +
-        "       ORDEN DE COMPRA: " + poNumber + "\n" +
-        "========================================\n" +
-        "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
-        "EMITIDO   : " + timeStamp + "\n" +
-        "ESTADO    : APROBADO Y CONFIRMADO\n" +
-        "----------------------------------------\n";
+        "==============================\n" +
+        "    ORDEN DE COMPRA: " + poNumber + "\n" +
+        "==============================\n" +
+        "PROV. : " + supplierName.toUpperCase() + "\n" +
+        "FECHA : " + timeStamp.split(",")[0] + "\n" + // Shortened to save width
+        "ESTADO: APROBADO\n" +
+        "------------------------------\n";
 
     filteredLines.forEach(function(item) {
-        // Safe string casting protects the alignment strings from throwing length errors if database values return numbers
-        var displayQty = String(item.approved_formats_quantity).padEnd(4);
-        var displayUOM = String(item.supplier_uom).padEnd(12); // Increased padding to prevent longer unit text from breaking your layout alignment
+        var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
+        var displayUOM = String(item.supplier_uom).substring(0, 10).padEnd(10); // Safe length crop
         
-        txt += "[ ] " + displayQty + " " + displayUOM + " - " + item.ingredient_name + "\n";
+        // 🌟 COMPACT TWO-LINE FORMAT WITH SPACING:
+        txt += "▶ " + displayQty + " " + displayUOM + "\n" +
+               "  " + item.ingredient_name + "\n\n"; // Trailing blank line separates items clearly!
     });
 
     txt += 
-        "----------------------------------------\n" +
-        "Por favor confirmar recepción y despacho.\n" +
-        "========================================";
+        "------------------------------\n" +
+        "Por favor confirmar recepción.\n" +
+        "==============================";
 
     slipContainer.innerText = txt;
     slipContainer.style.display = "block";
