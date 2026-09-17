@@ -1048,13 +1048,39 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
-        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
+            // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Unified Fixed Monospace Ticket Format) ---
     try {
-        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
+        var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+        
+        // 🌟 THE WHATSAPP MONOSPACE BINDING GATE: 
+        // We wrap the receipt layout inside triple backticks (```) so WhatsApp locks its visual width!
+        var msg = "Hola " + supplierName + ",\n" +
+                  "Adjunto orden de compra oficial para su revisión:\n\n" +
+                  "```\n" +
+                  "========================================\n" +
+                  "       ORDEN DE COMPRA: " + poNumber + "\n" +
+                  "========================================\n" +
+                  "PROVEEDOR : " + supplierName.toUpperCase() + "\n" +
+                  "EMITIDO   : " + timeStampStr + "\n" +
+                  "ESTADO    : APROBADO Y CONFIRMADO\n" +
+                  "----------------------------------------\n";
+
         filteredLines.forEach(function(item) {
-            msg += "▫️ *" + Math.ceil(item.approved_formats_quantity) + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
+            // Apply identical pad length criteria to align quantities and formats cleanly
+            var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
+            var displayUOM = String(item.supplier_uom).padEnd(12); 
+            
+            msg += "[ ] " + displayQty + " " + displayUOM + " - " + item.ingredient_name + "\n";
         });
-        msg += "\nPor favor confirmar recepción y fecha de entrega estimada. Adjunto comprobante de recibo visual.";
+
+        msg += "----------------------------------------\n" +
+               "Por favor confirmar recepción y despacho.\n" +
+               "========================================\n" +
+               "```"; // Closes your secure unalterable monospace wrapper text box
+
+        // Execute clipboard assignment instantly inside your core user-gesture window
+        await navigator.clipboard.writeText(msg);
+        console.log("📋 Unified Receipt Slip pushed to clipboard cleanly.");
 
         // 🌟 CRITICAL REPAIR: Execute the clipboard write immediately inside the user-gesture window!
         await navigator.clipboard.writeText(msg);
