@@ -1066,7 +1066,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
         filteredLines.forEach(function(item) {
             var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
-            var displayUOM = String(item.supplier_uom).substring(0, 10).padEnd(10); 
+            var displayUOM = String(item.supplier_uom).substring(0, 20).padEnd(20); 
             
             // 🌟 COMPACT TWO-LINE FORMAT MATCH: Drops legacy check brackets and stacks labels cleanly
             msg += "▶ " + displayQty + " " + displayUOM + "\n" +
@@ -1388,7 +1388,7 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
 
     filteredLines.forEach(function(item) {
         var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
-        var displayUOM = String(item.supplier_uom).substring(0, 10).padEnd(10); // Safe length crop
+        var displayUOM = String(item.supplier_uom).substring(0, 20).padEnd(20); // Safe length crop
         
         // 🌟 COMPACT TWO-LINE FORMAT WITH SPACING:
         txt += "▶ " + displayQty + " " + displayUOM + "\n" +
