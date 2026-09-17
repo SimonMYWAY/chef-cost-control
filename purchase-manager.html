@@ -1056,13 +1056,14 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var msg = "Hola " + supplierName + ",\n" +
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
                   "```\n" +
-                  "==============================\n" +
-                  "    ORDEN DE COMPRA: " + poNumber + "\n" +
-                  "==============================\n" +
+                  "==========================\n" +
+                  "    ORDEN DE COMPRA: "
+                       + poNumber + "\n" +
+                  "==========================\n" +
                   "PROV. : " + supplierName.toUpperCase() + "\n" +
                   "FECHA : " + shortDate + "\n" +
                   "ESTADO: APROBADO\n" +
-                  "------------------------------\n";
+                  "----------------------\n";
 
         filteredLines.forEach(function(item) {
             var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
@@ -1073,9 +1074,9 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                    "  " + item.ingredient_name + "\n\n";
         });
 
-        msg += "------------------------------\n" +
+        msg += "--------------------------\n" +
                "Por favor confirmar recepción.\n" +
-               "==============================\n" +
+               "==========================\n" +
                "```"; 
 
         await navigator.clipboard.writeText(msg);
