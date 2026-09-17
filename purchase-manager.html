@@ -1022,8 +1022,19 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
+        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
     try {
-        // --- STEP 1: MASTER DATABASE RECORDING ---
+        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
+        filteredLines.forEach(function(item) {
+            msg += "▫️ *" + Math.ceil(item.approved_formats_quantity) + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
+        });
+        msg += "\nPor favor confirmar recepción y fecha de entrega estimada. Adjunto comprobante de recibo visual.";
+
+        // 🌟 CRITICAL REPAIR: Execute the clipboard write immediately inside the user-gesture window!
+        await navigator.clipboard.writeText(msg);
+        console.log("📋 Text successfully pushed to clipboard before background async execution delays.");
+
+        // --- STEP 2: MASTER DATABASE ASYNC RECORDING ---
         var generatedPoUuid = null;
 
         if (!isAlreadySaved) {
@@ -1056,37 +1067,27 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 const parentRowResultData = await resParent.json();
                 generatedPoUuid = parentRowResultData[0].id;
             } else {
-                // Update parent status to frozen whatsapp checkpoint state
                 await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
                     method: "PATCH",
-                    headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify({ status: 'saved_pending_whatsapp' })
                 });
             }
 
-            // =======================================================================
-            // 🧹 THE CRITICAL ANTI-GHOST PURGE: SCRUB UNCHECKED LINES FROM SUPABASE
-            // =======================================================================
-            // Find all lines for this supplier that the manager explicitly unchecked on screen
+            // 🧹 THE ANTI-GHOST PURGE
             var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
-            
             if (rejectedLines.length > 0 && generatedPoUuid) {
-                console.log(`🧹 Scrubbing ${rejectedLines.length} unapproved ghost lines from database logs...`);
                 for (var r = 0; r < rejectedLines.length; r++) {
                     var rejectedItem = rejectedLines[r];
-                    // Delete this specific item from this specific PO layout container right now
                     await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(rejectedItem.ingredient_name), {
                         method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                     });
                 }
             }
-            // =======================================================================
 
             // Save child item rows natively
             for (var i = 0; i < filteredLines.length; i++) {
                 var item = filteredLines[i];
-                
-                // Clear old items from any alternative headers to prevent duplicate entries on split cards
                 await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
@@ -1113,26 +1114,18 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
                 if (existingItemId) {
                     await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
-                        method: "PATCH", headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        method: "PATCH", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify(childPayload)
                     });
                 } else {
                     await fetch(API_URL + "purchase_order_items", {
-                        method: "POST", headers: { "apikey": API_KEY, "Content-Type": "application/json" },
+                        method: "POST", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify(childPayload)
                     });
                 }
             }
-            console.log("💾 Base de datos congelada exitosamente. Listos para despacho.");
+            console.log("💾 Base de datos congelada exitosamente.");
         }
-        // --- STEP 2: FORMAT & CLIPBOARD COPY ---
-        var msg = "Hola " + supplierName + ", adjunto orden de compra oficial *" + poNumber + "*:\n\n";
-        filteredLines.forEach(function(item) {
-            msg += "▫️ *" + Math.ceil(item.approved_formats_quantity) + " " + item.supplier_uom + "* de " + item.ingredient_name + "\n";
-        });
-        msg += "\nPor favor confirmar recepción y fecha de entrega estimada. Adjunto comprobante de recibo visual.";
-
-        await navigator.clipboard.writeText(msg);
 
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
         if (supplierCard) {
@@ -1148,9 +1141,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             }
 
             var confirmationCheckboxNode = supplierCard.querySelector(".final-dispatch-gate");
-            if (confirmationCheckboxNode) {
-                confirmationCheckboxNode.style.display = "flex"; 
-            }
+            if (confirmationCheckboxNode) confirmationCheckboxNode.style.display = "flex"; 
 
             supplierCard.querySelectorAll("select, input[type='number'], input[type='checkbox']:not([onchange*='markSupplierOrderAsDispatched'])").forEach(function(input) {
                 input.disabled = true;
@@ -1465,7 +1456,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
     }
 }, 3000); // Check frequency optimized to 3 seconds
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2 - REPAIRED]
+// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2 - FULLY REPAIRED]
 var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; 
 
 async function toggleHistoricalArchiveOnDemandEngine() {
@@ -1483,13 +1474,29 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         return;
     }
 
-    // 🌟 EXTRACT CURRENT SEQUENCE TO EXCLUDE IT
+    // 🌟 MEMORY SYSTEM CORRECTION: Read your true shipment ID out of the active data objects array
     var currentScreenShipId = "00";
-    var headerNode = document.getElementById("terminal-cargo-meta-header");
-    if (headerNode) {
-        var strongElement = headerNode.querySelector("strong");
-        if (strongElement) {
-            currentScreenShipId = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
+        var baseObjectRow = LOCAL_STAGED_ROWS[0];
+        // Read shipment_id, fallback to extracting it from a forced PO number string text loop
+        if (baseObjectRow.shipment_id) {
+            currentScreenShipId = String(baseObjectRow.shipment_id).trim();
+        } else if (baseObjectRow.forced_po_number && baseObjectRow.forced_po_number.includes("-SHIP-")) {
+            var parts = baseObjectRow.forced_po_number.split("-SHIP-");
+            if (parts.length > 1) {
+                currentScreenShipId = parts[1].split("-")[0].trim();
+            }
+        }
+    }
+
+    // Secondary UI fallback check if memory arrays are in a shifting state
+    if (currentScreenShipId === "00" || currentScreenShipId === "00") {
+        var headerNode = document.getElementById("terminal-cargo-meta-header");
+        if (headerNode) {
+            var strongElement = headerNode.querySelector("strong");
+            if (strongElement) {
+                currentScreenShipId = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+            }
         }
     }
 
@@ -1501,53 +1508,36 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     contentRack.style.display = "flex";
 
     try {
-        // 🌟 FIX: Append a filter condition targeting the po_number string to exclude the current active ship ID completely!
-        var exclusionFilter = currentScreenShipId !== "00" ? `&po_number=not.ilike.*-SHIP-${currentScreenShipId}-*` : "";
+        // 🔒 IRONCLAD EXCLUSION PATTERN: Force an explicit string match filter to omit the current ship from history completely
+        var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? `&po_number=not.ilike.*-SHIP-${currentScreenShipId}-*` : "";
+        console.log(`🔍 Historical Firewall: Fetching history excluding active shipment #${currentScreenShipId}`);
 
         const response = await fetch(API_URL + `purchase_orders?status=eq.dispatched${exclusionFilter}&select=*,purchase_order_items(*)&order=created_at.desc`, {
-            headers: { 
-                "apikey": API_KEY, 
-                "Cache-Control": "no-cache",
-                "Prefer": "count=exact"
-            }
+            headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
         });
 
         if (!response.ok) throw new Error("Fallo al conectar con las tablas históricas.");
         const relationalOrdersBatch = await response.json();
 
-        if (!Array.isArray(relationalOrdersBatch)) {
-            throw new Error("No se obtuvo una colección de datos válida.");
-        }
+        if (!Array.isArray(relationalOrdersBatch)) throw new Error("No se obtuvo una colección válida.");
 
         GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
 
         relationalOrdersBatch.forEach(function(order) {
             var innerChildLinesList = order.purchase_order_items || [];
-            
             if (innerChildLinesList.length === 0) {
                 GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
-                    po_id: order.id,
-                    po_number: order.po_number || "PO-DESPACHADA",
-                    supplier_name: order.supplier_name || "Proveedor No Asignado",
-                    created_at: order.created_at,
-                    ingredient_name: "Sin ítems registrados",
-                    supplier_uom: "-",
-                    quantity_ordered: 0,
-                    faltante_base: 0,
-                    recipe_uom: "-"
+                    po_id: order.id, po_number: order.po_number || "PO-DESPACHADA",
+                    supplier_name: order.supplier_name || "Proveedor No Asignado", created_at: order.created_at,
+                    ingredient_name: "Sin ítems registrados", supplier_uom: "-", quantity_ordered: 0, faltante_base: 0, recipe_uom: "-"
                 });
             } else {
                 innerChildLinesList.forEach(function(line) {
                     GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
-                        po_id: order.id,
-                        po_number: order.po_number || "PO-DESPACHADA",
-                        supplier_name: order.supplier_name || "Proveedor No Asignado",
-                        created_at: order.created_at,
-                        ingredient_name: line.ingredient_name || "Insumo",
-                        supplier_uom: line.supplier_uom || "Unidad",
-                        quantity_ordered: parseFloat(line.quantity_ordered || 0),
-                        faltante_base: parseFloat(line.faltante_base || 0),
-                        recipe_uom: line.recipe_uom || "UOM"
+                        po_id: order.id, po_number: order.po_number || "PO-DESPACHADA",
+                        supplier_name: order.supplier_name || "Proveedor No Asignado", created_at: order.created_at,
+                        ingredient_name: line.ingredient_name || "Insumo", supplier_uom: line.supplier_uom || "Unidad",
+                        quantity_ordered: parseFloat(line.quantity_ordered || 0), faltante_base: parseFloat(line.faltante_base || 0), recipe_uom: line.recipe_uom || "UOM"
                     });
                 });
             }
@@ -1555,7 +1545,6 @@ async function toggleHistoricalArchiveOnDemandEngine() {
 
         actionBtn.innerHTML = "🔒 Ocultar Historial";
         actionBtn.style.backgroundColor = "#ef4444";
-        
         applyLiveHistoricalSearchMatrixFilters();
 
     } catch (err) {
