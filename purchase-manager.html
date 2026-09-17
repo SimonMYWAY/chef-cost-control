@@ -1022,7 +1022,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
-
     try {
         // --- STEP 1: MASTER DATABASE RECORDING ---
         var generatedPoUuid = null;
@@ -1060,10 +1059,28 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 // Update parent status to frozen whatsapp checkpoint state
                 await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
                     method: "PATCH",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                     body: JSON.stringify({ status: 'saved_pending_whatsapp' })
                 });
             }
+
+            // =======================================================================
+            // 🧹 THE CRITICAL ANTI-GHOST PURGE: SCRUB UNCHECKED LINES FROM SUPABASE
+            // =======================================================================
+            // Find all lines for this supplier that the manager explicitly unchecked on screen
+            var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
+            
+            if (rejectedLines.length > 0 && generatedPoUuid) {
+                console.log(`🧹 Scrubbing ${rejectedLines.length} unapproved ghost lines from database logs...`);
+                for (var r = 0; r < rejectedLines.length; r++) {
+                    var rejectedItem = rejectedLines[r];
+                    // Delete this specific item from this specific PO layout container right now
+                    await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(rejectedItem.ingredient_name), {
+                        method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                    });
+                }
+            }
+            // =======================================================================
 
             // Save child item rows natively
             for (var i = 0; i < filteredLines.length; i++) {
@@ -1096,18 +1113,15 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
                 if (existingItemId) {
                     await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
-                        method: "PATCH", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        method: "PATCH", headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify(childPayload)
                     });
                 } else {
                     await fetch(API_URL + "purchase_order_items", {
-                        method: "POST", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                        method: "POST", headers: { "apikey": API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify(childPayload)
                     });
                 }
-                
-                // 🛑 INVENTORY REMOVED FROM HERE FOR SECURITY 
-                // Stock updates do not execute during clipboard tracking phases anymore!
             }
             console.log("💾 Base de datos congelada exitosamente. Listos para despacho.");
         }
@@ -1451,8 +1465,8 @@ setInterval(async function enforceRemoteSequenceFirewall() {
     }
 }, 3000); // Check frequency optimized to 3 seconds
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2]
-var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; // Stores historical records locally for real-time search filtering
+// ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2 - REPAIRED]
+var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; 
 
 async function toggleHistoricalArchiveOnDemandEngine() {
     var panelRack = document.getElementById("historical-archive-search-panel-rack");
@@ -1461,7 +1475,6 @@ async function toggleHistoricalArchiveOnDemandEngine() {
 
     if (!panelRack || !contentRack) return;
 
-    // Collapsible Toggle Valve State Check
     if (panelRack.style.display === "block" || panelRack.style.display === "grid") {
         panelRack.style.display = "none";
         contentRack.style.display = "none";
@@ -1470,17 +1483,28 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         return;
     }
 
+    // 🌟 EXTRACT CURRENT SEQUENCE TO EXCLUDE IT
+    var currentScreenShipId = "00";
+    var headerNode = document.getElementById("terminal-cargo-meta-header");
+    if (headerNode) {
+        var strongElement = headerNode.querySelector("strong");
+        if (strongElement) {
+            currentScreenShipId = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+        }
+    }
+
     actionBtn.innerHTML = "⏳ Descargando Historial...";
     actionBtn.style.backgroundColor = "#64748b";
-    contentRack.innerHTML = '<div style="text-align:center; padding:30px; font-style:italic; color:#64748b;">🔄 Consultando registros históricos cerrados en Supabase...</div>';
+    contentRack.innerHTML = '<div style="text-align:center; padding:30px; font-style:italic; color:#64748b;">🔄 Consultando registros históricos cerrados...</div>';
     
     panelRack.style.display = "block";
     contentRack.style.display = "flex";
 
     try {
-        // 🌟 NESTED JOIN QUERY: Pull parent orders and their inner child lines together in one network fetch step
-        // By embedding purchase_order_items(*), we bypass default table limit bottlenecks completely!
-        const response = await fetch(API_URL + "purchase_orders?status=eq.dispatched&select=*,purchase_order_items(*)&order=created_at.desc", {
+        // 🌟 FIX: Append a filter condition targeting the po_number string to exclude the current active ship ID completely!
+        var exclusionFilter = currentScreenShipId !== "00" ? `&po_number=not.ilike.*-SHIP-${currentScreenShipId}-*` : "";
+
+        const response = await fetch(API_URL + `purchase_orders?status=eq.dispatched${exclusionFilter}&select=*,purchase_order_items(*)&order=created_at.desc`, {
             headers: { 
                 "apikey": API_KEY, 
                 "Cache-Control": "no-cache",
@@ -1497,13 +1521,10 @@ async function toggleHistoricalArchiveOnDemandEngine() {
 
         GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
 
-        // 🌟 UNPACK RELATIONAL PLIABLE GRAPH NEST: Extract data arrays cleanly
         relationalOrdersBatch.forEach(function(order) {
-            // Read the child rows nested directly inside this parent document row
             var innerChildLinesList = order.purchase_order_items || [];
             
             if (innerChildLinesList.length === 0) {
-                // Defensive fallback: Display an empty card holder shell if the PO has no rows
                 GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
                     po_id: order.id,
                     po_number: order.po_number || "PO-DESPACHADA",
@@ -1535,7 +1556,6 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         actionBtn.innerHTML = "🔒 Ocultar Historial";
         actionBtn.style.backgroundColor = "#ef4444";
         
-        // Render the processed data rows cleanly using our filtration paint loop
         applyLiveHistoricalSearchMatrixFilters();
 
     } catch (err) {
@@ -1545,6 +1565,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         actionBtn.style.backgroundColor = "#ef4444";
     }
 }
+
 // ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2]
 function applyLiveHistoricalSearchMatrixFilters() {
     var contentRack = document.getElementById("historical-archive-workspace-rack");
