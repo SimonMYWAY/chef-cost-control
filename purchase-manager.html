@@ -382,6 +382,20 @@ function renderInteractiveManagerSpreadsheetGrid() {
 
     // 🔒 LIFE-CYCLE RECOVERY CONSTANTS
     var activeShipmentSequenceId = "00";
+
+    // Extract it right out of your active memory rows before rendering the string template layout
+if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
+    var sampleRow = LOCAL_STAGED_ROWS[0];
+    var poStr = sampleRow.po_number || sampleRow.forced_po_number || "";
+    
+    if (poStr.includes("-SHIP-")) {
+        var parts = poStr.split("-SHIP-");
+        if (parts.length > 1) {
+            // Slices out "52" cleanly from "PO-SHIP-52-001" and updates your header token
+            activeShipmentSequenceId = parts[1].split("-")[0];
+        }
+    }
+}
     var informativeDisplayDateSignature = "Cargando..."; // Default layout placeholder while fetching
 
     // 🔒 ARRAY-INDEX SAFETY ENGINE: Read fields from the first object inside the downloaded collection array
@@ -442,7 +456,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
         var banner = document.getElementById("terminal-cargo-meta-header");
         if (banner) {
             banner.innerHTML = `
-                <div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${activeShipmentSequenceId}</strong></div>
+                <div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong id="header-shipment-number-display">${activeShipmentSequenceId}</strong></div>
                 <div style="display:flex; align-items:center; gap:15px;">
                     <span>📅 REF CONSUMO VENTAS: <strong>${informativeDisplayDateSignature}</strong></span>
                     
