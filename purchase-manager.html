@@ -384,18 +384,32 @@ function renderInteractiveManagerSpreadsheetGrid() {
     var activeShipmentSequenceId = "00";
 
     // Extract it right out of your active memory rows before rendering the string template layout
-if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
-    var sampleRow = LOCAL_STAGED_ROWS[0];
-    var poStr = sampleRow.po_number || sampleRow.forced_po_number || "";
-    
-    if (poStr.includes("-SHIP-")) {
-        var parts = poStr.split("-SHIP-");
-        if (parts.length > 1) {
-            // Slices out "52" cleanly from "PO-SHIP-52-001" and updates your header token
-            activeShipmentSequenceId = parts[1].split("-")[0];
+    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
+        var sampleRow = LOCAL_STAGED_ROWS[0];
+        var poStr = sampleRow.po_number || sampleRow.forced_po_number || "";
+        
+        if (poStr.includes("-SHIP-")) {
+            var parts = poStr.split("-SHIP-");
+            if (parts.length > 1) {
+                // Slices out "52" cleanly from "PO-SHIP-52-001" and updates your header token
+                activeShipmentSequenceId = parts[1].split("-")[0];
+                
+                // 🌟 THE COSMETIC INJECTION ANCHOR:
+                // Find the bold element container inside your header template and overwrite it right now!
+                var headerMetaStrong = document.getElementById("terminal-cargo-meta-header") ? document.getElementById("terminal-cargo-meta-header").querySelector("strong") : null;
+                if (!headerMetaStrong) {
+                    // Backup check: look for any strong tag nested inside your top meta elements row
+                    headerMetaStrong = document.querySelector("header strong") || document.querySelector("div strong");
+                }
+                
+                if (headerMetaStrong && activeShipmentSequenceId && activeShipmentSequenceId !== "00") {
+                    headerMetaStrong.innerText = activeShipmentSequenceId;
+                    console.log("🎯 UI Header cosmetically synchronized to shipment #" + activeShipmentSequenceId);
+                }
+            }
         }
     }
-}
+
     var informativeDisplayDateSignature = "Cargando..."; // Default layout placeholder while fetching
 
     // 🔒 ARRAY-INDEX SAFETY ENGINE: Read fields from the first object inside the downloaded collection array
