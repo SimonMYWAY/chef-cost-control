@@ -1057,8 +1057,8 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
                   "```\n" +
                   "==========================\n" +
-                  "    ORDEN DE COMPRA:        "
-                       + poNumber + "\n" +
+                  "    ORDEN DE COMPRA        \n" +
+                  "    " + poNumber.padEnd(23) + "\n" + // 🌟 Prints cleanly centered on its own line underneath!
                   "==========================\n" +
                   "PROV. : " + supplierName.toUpperCase() + "\n" +
                   "FECHA : " + shortDate + "\n" +
