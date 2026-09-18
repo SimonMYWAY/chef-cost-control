@@ -108,7 +108,7 @@
         var masterNameToUuidMap = {};
 
 
-// ⚡ RE-ENGINEERED SYNC: Reload-Safe PO Persistence & High-Speed Database Purge Engine [Part 1 of 2]
+// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - OPTIMIZED]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -123,59 +123,62 @@ async function pullActiveStagedCalculationFromCloud() {
     try {
         LOCAL_STAGED_ROWS = [];
 
-        // 1️⃣ PRIORITIZED PHASE: Fetch raw ingredients to build a unified Master Translation Dictionary [SCHEMA-ALIGNED]
-        const ingRes = await fetch(API_URL + "ingredients?select=id,name_es,uom", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
+        console.log("✈️ Launching asynchronous parallel data streams...");
         
+        // 🌟 HIGH-SPEED CONCURRENCY VALVE:
+        // Instead of fetching one-by-one, fire all three requests simultaneously!
+        const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
+            fetch(API_URL + "ingredients?select=id,name_es,uom", {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            }),
+            fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred", {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            }),
+            fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc", {
+                method: "GET", 
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY,
+                    "Cache-Control": "no-cache, no-store, must-revalidate"
+                }
+            })
+        ]);
+
+        // Verify all streams resolved successfully
+        if (!ingResponse.ok || !formatsResponse.ok || !ordersResponse.ok) {
+            throw new Error("Una de las conexiones paralelas con Supabase falló.");
+        }
+
+        // Unpack the JSON collections concurrently
+        const ings = await ingResponse.json();
+        GLOBAL_SUPPLIER_FORMATS_LIST = await formatsResponse.json();
+        const allDraftOrders = await ordersResponse.json();
+
+        // --- MAP INGREDIENTS DICTIONARY ---
         var recipeUnitsLookup = {};
-        if (ingRes.ok) {
-            const ings = await ingRes.json();
-            masterNameToUuidMap = {}; 
-            
-            ings.forEach(function(i) {
-                if (i.id) {
-                    var cleanId = String(i.id).toLowerCase().trim();
-                    var cleanName = i.name_es ? String(i.name_es).toLowerCase().trim() : "";
-                    recipeUnitsLookup[cleanId] = i.uom ? String(i.uom).trim() : "Kg";
-                    if (cleanName) masterNameToUuidMap[cleanName] = cleanId;
-                }
-            });
-        }
-
-        // 2️⃣ PHASE 2: Fetch alternative definitions linked to ingredients via supplier_formats using pure database UUIDs
-        var supplierFormatsLookup = {};
-        const formatsRes = await fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred", {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        if (formatsRes.ok) {
-            GLOBAL_SUPPLIER_FORMATS_LIST = await formatsRes.json();
-            GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
-                if (format.ingredient_id) {
-                    var formatKey = String(format.ingredient_id).toLowerCase().trim();
-                    supplierFormatsLookup[formatKey] = {
-                        provider_name: format.provider_name ? String(format.provider_name).trim() : null,
-                        purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
-                        units_per_purchase: parseFloat(format.units_per_purchase || 1),
-                        is_preferred: format.is_preferred === true || format.is_preferred === 'true'
-                    };
-                }
-            });
-        }
-
-        // 3️⃣ PHASE 3: DOWNLOAD DRAFT ORDERS DIRECTLY FROM PERSISTENT TABLES
-        const targetFetchUrl = API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc";
-        const ordersRes = await fetch(targetFetchUrl, {
-            method: "GET", 
-            headers: { 
-                "apikey": API_KEY, 
-                "Authorization": "Bearer " + API_KEY,
-                "Cache-Control": "no-cache, no-store, must-revalidate"
+        masterNameToUuidMap = {}; 
+        ings.forEach(function(i) {
+            if (i.id) {
+                var cleanId = String(i.id).toLowerCase().trim();
+                var cleanName = i.name_es ? String(i.name_es).toLowerCase().trim() : "";
+                recipeUnitsLookup[cleanId] = i.uom ? String(i.uom).trim() : "Kg";
+                if (cleanName) masterNameToUuidMap[cleanName] = cleanId;
             }
         });
-        
-        if (!ordersRes.ok) throw new Error("Fallo al descargar las órdenes de compra activas.");
-        const allDraftOrders = await ordersRes.json();
+
+        // --- MAP SUPPLIER FORMATS LOOKUP ---
+        var supplierFormatsLookup = {};
+        GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
+            if (format.ingredient_id) {
+                var formatKey = String(format.ingredient_id).toLowerCase().trim();
+                supplierFormatsLookup[formatKey] = {
+                    provider_name: format.provider_name ? String(format.provider_name).trim() : null,
+                    purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
+                    units_per_purchase: parseFloat(format.units_per_purchase || 1),
+                    is_preferred: format.is_preferred === true || format.is_preferred === 'true'
+                };
+            }
+        });
 
         if (!allDraftOrders || allDraftOrders.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
@@ -183,7 +186,7 @@ async function pullActiveStagedCalculationFromCloud() {
             return;
         }
 
-        // 🔒 THE SHIELD ENGINE: Analyze the batch to extract the highest/newest active shipment sequence
+        // --- EXTRACT HIGHEST SHIPMENT SEQUENCE ---
         var highestShipmentId = 0;
         allDraftOrders.forEach(function(o) {
             if (o.po_number && o.po_number.includes("-SHIP-")) {
@@ -196,6 +199,8 @@ async function pullActiveStagedCalculationFromCloud() {
                 }
             }
         });
+
+        // ... [The high-speed database purge section and the rest of Part 1 continues exactly the same from here] ...
 
         // =======================================================================
         // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (REPAIRED & UNLOCKED)
