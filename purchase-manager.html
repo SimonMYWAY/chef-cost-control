@@ -1055,11 +1055,17 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     // =======================================================================
     // ⚡ HIGH-SPEED DATABASE PIPELINE & CLIPBOARD INGESTION 
     // =======================================================================
+    // =======================================================================
+    // ⚡ HIGH-SPEED DATABASE PIPELINE & CLIPBOARD INGESTION 
+    // =======================================================================
     try {
-        var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
-        var shortDate = timeStampStr.split(",")[0];
+        console.time("⏱️ TOTAL_UNIFIED_PROCESS_TIME"); // Starts the global master timer
         
-        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
+        var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
+        var shortDate = timeStampStr.split(",");
+        
+        // --- STEP 1: CLIPBOARD STRING COMPILATION ---
+        console.time("⏱️ STEP_1_CLIPBOARD_AND_TEXT_FORMATTING");
         var msg = "Hola " + supplierName + ",\n" +
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
                   "```\n" +
@@ -1086,8 +1092,10 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                "```"; 
 
         await navigator.clipboard.writeText(msg);
-        console.log("📋 Text successfully pushed to clipboard before background async execution delays.");
+        console.timeEnd("⏱️ STEP_1_CLIPBOARD_AND_TEXT_FORMATTING"); // 👈 Logs Clipboard Speed
+
         // --- STEP 2: MASTER DATABASE RECORDING ---
+        console.time("⏱️ STEP_2_DATABASE_NETWORK_TRANSACTION");
         var generatedPoUuid = null;
 
         if (!isAlreadySaved) {
@@ -1127,7 +1135,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 });
             }
 
-            // 🧹 THE ANTI-GHOST PURGE: Clear unapproved rows right out of Supabase
             var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
             if (rejectedLines.length > 0 && generatedPoUuid) {
                 for (var r = 0; r < rejectedLines.length; r++) {
@@ -1138,34 +1145,25 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 }
             }
 
-            // 🧹 ATOMIC OVERWRITE: Wipe existing items for this specific PO to eliminate loop checks
             if (generatedPoUuid) {
                 await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
             }
 
-            // =======================================================================
-            // ⚡ HIGH-SPEED BULK ALTERNATIVE CLEANUP (REPLACES THE LOOP FETCH)
-            // =======================================================================
             if (filteredLines.length > 0 && generatedPoUuid) {
-                // Build a comma-separated list of ingredient names for a single network check
                 var ingredientNamesList = filteredLines.map(function(item) { 
                     return `"${item.ingredient_name.replace(/"/g, '\\"')}"`; 
                 }).join(',');
 
-                // Fire ONE single query to wipe out alternative duplicates across all ingredients at once!
                 await fetch(API_URL + "purchase_order_items?po_id=neq." + generatedPoUuid + "&ingredient_name=in.(" + encodeURIComponent(ingredientNamesList) + ")", {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
             }
-            // =======================================================================
 
-            // Assemble child rows completely in local memory with ZERO network queries inside
             var bulkItemsPayloadArray = [];
             for (var i = 0; i < filteredLines.length; i++) {
                 var item = filteredLines[i];
-                
                 bulkItemsPayloadArray.push({
                     po_id: generatedPoUuid,
                     ingredient_name: item.ingredient_name,
@@ -1177,26 +1175,19 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 });
             }
 
-            // 🚀 BATCH UPLOAD FIREWALL: Fire ONE single query to write all lines concurrently
             if (bulkItemsPayloadArray.length > 0) {
-                console.log(`✈️ Dispatched atomic batch payload of ${bulkItemsPayloadArray.length} items...`);
                 const bulkPostResponse = await fetch(API_URL + "purchase_order_items", {
                     method: "POST",
-                    headers: { 
-                        "apikey": API_KEY, 
-                        "Authorization": "Bearer " + API_KEY, 
-                        "Content-Type": "application/json",
-                        "Prefer": "return=minimal"
-                    },
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
                     body: JSON.stringify(bulkItemsPayloadArray)
                 });
-
                 if (!bulkPostResponse.ok) throw new Error("Fallo en la inserción masiva de insumos.");
             }
-            console.log("💾 Base de datos congelada exitosamente masivamente en milisegundos.");
         }
+        console.timeEnd("⏱️ STEP_2_DATABASE_NETWORK_TRANSACTION"); // 👈 Logs Database Speed
 
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
+        console.time("⏱️ STEP_3_INTERFACE_DOM_PAINT_AND_REFRESH");
         if (supplierCard) {
             supplierCard.classList.add("status-saved-pending");
             supplierCard.style.borderLeft = "5px solid #f1c40f"; 
@@ -1231,13 +1222,17 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 r.db_saved_status = 'saved_pending_whatsapp';
             }
         });
+        console.timeEnd("⏱️ STEP_3_INTERFACE_DOM_PAINT_AND_REFRESH"); // 👈 Logs DOM Paint Speed
+        
+        console.timeEnd("⏱️ TOTAL_UNIFIED_PROCESS_TIME"); // 👈 End Master Timer
 
-        alert("📋 ¡Orden guardada en la nube y copiada al portapapeles! El stock de inventario se mantendrá intacto hasta confirmar el despacho en el chat.");
+        alert("📋 ¡Orden guardada en la nube y copiada al portapapeles!");
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
-        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso: " + err.message);
+        alert("❌ ERROR CRÍTICO: " + err.message);
     }
+
 }
 
 // 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs
