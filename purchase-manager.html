@@ -995,7 +995,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     }
 }
 
-// ⚡ UNIFIED ENGINE: Process stock calculations, commit to Supabase, copy layout text
+// 🟢 HIGH-SPEED ATOMIC BATCH ENGINE: Processes stock calculations, bulk commits to Supabase, copies text
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
     // =======================================================================
@@ -1003,7 +1003,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     // =======================================================================
     try {
         if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-            // 🌟 DIRECT MEMORY SELECTION: Read the ship ID straight from the local array cache
             var firstStagedRow = LOCAL_STAGED_ROWS[0];
             var screenShipId = parseInt(firstStagedRow.shipment_id || 0, 10);
 
@@ -1027,7 +1026,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                         if (!isNaN(trueCloudShipId) && trueCloudShipId !== screenShipId) {
                             alert(`🚨 ENVIÓ RECHAZADO POR SEGURIDAD:\n\nEl Backoffice ha emitido un nuevo embarque (#${trueCloudShipId}). Los datos en esta pantalla corresponden al embarque antiguo (#${screenShipId}) y ya no son válidos.\n\nLa terminal se actualizará de inmediato.`);
                             location.reload();
-                            return; // Halt function execution completely
+                            return; 
                         }
                     }
                 }
@@ -1036,6 +1035,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     } catch (firewallErr) {
         console.warn("Logistics security checkpoint bypassed or failed:", firewallErr);
     }
+
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -1051,11 +1051,15 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var poBadgeNode = supplierCard.querySelector(".po-badge");
         if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
     }
-        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Unified Compact Mobile Format) ---
+
+    // =======================================================================
+    // ⚡ HIGH-SPEED DATABASE PIPELINE & CLIPBOARD INGESTION 
+    // =======================================================================
     try {
         var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
-        var shortDate = timeStampStr.split(",");
+        var shortDate = timeStampStr.split(",")[0];
         
+        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
         var msg = "Hola " + supplierName + ",\n" +
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
                   "```\n" +
@@ -1081,11 +1085,9 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                "==============================\n" +
                "```"; 
 
-        // Execute clipboard assignment instantly inside your core user-gesture window
         await navigator.clipboard.writeText(msg);
-        console.log("📋 Text successfully pushed to clipboard.");
-
-        // --- STEP 2: HIGH-SPEED BATCH DATABASE RECORDING ---
+        console.log("📋 Text successfully pushed to clipboard before background async execution delays.");
+        // --- STEP 2: MASTER DATABASE RECORDING ---
         var generatedPoUuid = null;
 
         if (!isAlreadySaved) {
@@ -1096,7 +1098,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             if (checkPoRes.ok) {
                 const existingPoData = await checkPoRes.json();
                 if (existingPoData && existingPoData.length > 0) {
-                    generatedPoUuid = existingPoData[0].id;
+                    generatedPoUuid = existingPoData[0].id; // Extracted row properties natively
                 }
             }
 
@@ -1124,67 +1126,62 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                     body: JSON.stringify({ status: 'saved_pending_whatsapp' })
                 });
             }
-            
-            // =======================================================================
-            // ⚡ ATOMIC OPTIMIZATION BULK FLUSH GATEWAYS [FULLY DECOUPLED BATCH MATRIX]
-            // =======================================================================
-            if (generatedPoUuid) {
-                console.log("⚡ Initiating single-stroke atomic bulk database swap...");
 
-                // 1️⃣ WIPE ALL EXISTING CHILD ITEMS FOR THIS SPECIFIC PO ID IN ONE SINGLE SHOT
-                await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
-                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-                
-                // 2️⃣ BUNDLE ALL INGREDIENT STRING NAMES IN MEMORY FOR AN IN-LINE MULTI-CLEANUP
-                var namesToPurgeList = filteredLines.map(function(item) {
-                    // Escape internal characters cleanly to preserve text strings boundaries
-                    return `"${item.ingredient_name.replace(/"/g, '\\"')}"`;
-                }).join(",");
-
-                // 3️⃣ EXECUTE A SINGLE BULK CLEANUP FOR ALTERNATIVE OPEN HEADERS OUTSIDE THE LOOP
-                if (namesToPurgeList.length > 0) {
-                    await fetch(API_URL + "purchase_order_items?po_id=neq." + generatedPoUuid + "&ingredient_name=in.(" + encodeURIComponent(namesToPurgeList) + ")", {
+            // 🧹 THE ANTI-GHOST PURGE: Clear unapproved rows right out of Supabase
+            var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
+            if (rejectedLines.length > 0 && generatedPoUuid) {
+                for (var r = 0; r < rejectedLines.length; r++) {
+                    var rejectedItem = rejectedLines[r];
+                    await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(rejectedItem.ingredient_name), {
                         method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                     });
                 }
+            }
 
-                // 4️⃣ COMPILE INDEPENDENT LINE ITEMS DIRECTLY IN LOCAL DEVICE MEMORY (NO NETWORK LOOPS!)
-                var bulkPayloadBatch = filteredLines.map(function(item) {
-                    return {
-                        po_id: generatedPoUuid,
-                        ingredient_name: item.ingredient_name,
-                        quantity_ordered: Math.ceil(item.approved_formats_quantity),
-                        supplier_uom: item.supplier_uom || "Formato",
-                        faltante_base: parseFloat(item.faltante_base || 0),
-                        equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
-                        recipe_uom: item.recipe_uom || "unidad"
-                    };
+            // 🧹 ATOMIC OVERWRITE: Wipe existing items for this specific PO to eliminate loop checks
+            if (generatedPoUuid) {
+                await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+            }
+
+            // Assemble child rows locally inside memory arrays instead of hitting the network inside loops
+            var bulkItemsPayloadArray = [];
+            for (var i = 0; i < filteredLines.length; i++) {
+                var item = filteredLines[i];
+                
+                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
 
-                // 5️⃣ DESPATCH A SINGLE MASS INJECTION MASSIVE PAYLOAD UP TO SUPABASE TABLES
-                if (bulkPayloadBatch.length > 0) {
-                    const bulkRes = await fetch(API_URL + "purchase_order_items", {
-                        method: "POST",
-                        headers: { 
-                            "apikey": API_KEY, 
-                            "Authorization": "Bearer " + API_KEY, 
-                            "Content-Type": "application/json",
-                            "Prefer": "return=minimal"
-                        },
-                        body: JSON.stringify(bulkPayloadBatch)
-                    });
-
-                    if (!bulkRes.ok) {
-                        const errDetails = await bulkRes.json();
-                        console.error("❌ Bulk item commit failed:", errDetails);
-                        throw new Error("Fallo masivo al inyectar líneas en la base de datos.");
-                    }
-                }
+                bulkItemsPayloadArray.push({
+                    po_id: generatedPoUuid,
+                    ingredient_name: item.ingredient_name,
+                    quantity_ordered: Math.ceil(item.approved_formats_quantity),
+                    supplier_uom: item.supplier_uom || "Formato",
+                    faltante_base: parseFloat(item.faltante_base || 0),
+                    equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
+                    recipe_uom: item.recipe_uom || "unidad"
+                });
             }
-            console.log("🚀 Base de datos sincronizada de forma atómica a alta velocidad.");
-            // =======================================================================
 
+            // 🚀 BATCH UPLOAD FIREWALL: Fire ONE single query to write all lines concurrently
+            if (bulkItemsPayloadArray.length > 0) {
+                console.log(`✈️ Dispatched atomic batch payload of ${bulkItemsPayloadArray.length} items...`);
+                const bulkPostResponse = await fetch(API_URL + "purchase_order_items", {
+                    method: "POST",
+                    headers: { 
+                        "apikey": API_KEY, 
+                        "Authorization": "Bearer " + API_KEY, 
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal"
+                    },
+                    body: JSON.stringify(bulkItemsPayloadArray)
+                });
+
+                if (!bulkPostResponse.ok) throw new Error("Fallo en la inserción masiva de insumos.");
+            }
+            console.log("💾 Base de datos congelada exitosamente masivamente en milisegundos.");
         }
 
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
