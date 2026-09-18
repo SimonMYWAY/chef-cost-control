@@ -1098,7 +1098,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             if (checkPoRes.ok) {
                 const existingPoData = await checkPoRes.json();
                 if (existingPoData && existingPoData.length > 0) {
-                    generatedPoUuid = existingPoData[0].id; // Extracted row properties natively
+                    generatedPoUuid = existingPoData[0].id; 
                 }
             }
 
@@ -1145,15 +1145,27 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 });
             }
 
-            // Assemble child rows locally inside memory arrays instead of hitting the network inside loops
+            // =======================================================================
+            // ⚡ HIGH-SPEED BULK ALTERNATIVE CLEANUP (REPLACES THE LOOP FETCH)
+            // =======================================================================
+            if (filteredLines.length > 0 && generatedPoUuid) {
+                // Build a comma-separated list of ingredient names for a single network check
+                var ingredientNamesList = filteredLines.map(function(item) { 
+                    return `"${item.ingredient_name.replace(/"/g, '\\"')}"`; 
+                }).join(',');
+
+                // Fire ONE single query to wipe out alternative duplicates across all ingredients at once!
+                await fetch(API_URL + "purchase_order_items?po_id=neq." + generatedPoUuid + "&ingredient_name=in.(" + encodeURIComponent(ingredientNamesList) + ")", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                });
+            }
+            // =======================================================================
+
+            // Assemble child rows completely in local memory with ZERO network queries inside
             var bulkItemsPayloadArray = [];
             for (var i = 0; i < filteredLines.length; i++) {
                 var item = filteredLines[i];
                 
-                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
-                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-
                 bulkItemsPayloadArray.push({
                     po_id: generatedPoUuid,
                     ingredient_name: item.ingredient_name,
