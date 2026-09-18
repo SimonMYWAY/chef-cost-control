@@ -200,41 +200,34 @@ async function pullActiveStagedCalculationFromCloud() {
             }
         });
 
-        // ... [The high-speed database purge section and the rest of Part 1 continues exactly the same from here] ...
-
+            // =======================================================================
+        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (RE-ALIGNED & BACKGROUND-DECOUPLED)
         // =======================================================================
-        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (REPAIRED & UNLOCKED)
-        // =======================================================================
-        // 🛡️ BARRICADE MATCH: Find older uncommitted parent headers that do NOT match this new shipment ID numbers
         var legacyOrdersToPurge = allDraftOrders.filter(function(o) {
             var isNotDispatched = o.status !== 'dispatched';
             var currentShipId = 0;
             if (o.po_number && o.po_number.includes("-SHIP-")) {
                 currentShipId = parseInt(o.po_number.split("-SHIP-")[1].split("-")[0], 10);
             }
-            // 🛑 ONLY purge if it's uncommitted AND belongs to a completely older legacy shipment sequence!
             return isNotDispatched && currentShipId > 0 && currentShipId < highestShipmentId;
         });
 
         if (legacyOrdersToPurge.length > 0) {
-            console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} abandoned legacy entries...`);
+            console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} abandoned legacy entries in background...`);
             
-            // Extract raw properties lists without internal character transformations
             var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
             var purgePoNumbersList = legacyOrdersToPurge.map(function(o) { return o.po_number; }).join(',');
             
-            // 1. Bulk delete matching child items rows concurrently using the parent ID string list
-            await fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
+            // 🌟 REMOVED 'AWAIT': Fire these requests concurrently to let the main browser thread unlock instantly!
+            fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
+            }).catch(e => console.warn("Background child cleanup delayed:", e));
 
-            // 2. Bulk delete matching parent order rows concurrently using the explicit PO Number text strings list
-            // 🌟 FIX: Commas are left raw so the Postgrest API parses the target set properly
-            await fetch(API_URL + "purchase_orders?po_number=in.(" + purgePoNumbersList + ")", {
+            fetch(API_URL + "purchase_orders?po_number=in.(" + purgePoNumbersList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
+            }).catch(e => console.warn("Background parent cleanup delayed:", e));
             
-            console.log("✅ High-speed database purge loop complete. Both tables successfully cleared.");
+            console.log("✅ Main thread unblocked from purge waiting lines.");
         }
         // =======================================================================
 
