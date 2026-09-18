@@ -108,7 +108,7 @@
         var masterNameToUuidMap = {};
 
 
-// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - OPTIMIZED]
+// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - BULLETPROOF]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -122,11 +122,9 @@ async function pullActiveStagedCalculationFromCloud() {
 
     try {
         LOCAL_STAGED_ROWS = [];
-
         console.log("✈️ Launching asynchronous parallel data streams...");
         
-        // 🌟 HIGH-SPEED CONCURRENCY VALVE:
-        // Instead of fetching one-by-one, fire all three requests simultaneously!
+        // 🌟 Concurrent execution prevents blocking chaining bottlenecks
         const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             fetch(API_URL + "ingredients?select=id,name_es,uom", {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
@@ -144,12 +142,10 @@ async function pullActiveStagedCalculationFromCloud() {
             })
         ]);
 
-        // Verify all streams resolved successfully
         if (!ingResponse.ok || !formatsResponse.ok || !ordersResponse.ok) {
             throw new Error("Una de las conexiones paralelas con Supabase falló.");
         }
 
-        // Unpack the JSON collections concurrently
         const ings = await ingResponse.json();
         GLOBAL_SUPPLIER_FORMATS_LIST = await formatsResponse.json();
         const allDraftOrders = await ordersResponse.json();
@@ -181,18 +177,20 @@ async function pullActiveStagedCalculationFromCloud() {
         });
 
         if (!allDraftOrders || allDraftOrders.length === 0) {
-            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido descargadas y procesadas con éxito! Bodega vacía.</div>';
+            workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡Todas las órdenes de compra de hoy han sido procesadas con éxito!</div>';
             ACTIVE_SHIPMENT_TIMESTAMP = null;
             return;
         }
 
-        // --- EXTRACT HIGHEST SHIPMENT SEQUENCE ---
+        // --- EXTRACT HIGHEST SHIPMENT SEQUENCE WITH STRICT DEFENSIVE TYPE CHECKS ---
         var highestShipmentId = 0;
         allDraftOrders.forEach(function(o) {
-            if (o.po_number && o.po_number.includes("-SHIP-")) {
-                var parts = o.po_number.split("-SHIP-")[1];
-                if (parts) {
-                    var shipSequenceNum = parseInt(parts.split("-")[0], 10);
+            var poStr = o.po_number ? String(o.po_number).trim() : "";
+            if (poStr && poStr.includes("-SHIP-")) {
+                var splitParts = poStr.split("-SHIP-");
+                if (splitParts.length > 1 && splitParts[1]) {
+                    var sequenceSegment = splitParts[1].split("-")[0];
+                    var shipSequenceNum = parseInt(sequenceSegment, 10);
                     if (!isNaN(shipSequenceNum) && shipSequenceNum > highestShipmentId) {
                         highestShipmentId = shipSequenceNum;
                     }
@@ -200,25 +198,28 @@ async function pullActiveStagedCalculationFromCloud() {
             }
         });
 
-            // =======================================================================
-        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (RE-ALIGNED & BACKGROUND-DECOUPLED)
+        // =======================================================================
+        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (RE-ALIGNED & DEFENSIVE)
         // =======================================================================
         var legacyOrdersToPurge = allDraftOrders.filter(function(o) {
             var isNotDispatched = o.status !== 'dispatched';
             var currentShipId = 0;
-            if (o.po_number && o.po_number.includes("-SHIP-")) {
-                currentShipId = parseInt(o.po_number.split("-SHIP-")[1].split("-")[0], 10);
+            var poStr = o.po_number ? String(o.po_number).trim() : "";
+            
+            if (poStr && poStr.includes("-SHIP-")) {
+                var splitParts = poStr.split("-SHIP-");
+                if (splitParts.length > 1 && splitParts[1]) {
+                    currentShipId = parseInt(splitParts[1].split("-")[0], 10);
+                }
             }
             return isNotDispatched && currentShipId > 0 && currentShipId < highestShipmentId;
         });
 
         if (legacyOrdersToPurge.length > 0) {
-            console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} abandoned legacy entries in background...`);
-            
+            console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} legacy entries...`);
             var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
             var purgePoNumbersList = legacyOrdersToPurge.map(function(o) { return o.po_number; }).join(',');
             
-            // 🌟 REMOVED 'AWAIT': Fire these requests concurrently to let the main browser thread unlock instantly!
             fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }).catch(e => console.warn("Background child cleanup delayed:", e));
@@ -226,21 +227,22 @@ async function pullActiveStagedCalculationFromCloud() {
             fetch(API_URL + "purchase_orders?po_number=in.(" + purgePoNumbersList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }).catch(e => console.warn("Background parent cleanup delayed:", e));
-            
-            console.log("✅ Main thread unblocked from purge waiting lines.");
         }
         // =======================================================================
 
-        // 🔒 FIREWALL: Filter out and separate active rows for this active session grid view
         const draftOrders = allDraftOrders.filter(function(o) {
-            if (o.po_number && o.po_number.includes("-SHIP-")) {
-                var currentNum = parseInt(o.po_number.split("-SHIP-")[1].split("-")[0], 10);
-                return currentNum === highestShipmentId;
+            var poStr = o.po_number ? String(o.po_number).trim() : "";
+            if (poStr && poStr.includes("-SHIP-")) {
+                var splitParts = poStr.split("-SHIP-");
+                if (splitParts.length > 1 && splitParts[1]) {
+                    var currentNum = parseInt(splitParts[1].split("-")[0], 10);
+                    return currentNum === highestShipmentId;
+                }
             }
             return false;
         });
 
-        console.warn(`🛡️ Sequence Firewall: Identified Active Ship #${highestShipmentId}. Blocked ${allDraftOrders.length - draftOrders.length} legacy items from view.`);
+        console.warn(`🛡️ Sequence Firewall: Identified Active Ship #${highestShipmentId}.`);
 
         if (draftOrders.length === 0) {
             workspace.innerHTML = '<div class="loader-text" style="color:#2ecc71; font-weight:bold;">✅ ¡No hay órdenes pendientes para el cargamento activo actual!</div>';
@@ -249,6 +251,9 @@ async function pullActiveStagedCalculationFromCloud() {
 
         var absoluteNewestOrder = draftOrders[0];
         ACTIVE_SHIPMENT_TIMESTAMP = absoluteNewestOrder.created_at || new Date().toISOString();
+
+        // Store globally to window memory properties cleanly
+        window.highestActiveShipmentIdGlobalValue = highestShipmentId;
 
         // 4. DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS
         const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,faltante_base,equivalencia,recipe_uom";
