@@ -1124,28 +1124,34 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                     body: JSON.stringify({ status: 'saved_pending_whatsapp' })
                 });
             }
-
-            // ⚡ ATOMIC OPTIMIZATION BULK FLUSH GATEWAYS:
+            
+            // =======================================================================
+            // ⚡ ATOMIC OPTIMIZATION BULK FLUSH GATEWAYS [FULLY DECOUPLED BATCH MATRIX]
+            // =======================================================================
             if (generatedPoUuid) {
-                console.log("⚡ Initiating atomic bulk database swap...");
+                console.log("⚡ Initiating single-stroke atomic bulk database swap...");
 
-                // 1️⃣ WIPE ALL EXISTING CHILD ITEMS FOR THIS PO ID IN ONE SINGLE COMMAND
-                // This replaces multiple iterative loops with a single rapid database sweep
+                // 1️⃣ WIPE ALL EXISTING CHILD ITEMS FOR THIS SPECIFIC PO ID IN ONE SINGLE SHOT
                 await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                 });
+                
+                // 2️⃣ BUNDLE ALL INGREDIENT STRING NAMES IN MEMORY FOR AN IN-LINE MULTI-CLEANUP
+                var namesToPurgeList = filteredLines.map(function(item) {
+                    // Escape internal characters cleanly to preserve text strings boundaries
+                    return `"${item.ingredient_name.replace(/"/g, '\\"')}"`;
+                }).join(",");
 
-                // 2️⃣ COMPILE INDEPENDENT LINE ITEMS DIRECTLY IN THE LOCAL DEVICE MEMORY
-                var bulkPayloadBatch = [];
-                for (var i = 0; i < filteredLines.length; i++) {
-                    var item = filteredLines[i];
-                    
-                    // Clear old duplicate entries from alternative open headers concurrently before inserting
-                    await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
+                // 3️⃣ EXECUTE A SINGLE BULK CLEANUP FOR ALTERNATIVE OPEN HEADERS OUTSIDE THE LOOP
+                if (namesToPurgeList.length > 0) {
+                    await fetch(API_URL + "purchase_order_items?po_id=neq." + generatedPoUuid + "&ingredient_name=in.(" + encodeURIComponent(namesToPurgeList) + ")", {
                         method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
                     });
+                }
 
-                    bulkPayloadBatch.push({
+                // 4️⃣ COMPILE INDEPENDENT LINE ITEMS DIRECTLY IN LOCAL DEVICE MEMORY (NO NETWORK LOOPS!)
+                var bulkPayloadBatch = filteredLines.map(function(item) {
+                    return {
                         po_id: generatedPoUuid,
                         ingredient_name: item.ingredient_name,
                         quantity_ordered: Math.ceil(item.approved_formats_quantity),
@@ -1153,10 +1159,10 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                         faltante_base: parseFloat(item.faltante_base || 0),
                         equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
                         recipe_uom: item.recipe_uom || "unidad"
-                    });
-                }
+                    };
+                });
 
-                // 3️⃣ EXECUTE A SINGLE MASS BULK POST TO SUPABASE
+                // 5️⃣ DESPATCH A SINGLE MASS INJECTION MASSIVE PAYLOAD UP TO SUPABASE TABLES
                 if (bulkPayloadBatch.length > 0) {
                     const bulkRes = await fetch(API_URL + "purchase_order_items", {
                         method: "POST",
@@ -1177,6 +1183,8 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 }
             }
             console.log("🚀 Base de datos sincronizada de forma atómica a alta velocidad.");
+            // =======================================================================
+
         }
 
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
