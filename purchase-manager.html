@@ -191,52 +191,85 @@ async function handleGatewaySubmit(event) {
     }
 }
 
-async function executeNewLocalGatewayAuthenticationChallenge(usernameInput, passwordInput) {
-    var cleanUsername = String(usernameInput || "").trim();
-    var cleanPassword = String(passwordInput || "").trim();
-
-    if (!cleanUsername || !cleanPassword) {
-        throw new Error("Por favor, rellene todos los campos.");
+async function executeNewLocalGatewayAuthenticationChallenge(event) {
+    // 🛡️ RESTORED: This is what your other apps use to hold the form perfectly still!
+    if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
     }
 
-    // 🔗 Safe query encoding to prevent broken network URLs
-    var queryUrl = API_URL + "profiles?username=eq." + encodeURIComponent(cleanUsername);
+    var feedback = document.getElementById("gateway-login-error-feedback");
+    var usernameInput = document.getElementById("gateway-input-user").value;
+    var passwordInput = document.getElementById("gateway-input-pass").value;
 
-    var res = await fetch(queryUrl, {
-        method: "GET",
-        headers: {
-            "apikey": API_KEY,
-            "Authorization": "Bearer " + API_KEY,
-            "Content-Type": "application/json"
+    if (feedback) {
+        feedback.style.color = "#007afb";
+        feedback.innerHTML = "⏳ Verificando credenciales...";
+    }
+
+    try {
+        var cleanUsername = String(usernameInput || "").trim();
+        var cleanPassword = String(passwordInput || "").trim();
+
+        if (!cleanUsername || !cleanPassword) {
+            throw new Error("Por favor, rellene todos los campos.");
         }
-    });
 
-    if (!res.ok) {
-        throw new Error("Error de red con el servidor (" + res.status + ").");
+        // Connect to your profiles endpoint
+        var queryUrl = API_URL + "profiles?username=eq." + encodeURIComponent(cleanUsername);
+        var res = await fetch(queryUrl, {
+            method: "GET",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error("Error de red con el servidor (" + res.status + ").");
+        }
+
+        var data = await res.json();
+
+        // 🛡️ Supabase list check
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error("Credenciales inválidas o usuario no registrado.");
+        }
+
+        // Pull the user record row cleanly out of the data array
+        var profileRecord = data[0];
+
+        // Verify password string matches
+        if (profileRecord.password_hash !== cleanPassword) {
+            throw new Error("Credenciales inválidas o usuario no registrado.");
+        }
+
+        // 🔒 Verify permissions mapping against the 'role' column field
+        var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
+        if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
+            throw new Error("⛔ ACCESO DENEGADO: Tu usuario no tiene permisos para esta terminal.");
+        }
+
+        // 🎉 SUCCESS ROUTINE: Authorization passes, hide the curtain cleanly
+        if (feedback) {
+            feedback.style.color = "#22c55e";
+            feedback.innerHTML = "🎉 Acceso autorizado.";
+        }
+        
+        var lockScreen = document.getElementById("security-gateway-lock-screen");
+        if (lockScreen) {
+            lockScreen.style.display = "none";
+        }
+
+        return profileRecord;
+
+    } catch (err) {
+        console.error("Authentication fault event:", err);
+        if (feedback) {
+            feedback.style.color = "#ef4444";
+            feedback.innerHTML = err.message || "❌ Credenciales inválidas o usuario no registrado.";
+        }
     }
-
-    var data = await res.json();
-
-    // 🛡️ CRITICAL ARRAY VALIDATION: Supabase returns a list collection array
-    if (!Array.isArray(data) || data.length === 0) {
-        throw new Error("Credenciales inválidas o usuario no registrado.");
-    }
-
-    // Extract the matching record from index slot 0 safely
-    var profileRecord = data[0];
-
-    // Password comparison
-    if (profileRecord.password_hash !== cleanPassword) {
-        throw new Error("Credenciales inválidas o usuario no registrado.");
-    }
-
-    // Role verification enforcement rule checks
-    var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
-    if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
-        throw new Error("⛔ ACCESO DENEGADO: Tu usuario no tiene permisos para esta terminal.");
-    }
-
-    return profileRecord;
 }
 
 // 🚪 Optional Utility: Global Log Out Trigger to lock the console manually
