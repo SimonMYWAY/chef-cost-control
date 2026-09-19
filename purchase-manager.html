@@ -55,7 +55,7 @@
         <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
         <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
         <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Compras.</p>
-        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event)">
+        <form id="gateway-login-form" onsubmit="handleGatewaySubmit(event)"></form>
             <div style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
                 <input type="text" id="gateway-input-user" required placeholder="ej: comprador.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
@@ -153,6 +153,43 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 });
+// 🎮 GATEWAY SUBMISSION ROUTER CONTROLLER
+async function handleGatewaySubmit(event) {
+    // 🛡️ CRITICAL LOCK: Halts the browser from refreshing the webpage completely!
+    if (event) event.preventDefault();
+
+    var feedback = document.getElementById("gateway-login-error-feedback");
+    var userInput = document.getElementById("gateway-input-user").value;
+    var passInput = document.getElementById("gateway-input-pass").value;
+
+    if (!feedback) return;
+
+    // ⏳ Provide active visual status feedback to the operator
+    feedback.style.color = "#007afb";
+    feedback.innerHTML = "⏳ Verificando credenciales...";
+
+    try {
+        // Run your updated array-safe verification script
+        var validatedProfile = await executeNewLocalGatewayAuthenticationChallenge(userInput, passInput);
+        
+        // 🎉 SUCCESS: Transition status and hide the overlay shield wrapper completely
+        feedback.style.color = "#22c55e";
+        feedback.innerHTML = "🎉 Acceso autorizado. Cargando panel...";
+        
+        setTimeout(function() {
+            var lockScreen = document.getElementById("security-gateway-lock-screen");
+            if (lockScreen) {
+                lockScreen.style.display = "none"; 
+            }
+        }, 600);
+
+    } catch (err) {
+        // ❌ FAILURE: Display the precise validation error safely in your feedback element
+        console.error("Authentication Error Details:", err);
+        feedback.style.color = "#ef4444";
+        feedback.innerHTML = err.message || "❌ Credenciales inválidas o usuario no registrado.";
+    }
+}
 
 async function executeNewLocalGatewayAuthenticationChallenge(usernameInput, passwordInput) {
     var cleanUsername = String(usernameInput || "").trim();
