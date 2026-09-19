@@ -995,7 +995,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     }
 }
 
-// 🟢 HIGH-SPEED ATOMIC BATCH ENGINE: Processes stock calculations, bulk commits to Supabase, copies text
+// 🟢 HIGH-SPEED ATOMIC BATCH ENGINE: Processes stock calculations, bulk commits to Supabase via RPC, copies text
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
     // =======================================================================
@@ -1045,7 +1045,6 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     }
 
     var supplierCard = document.getElementById(cardElementId);
-    var isAlreadySaved = supplierCard && supplierCard.classList.contains("status-saved-pending");
     
     var poNumber = "PO-SYSTEM";
     if (supplierCard) {
@@ -1091,115 +1090,55 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
         await navigator.clipboard.writeText(msg);
         console.timeEnd("⏱️ STEP_1_CLIPBOARD_AND_TEXT_FORMATTING");
-        // --- STEP 2: MASTER DATABASE RECORDING ---
+
+        // =======================================================================
+        // ⚡ MASTER DATABASE ATOMIC RPC RECORDING (REPLACES ALL MULTIPLE STEPS)
+        // =======================================================================
         console.time("⏱️ STEP_2_DATABASE_NETWORK_TRANSACTION");
-        var generatedPoUuid = null;
-
-        if (!isAlreadySaved) {
-            const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+        
+        // 1. Gather approved lines into a local JSON structure in memory
+        var jsonFilteredItems = [];
+        for (var i = 0; i < filteredLines.length; i++) {
+            var item = filteredLines[i];
+            jsonFilteredItems.push({
+                ingredient_name: item.ingredient_name,
+                quantity_ordered: Math.ceil(item.approved_formats_quantity),
+                supplier_uom: item.supplier_uom || "Formato",
+                faltante_base: parseFloat(item.faltante_base || 0),
+                equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
+                recipe_uom: item.recipe_uom || "unidad"
             });
-            
-            if (checkPoRes.ok) {
-                const existingPoData = await checkPoRes.json();
-                if (existingPoData && existingPoData.length > 0) {
-                    generatedPoUuid = existingPoData[0].id; 
-                }
-            }
-
-            if (!generatedPoUuid) {
-                var parentPayload = {
-                    po_number: poNumber,
-                    supplier_name: supplierName,
-                    status: 'saved_pending_whatsapp', 
-                    total_items: filteredLines.length
-                };
-
-                const resParent = await fetch(API_URL + "purchase_orders", {
-                    method: "POST",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
-                    body: JSON.stringify(parentPayload)
-                });
-
-                if (!resParent.ok) throw new Error("Error al guardar la cabecera.");
-                const parentRowResultData = await resParent.json();
-                generatedPoUuid = parentRowResultData[0].id;
-            } else {
-                await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
-                    method: "PATCH",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ status: 'saved_pending_whatsapp' })
-                });
-            }
-
-            // 1. 🧹 THE ANTI-GHOST PURGE: Clear unapproved rows out of Supabase
-            var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
-            if (rejectedLines.length > 0 && generatedPoUuid) {
-                for (var r = 0; r < rejectedLines.length; r++) {
-                    var rejectedItem = rejectedLines[r];
-                    await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(rejectedItem.ingredient_name), {
-                        method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                    });
-                }
-            }
-
-            // 2. 🧹 ATOMIC OVERWRITE: Wipe existing items for this specific PO to eliminate duplicate checks
-            if (generatedPoUuid) {
-                await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
-                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-            }
-
-            // =======================================================================
-            // 🌟 HIGH-SPEED ATOMIC BULK CLEANUP (REPLACES THE LOOP FETCH DELAYS)
-            // =======================================================================
-            if (filteredLines.length > 0 && generatedPoUuid) {
-                // Map out all active ingredient names into a single comma-separated list string
-                var ingredientNamesList = filteredLines.map(function(item) { 
-                    return `"${item.ingredient_name.replace(/"/g, '\\"')}"`; 
-                }).join(',');
-
-                // Fire ONE single query to wipe out alternative duplicates across all ingredients concurrently!
-                await fetch(API_URL + "purchase_order_items?po_id=neq." + generatedPoUuid + "&ingredient_name=in.(" + encodeURIComponent(ingredientNamesList) + ")", {
-                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-            }
-            // =======================================================================
-
-            // 3. 🌟 PURE MEMORY LOOP: Compiles the batch array locally in microseconds with ZERO network fetch delays
-            var bulkItemsPayloadArray = [];
-            for (var i = 0; i < filteredLines.length; i++) {
-                var item = filteredLines[i];
-                
-                bulkItemsPayloadArray.push({
-                    po_id: generatedPoUuid,
-                    ingredient_name: item.ingredient_name,
-                    quantity_ordered: Math.ceil(item.approved_formats_quantity),
-                    supplier_uom: item.supplier_uom || "Formato",
-                    faltante_base: parseFloat(item.faltante_base || 0),
-                    equivalencia: parseFloat(item.equivalencia || item.conversion_factor || 1.0),
-                    recipe_uom: item.recipe_uom || "unidad"
-                });
-            }
-
-            // 🚀 BATCH UPLOAD FIREWALL: Fire ONE single query to write all lines concurrently
-            if (bulkItemsPayloadArray.length > 0) {
-                console.log(`✈️ Dispatched atomic batch payload of ${bulkItemsPayloadArray.length} items...`);
-                const bulkPostResponse = await fetch(API_URL + "purchase_order_items", {
-                    method: "POST",
-                    headers: { 
-                        "apikey": API_KEY, 
-                        "Authorization": "Bearer " + API_KEY, 
-                        "Content-Type": "application/json",
-                        "Prefer": "return=minimal"
-                    },
-                    body: JSON.stringify(bulkItemsPayloadArray)
-                });
-
-                if (!bulkPostResponse.ok) throw new Error("Fallo en la inserción masiva de insumos.");
-            }
-            console.log("💾 Base de datos congelada exitosamente masivamente en milisegundos.");
         }
+
+        // 2. Gather explicitly unapproved or unchecked lines into a local array structure
+        var rejectedLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && (!r.is_approved || r.approved_formats_quantity <= 0));
+        var jsonRejectedItems = rejectedLines.map(function(item) {
+            return { ingredient_name: item.ingredient_name };
+        });
+
+        // 3. Fire ONE SINGLE network round-trip call to your server-side database procedure
+        console.log(`✈️ Launching single-packet atomic transaction block for ${supplierName}...`);
+        const rpcResponse = await fetch(API_URL + "rpc/execute_atomic_supplier_order", {
+            method: "POST",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                p_po_number: poNumber,
+                p_supplier_name: supplierName,
+                p_filtered_items: jsonFilteredItems,
+                p_rejected_items: jsonRejectedItems
+            })
+        });
+
+        if (!rpcResponse.ok) {
+            const errorText = await rpcResponse.text();
+            throw new Error("Error en la ejecución remota de base de datos: " + errorText);
+        }
+        
+        console.log("⚡ Servidor Supabase ejecutó y congeló toda la transacción internamente.");
         console.timeEnd("⏱️ STEP_2_DATABASE_NETWORK_TRANSACTION"); // 👈 End Step 2 Timer
 
         // --- STEP 3: INTERFACE STATE UPDATES & CRITICAL UI FREEZE ---
@@ -1245,7 +1184,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
     } catch (err) {
         console.error("Unified Process Halt Error:", err);
-        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso: " + err.message);
+        alert("❌ ERROR CRÍTICO: No se pudo completar el proceso masivo: " + err.message);
     }
 }
 
