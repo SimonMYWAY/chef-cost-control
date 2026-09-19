@@ -628,10 +628,17 @@
                     <div style="margin-bottom: 20px;">
                         <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px; color:#334155;">Rol / Permisos de Aplicación</label>
                         <select id="user-admin-role" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; box-sizing:border-box;">
-                            <option value="kitchen">👨‍🍳 Personal de Cocina (Solo kitchen.html)</option>
-                            <option value="chef">👨‍🍳 Jefe de Cocina (kitchen.html + index.html)</option>
-                            <option value="owner">💼 Administrador Total (Todas las Aplicaciones)</option>
+                        <!-- Existing Core Framework Profiles -->
+                        <option value="kitchen">🍳 Personal de Cocina (Solo kitchen.html)</option>
+                        <option value="chef">👨‍🍳 Jefe de Cocina (kitchen.html + index.html)</option>
+                        <option value="owner">💼 Administrador Total (Todas las Aplicaciones)</option>
+    
+                        <!-- 🌟 NEW: SPECIALIZED LOGISTICAL PROFILE CHANNELS -->
+                        <option value="purchase">🛒 Compras (Acceso exclusivo a Purchase App)</option>
+                        <option value="receiving">🗃️ Recepción (Acceso exclusivo a Receiving & Inspection App)</option>
+                        <option value="inventory">📦 Inventario (Acceso exclusivo a Inventory App)</option>
                         </select>
+
                     </div>
                     <button type="submit" style="width:100%; background:#22c55e; color:white; border:none; padding:10px; border-radius:6px; font-weight:600; cursor:pointer;">Crear Cuenta de Personal</button>
                 </form>
@@ -3223,26 +3230,52 @@ async function handleStaffUserCreation(event) {
     event.preventDefault();
     var feedback = document.getElementById("user-creation-feedback");
     feedback.innerHTML = "<span style='color:#007afb;'>⏳ Registrando credenciales...</span>";
+    
+    // 🔍 Extracting and cleaning input values
+    var inputUsername = document.getElementById("user-admin-username").value.trim();
+    var inputEmail = document.getElementById("user-admin-email").value.trim();
+    var inputPassword = document.getElementById("user-admin-password").value.trim();
+    
+    // ⚙️ NORMALIZATION: Forces the role to lowercase (e.g., "Owner" becomes "owner") 
+    // to guarantee it perfectly matches your login authentication rules.
+    var selectedRole = String(document.getElementById("user-admin-role").value || "").toLowerCase().trim();
+
+    // 🛑 VALIDATION: Prevent sending empty records to your Supabase table
+    if (!inputUsername || !selectedRole) {
+        feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error: El usuario y el rol son obligatorios.</span>";
+        return;
+    }
+
     try {
-                // 🌟 FIXED PAYLOAD KEY: Explicitly assigns a unique UUID key token to bypass the 409 conflict rules
         var res = await fetch(API_URL + "profiles", {
             method: "POST",
-            headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+            headers: { 
+                "apikey": API_KEY, 
+                "Content-Type": "application/json", 
+                "Prefer": "return=minimal" 
+            },
             body: JSON.stringify({
-                id: crypto.randomUUID(), // 🚀 Forces a brand-new unique ID token key right from the browser!
-                username: document.getElementById("user-admin-username").value.trim(),
-                email: document.getElementById("user-admin-email").value.trim(),
-                password_hash: document.getElementById("user-admin-password").value.trim(),
-                role: document.getElementById("user-admin-role").value
+                id: crypto.randomUUID(), 
+                username: inputUsername,
+                email: inputEmail,
+                password_hash: inputPassword,
+                role: selectedRole
             })
         });
 
         if (res.ok) {
-            feedback.innerHTML = "<span style='color:#22c55e; font-weight:600;'>🎉 ¡Usuario registrado!</span>";
+            feedback.innerHTML = "<span style='color:#22c55e; font-weight:600;'>🎉 ¡Usuario registrado con éxito!</span>";
             document.getElementById("user-admin-form").reset();
             fetchActiveStaffProfiles();
-        } else { feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error al guardar perfil.</span>"; }
-    } catch (err) { feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error de red.</span>"; }
+        } else { 
+            var errData = await res.json().catch(() => ({}));
+            console.error("Supabase error payload:", errData);
+            feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error al guardar perfil en la base de datos.</span>"; 
+        }
+    } catch (err) { 
+        console.error("Network error details:", err);
+        feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error de red o conexión.</span>"; 
+    }
 }
 
 async function deleteStaffProfileRow(userId) {
