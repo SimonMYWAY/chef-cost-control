@@ -49,6 +49,28 @@
     </style>
 </head>
 <body>
+<!-- 🔐 GATEWAY SECURITY LOGIN OVERLAY (BLOCKS ENTIRE SCREEN ON INTERFACE BOOT) -->
+<div id="security-gateway-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 400px; padding: 30px; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
+        <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Compras.</p>
+        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event)">
+            <div style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
+                <input type="text" id="gateway-input-user" required placeholder="ej: comprador.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            <div style="text-align: left; margin-bottom: 22px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña de Personal</label>
+                <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+            </div>
+            <button type="submit" style="width: 100%; background: #007afb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 122, 251, 0.25);">
+                🔓 Iniciar Sesión en Compras
+            </button>
+        </form>
+        <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
+    </div>
+</div>
 
         <!-- 🎛️ CONTROL TERMINAL BOARD OVERHAUL: Dual Action Launcher Gates -->
     <header>
@@ -106,6 +128,119 @@
         var GLOBAL_SUPPLIER_FORMATS_LIST = [];
         // 🔒 GLOBAL SCOPING BIND: Ensures name translation is visible to render functions
         var masterNameToUuidMap = {};
+// =======================================================================
+// 🔐 GATEWAY SECURITY AUTHENTICATION VALVE MATRIX: PURCHASE PANEL
+// =======================================================================
+
+// 1. Initial execution block: Runs immediately on screen boot to preserve active logins
+document.addEventListener("DOMContentLoaded", function() {
+    var storedProfileSession = localStorage.getItem("purchase_app_authorized_session_profile");
+    if (storedProfileSession) {
+        try {
+            var activeSessionData = JSON.parse(storedProfileSession);
+            var authorizedRole = String(activeSessionData.role).toLowerCase().trim();
+
+            // Safeguard entry check: Validate that the session role holds the correct privileges
+            if (authorizedRole === "owner" || authorizedRole === "purchase") {
+                console.log(`🔐 Access pre-authorized: Logged in as ${activeSessionData.username} (${authorizedRole})`);
+                var lockScreen = document.getElementById("security-gateway-lock-screen");
+                if (lockScreen) lockScreen.style.display = "none";
+                return;
+            }
+        } catch (e) {
+            console.warn("Expired or corrupt session profile detected, forcing re-authentication.");
+            localStorage.removeItem("purchase_app_authorized_session_profile");
+        }
+    }
+});
+
+// 2. Main Authentication Interception Challenge Gate
+async function executeNewLocalGatewayAuthenticationChallenge(event) {
+    if (event) event.preventDefault();
+
+    var userInput = document.getElementById("gateway-input-user")?.value.trim().toLowerCase() || "";
+    var passInput = document.getElementById("gateway-input-pass")?.value || "";
+    var errorFeedback = document.getElementById("gateway-login-error-feedback");
+
+    if (errorFeedback) errorFeedback.innerText = "";
+
+    if (!userInput || !passInput) {
+        if (errorFeedback) errorFeedback.innerText = "⚠️ Introduce un usuario y contraseña válidos.";
+        return;
+    }
+
+    try {
+        var loginFormButton = event.target.querySelector("button[type='submit']");
+        if (loginFormButton) {
+            loginFormButton.disabled = true;
+            loginFormButton.innerText = "⏳ Verificando Identidad...";
+        }
+
+        // Determine if input parameter is an email address format or a username string text token
+        var profileQueryColumn = userInput.includes("@") ? "email" : "username";
+        var secureRequestUrl = API_URL + `profiles?${profileQueryColumn}=eq.${encodeURIComponent(userInput)}&select=id,username,email,role,password_hash`;
+
+        const authResponse = await fetch(secureRequestUrl, {
+            method: "GET", headers: { "apikey": API_KEY }
+        });
+
+        if (!authResponse.ok) throw new Error("Fallo de comunicación con la base de datos central.");
+        const matchedProfileRows = await authResponse.json();
+
+        // Security Firewall: Stop immediately if no profile record matches the text tokens
+        if (!Array.isArray(matchedProfileRows) || matchedProfileRows.length === 0) {
+            throw new Error("Credenciales inválidas o usuario no registrado.");
+        }
+
+        var profileRecord = matchedProfileRows[0];
+        
+        // 🔒 DIRECT PASSWORD STRING FIELD CHECK (Matching your other applications' architecture)
+        if (String(profileRecord.password_hash) !== String(passInput)) {
+            throw new Error("Contraseña incorrecta. Inténtalo de nuevo.");
+        }
+
+        // 🛡️ ROLE ISOLATION PRIVILEGE BLOCK: Filter out illegal profiles immediately
+        var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
+        if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
+            throw new Error("⛔ ACCESO DENEGADO: Tu cuenta no tiene permisos para acceder a esta terminal de Compras.");
+        }
+
+        // Cache the authorized session profile safely to prevent screen locking on reload
+        var sessionPayload = {
+            id: profileRecord.id,
+            username: profileRecord.username,
+            email: profileRecord.email,
+            role: verifiedRole,
+            timestamp: new Date().toISOString()
+        };
+        localStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(sessionPayload));
+
+        // Fade out and clear the lock screen mask
+        var lockScreenMaskNode = document.getElementById("security-gateway-lock-screen");
+        if (lockScreenMaskNode) {
+            lockScreenMaskNode.style.transition = "opacity 0.3s ease";
+            lockScreenMaskNode.style.opacity = "0";
+            setTimeout(() => { lockScreenMaskNode.style.display = "none"; }, 300);
+        }
+
+        console.log(`🚀 Authentication success! Terminal unlocked for ${profileRecord.username}`);
+
+    } catch (err) {
+        console.error("Authentication fault event:", err);
+        if (errorFeedback) errorFeedback.innerText = "❌ " + err.message;
+        
+        if (loginFormButton) {
+            loginFormButton.disabled = false;
+            loginFormButton.innerHTML = "🔓 Iniciar Sesión en Compras";
+        }
+    }
+}
+
+// 🚪 Optional Utility: Global Log Out Trigger to lock the console manually
+function terminateActivePurchaseAppSession() {
+    localStorage.removeItem("purchase_app_authorized_session_profile");
+    location.reload();
+}
 
 
 // ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - BULLETPROOF]
