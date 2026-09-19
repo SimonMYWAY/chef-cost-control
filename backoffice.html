@@ -4331,68 +4331,31 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 recipe_uom: String(fundamentalRecipeUOM).trim()
             });
         });
+        // =======================================================================
+        // 🚀 NEW: MASTER ATOMIC SHIPMENT PAYLOAD RPC (REPLACES THE SUPPLIER LOOP)
+        // =======================================================================
+        console.log(`✈️ Dispatching unified atomic payload containing ${Object.keys(supplierGroups).length} suppliers directly to Supabase...`);
+        
+        // Fire ONE SINGLE network round-trip call to your server-side database procedure
+        const rpcResponse = await fetch(API_URL + "rpc/broadcast_atomic_shipment_payload", {
+            method: "POST",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                p_next_shipment_id: nextShipmentIdNumber,
+                p_supplier_groups: supplierGroups // Hands off the entire map object at once!
+            })
+        });
 
-        // 4️⃣ COMMIT STATEFUL DRAFTS TO PERSISTENT DATABASE TABLES [SCHEMA & DATE ALIGNED]
-        var uniqueSuppliers = Object.keys(supplierGroups);
-        for (var i = 0; i < uniqueSuppliers.length; i++) {
-            var supplierName = uniqueSuppliers[i];
-            var items = supplierGroups[supplierName];
-            if (items.length === 0) continue;
-            
-            var paddedIndex = String(i + 1).padStart(3, '0');
-            var generatedPoNumber = "PO-SHIP-" + nextShipmentIdNumber + "-" + paddedIndex;
-
-            const poResponse = await fetch(API_URL + "purchase_orders", {
-                method: "POST",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY, 
-                    "Content-Type": "application/json",
-                    "Prefer": "return=representation"
-                },
-                body: JSON.stringify({
-                    po_number: generatedPoNumber,
-                    supplier_name: supplierName,
-                    status: 'draft',
-                    created_at: new Date().toISOString()
-                })
-            });
-
-            if (!poResponse.ok) {
-                const poErrLog = await poResponse.text();
-                throw new Error("Error guardando orden principal: " + poErrLog);
-            }
-
-            const createdPoData = await poResponse.json();
-            const targetPoRow = Array.isArray(createdPoData) ? createdPoData[0] : createdPoData;
-            const databaseGeneratedPoId = targetPoRow?.id || null;
-
-            if (!databaseGeneratedPoId) throw new Error("No se pudo obtener el ID relacional de la orden generada.");
-
-            var itemPayloads = items.map(function(item) {
-                return {
-                    po_id: databaseGeneratedPoId,
-                    quantity_ordered: Math.ceil(item.pedido_sugerido),
-                    ingredient_name: item.ingredient_name,
-                    supplier_uom: item.supplier_uom, 
-                    faltante_base: parseFloat(item.faltante_base || 0),
-                    equivalencia: parseFloat(item.conversion_factor || 1.0),
-                    recipe_uom: item.recipe_uom,
-                    created_at: new Date().toISOString()
-                };
-            });
-
-            const itemsResponse = await fetch(API_URL + "purchase_order_items", {
-                method: "POST",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                body: JSON.stringify(itemPayloads)
-            });
-
-            if (!itemsResponse.ok) {
-                const itemErrLog = await itemsResponse.text();
-                throw new Error("Error guardando los ítems de la orden: " + itemErrLog);
-            }
+        if (!rpcResponse.ok) {
+            const errorText = await rpcResponse.text();
+            throw new Error("Error en la transmisión remota del cargamento masivo: " + errorText);
         }
+        
+        console.log("⚡ Servidor Supabase procesó, enlazó y distribuyó todo el cargamento masivo internamente.");
 
         // 5️⃣ STEP SEQUENCE COUNTER FORWARD (Triggers Remote Lockout on active terminals instantly)
         await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
@@ -4414,7 +4377,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
 
     } catch (err) {
         console.error("Broadcast transmission halted error:", err);
-        alert("❌ Error crítico en transmisión: " + err.message);
+        alert("❌ Error crítico en transmisión masiva: " + err.message);
         if (shipBtn) {
             shipBtn.disabled = false;
             shipBtn.style.background = "#ef4444";
