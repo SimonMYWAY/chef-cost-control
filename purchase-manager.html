@@ -192,12 +192,14 @@ async function handleGatewaySubmit(event) {
 }
 
 async function executeNewLocalGatewayAuthenticationChallenge(event) {
-    // 🛡️ RESTORED: This is what your other apps use to hold the form perfectly still!
+    // 🛡️ Safe entry block lock to hold the form perfectly stable
     if (event && typeof event.preventDefault === "function") {
         event.preventDefault();
     }
 
     var feedback = document.getElementById("gateway-login-error-feedback");
+    
+    // 🔍 SYNCED IDs: Explicitly reading from your exact template input elements
     var usernameInput = document.getElementById("gateway-input-user").value;
     var passwordInput = document.getElementById("gateway-input-pass").value;
 
@@ -214,7 +216,7 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
             throw new Error("Por favor, rellene todos los campos.");
         }
 
-        // Connect to your profiles endpoint
+        // Connect to your profiles endpoint configuration
         var queryUrl = API_URL + "profiles?username=eq." + encodeURIComponent(cleanUsername);
         var res = await fetch(queryUrl, {
             method: "GET",
@@ -231,26 +233,26 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
 
         var data = await res.json();
 
-        // 🛡️ Supabase list check
+        // 🛡️ Array verification check
         if (!Array.isArray(data) || data.length === 0) {
             throw new Error("Credenciales inválidas o usuario no registrado.");
         }
 
-        // Pull the user record row cleanly out of the data array
+        // ✨ THE FIX: Pull the first index row record object cleanly out of the data collection array
         var profileRecord = data[0];
 
-        // Verify password string matches
+        // Verify password string matches perfectly
         if (profileRecord.password_hash !== cleanPassword) {
             throw new Error("Credenciales inválidas o usuario no registrado.");
         }
 
-        // 🔒 Verify permissions mapping against the 'role' column field
+        // 🔒 Verify permissions mapping against the database column field
         var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
         if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
             throw new Error("⛔ ACCESO DENEGADO: Tu usuario no tiene permisos para esta terminal.");
         }
 
-        // 🎉 SUCCESS ROUTINE: Authorization passes, hide the curtain cleanly
+        // 🎉 SUCCESS ROUTINE: Hide the gateway lock layer wrapper
         if (feedback) {
             feedback.style.color = "#22c55e";
             feedback.innerHTML = "🎉 Acceso autorizado.";
@@ -271,6 +273,7 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
         }
     }
 }
+
 
 // 🚪 Optional Utility: Global Log Out Trigger to lock the console manually
 function terminateActivePurchaseAppSession() {
