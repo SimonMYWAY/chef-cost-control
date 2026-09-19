@@ -154,86 +154,52 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-// 2. Main Authentication Interception Challenge Gate
-async function executeNewLocalGatewayAuthenticationChallenge(event) {
-    if (event) event.preventDefault();
+async function executeNewLocalGatewayAuthenticationChallenge(usernameInput, passwordInput) {
+    var cleanUsername = String(usernameInput || "").trim();
+    var cleanPassword = String(passwordInput || "").trim();
 
-    var userInput = document.getElementById("gateway-input-user")?.value.trim().toLowerCase() || "";
-    var passInput = document.getElementById("gateway-input-pass")?.value || "";
-    var errorFeedback = document.getElementById("gateway-login-error-feedback");
-
-    if (errorFeedback) errorFeedback.innerText = "";
-
-    if (!userInput || !passInput) {
-        if (errorFeedback) errorFeedback.innerText = "⚠️ Introduce un usuario y contraseña válidos.";
-        return;
+    if (!cleanUsername || !cleanPassword) {
+        throw new Error("Por favor, rellene todos los campos.");
     }
 
-    try {
-        var loginFormButton = event.target.querySelector("button[type='submit']");
-        if (loginFormButton) {
-            loginFormButton.disabled = true;
-            loginFormButton.innerText = "⏳ Verificando Identidad...";
+    // 🔗 Safe query encoding to prevent broken network URLs
+    var queryUrl = API_URL + "profiles?username=eq." + encodeURIComponent(cleanUsername);
+
+    var res = await fetch(queryUrl, {
+        method: "GET",
+        headers: {
+            "apikey": API_KEY,
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json"
         }
+    });
 
-        // Determine if input parameter is an email address format or a username string text token
-        var profileQueryColumn = userInput.includes("@") ? "email" : "username";
-        var secureRequestUrl = API_URL + `profiles?${profileQueryColumn}=eq.${encodeURIComponent(userInput)}&select=id,username,email,role,password_hash`;
-
-        const authResponse = await fetch(secureRequestUrl, {
-            method: "GET", headers: { "apikey": API_KEY }
-        });
-
-        if (!authResponse.ok) throw new Error("Fallo de comunicación con la base de datos central.");
-        const matchedProfileRows = await authResponse.json();
-
-        // Security Firewall: Stop immediately if no profile record matches the text tokens
-        if (!Array.isArray(matchedProfileRows) || matchedProfileRows.length === 0) {
-            throw new Error("Credenciales inválidas o usuario no registrado.");
-        }
-
-        var profileRecord = matchedProfileRows[0];
-        
-        // 🔒 DIRECT PASSWORD STRING FIELD CHECK (Matching your other applications' architecture)
-        if (String(profileRecord.password_hash) !== String(passInput)) {
-            throw new Error("Contraseña incorrecta. Inténtalo de nuevo.");
-        }
-
-        // 🛡️ ROLE ISOLATION PRIVILEGE BLOCK: Filter out illegal profiles immediately
-        var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
-        if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
-            throw new Error("⛔ ACCESO DENEGADO: Tu cuenta no tiene permisos para acceder a esta terminal de Compras.");
-        }
-
-        // Cache the authorized session profile safely to prevent screen locking on reload
-        var sessionPayload = {
-            id: profileRecord.id,
-            username: profileRecord.username,
-            email: profileRecord.email,
-            role: verifiedRole,
-            timestamp: new Date().toISOString()
-        };
-        localStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(sessionPayload));
-
-        // Fade out and clear the lock screen mask
-        var lockScreenMaskNode = document.getElementById("security-gateway-lock-screen");
-        if (lockScreenMaskNode) {
-            lockScreenMaskNode.style.transition = "opacity 0.3s ease";
-            lockScreenMaskNode.style.opacity = "0";
-            setTimeout(() => { lockScreenMaskNode.style.display = "none"; }, 300);
-        }
-
-        console.log(`🚀 Authentication success! Terminal unlocked for ${profileRecord.username}`);
-
-    } catch (err) {
-        console.error("Authentication fault event:", err);
-        if (errorFeedback) errorFeedback.innerText = "❌ " + err.message;
-        
-        if (loginFormButton) {
-            loginFormButton.disabled = false;
-            loginFormButton.innerHTML = "🔓 Iniciar Sesión en Compras";
-        }
+    if (!res.ok) {
+        throw new Error("Error de red con el servidor (" + res.status + ").");
     }
+
+    var data = await res.json();
+
+    // 🛡️ CRITICAL ARRAY VALIDATION: Supabase returns a list collection array
+    if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("Credenciales inválidas o usuario no registrado.");
+    }
+
+    // Extract the matching record from index slot 0 safely
+    var profileRecord = data[0];
+
+    // Password comparison
+    if (profileRecord.password_hash !== cleanPassword) {
+        throw new Error("Credenciales inválidas o usuario no registrado.");
+    }
+
+    // Role verification enforcement rule checks
+    var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
+    if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
+        throw new Error("⛔ ACCESO DENEGADO: Tu usuario no tiene permisos para esta terminal.");
+    }
+
+    return profileRecord;
 }
 
 // 🚪 Optional Utility: Global Log Out Trigger to lock the console manually

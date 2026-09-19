@@ -3183,7 +3183,7 @@ function executeLiveTableDataSearch(inputBoxFieldId, targetTableBodyContainerId)
         }
     }
 }
-    // 📡 USER SECURITY DIRECTORY LOGIC ENGINE
+// 📡 USER SECURITY DIRECTORY LOGIC ENGINE
 async function fetchActiveStaffProfiles() {
     var rowsTarget = document.getElementById("users-table-rows");
     if (!rowsTarget) return;
@@ -3201,16 +3201,23 @@ async function fetchActiveStaffProfiles() {
             var systemRole = String(user.role || "kitchen").toLowerCase().trim();
             var appsBadgeHTML = "";
             var roleLabelHTML = "";
+            
+            // 🏷️ Expanded structural classification logic mapping
             if (systemRole === "owner") {
                 roleLabelHTML = "<span style='background:#fef3c7; color:#d97706; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>💼 Owner</span>";
                 appsBadgeHTML = "<span style='color:#22c55e; font-weight:600;'>Todo Acceso (3 Apps)</span>";
             } else if (systemRole === "chef") {
                 roleLabelHTML = "<span style='background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>👨‍🍳 Chef</span>";
                 appsBadgeHTML = "<span style='color:#007afb; font-weight:600;'>index, kitchen</span>";
+            } else if (systemRole === "purchase") {
+                // ✨ ADDED: Visual design rule mapping specifically for the purchase terminal users
+                roleLabelHTML = "<span style='background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🛒 Purchase</span>";
+                appsBadgeHTML = "<span style='color:#16a34a; font-weight:600;'>purchase-manager.html</span>";
             } else {
                 roleLabelHTML = "<span style='background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🍳 Kitchen</span>";
                 appsBadgeHTML = "<span style='color:#64748b;'>Solo kitchen.html</span>";
             }
+            
             var userDisplayString = user.username ? `<b>${user.username}</b><br><span style='font-size:0.78rem; color:#64748b;'>${user.email}</span>` : `<b>${user.email}</b>`;
             html += "<tr style='border-bottom:1px solid #e2e8f0;'>" +
                         "<td style='padding:12px; text-align:left;'>" + userDisplayString + "</td>" +
