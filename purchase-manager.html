@@ -339,7 +339,9 @@ async function pullActiveStagedCalculationFromCloud() {
                     provider_name: format.provider_name ? String(format.provider_name).trim() : null,
                     purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
                     units_per_purchase: parseFloat(format.units_per_purchase || 1),
-                    is_preferred: format.is_preferred === true || format.is_preferred === 'true'
+                    is_preferred: format.is_preferred === true || format.is_preferred === 'true',
+                    // ✨ NEW: Map the downloaded column field directly to the dictionary key cache
+                    commercial_name: format.commercial_name ? String(format.commercial_name).trim() : null
                 };
             }
         });
@@ -442,16 +444,22 @@ async function pullActiveStagedCalculationFromCloud() {
                 return cleanItemPoId === cleanOrderId && cleanOrderId !== "";
             });
             
-            matchedItems.forEach(function(item) {
+                        matchedItems.forEach(function(item) {
+                // 🔍 NEW LOOKUP ENGINE LINK: Find the matching format data in your dictionary
+                var cleanIngKey = String(item.ingredient_name).toLowerCase().trim();
+                var matchedFormatData = supplierFormatsLookup[cleanIngKey] || {};
+
                 cloudRows.push({
                     id: item.id,
                     ingredient_id: String(item.ingredient_name).trim(), 
                     ingredient_name: item.ingredient_name,
                     
-                    // 🚀 THE CRITICAL FIX: Pull your exact database columns!
+                    // ✨ NEW: Map the dictionary lookup column string to your final dataset row item
+                    commercial_name: matchedFormatData.commercial_name || item.ingredient_name,
+                    
                     faltante_base: parseFloat(item.faltante_base || 0), 
-                    equivalencia: parseFloat(item.equivalencia || 1.0), // 🔒 Real conversion factor ratio
-                    recipe_uom: item.recipe_uom || "unidad",            // 🔒 Real database unit string
+                    equivalencia: parseFloat(item.equivalencia || 1.0), 
+                    recipe_uom: item.recipe_uom || "unidad",            
                     
                     supplier_uom: item.supplier_uom || "Formato",
                     conversion_factor: parseFloat(item.equivalencia || 1.0), 
