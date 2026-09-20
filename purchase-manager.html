@@ -49,25 +49,28 @@
     </style>
 </head>
 <body>
-<!-- 🔐 GATEWAY SECURITY LOGIN OVERLAY (BLOCKS ENTIRE SCREEN ON INTERFACE BOOT) -->
+<!-- 🔐 GATEWAY SECURITY LOGIN OVERLAY (EXTENSION-PROOF VERSION) -->
 <div id="security-gateway-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; padding: 15px; box-sizing: border-box;">
     <div style="background: #ffffff; width: 100%; max-width: 400px; padding: 30px; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); text-align: center;">
         <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
         <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
         <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Compras.</p>
-        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event); return false;"></form>
-            <div style="text-align: left; margin-bottom: 15px;">
-                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
-                <input type="text" id="gateway-input-user" required placeholder="ej: comprador.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
-            </div>
-            <div style="text-align: left; margin-bottom: 22px;">
-                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña de Personal</label>
-                <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
-            </div>
-            <button type="submit" style="width: 100%; background: #007afb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 122, 251, 0.25);">
-                🔓 Iniciar Sesión en Compras
-            </button>
-        </form>
+        
+        <!-- 🔄 REMOVED THE FORM TAG COMPLETELY TO DEACTIVATE ADOBE HIJACKING -->
+        <div style="text-align: left; margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
+            <input type="text" id="gateway-input-user" required placeholder="ej: comprador.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+        </div>
+        <div style="text-align: left; margin-bottom: 22px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña de Personal</label>
+            <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+        </div>
+        
+        <!-- ⚡ TRIGGER VIA ONCLICK: Bypasses the extension layer entirely -->
+        <button type="button" onclick="executeNewLocalGatewayAuthenticationChallenge(null)" style="width: 100%; background: #007afb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 122, 251, 0.25);">
+            🔓 Iniciar Sesión en Compras
+        </button>
+        
         <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
     </div>
 </div>
