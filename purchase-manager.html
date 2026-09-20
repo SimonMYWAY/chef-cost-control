@@ -191,89 +191,61 @@ async function handleGatewaySubmit(event) {
     }
 }
 
-async function executeNewLocalGatewayAuthenticationChallenge(event) {
-    // 🛡️ Safe entry block lock to hold the form perfectly stable
-    if (event && typeof event.preventDefault === "function") {
+    // 🧠 UNIFIED LOCAL ENGINE: PURCHASE-MANAGER.HTML AUTH SHIELD
+    async function executeNewLocalGatewayAuthenticationChallenge(event) {
         event.preventDefault();
-    }
-
-    var feedback = document.getElementById("gateway-login-error-feedback");
-    
-    // 🔍 SYNCED IDs: Explicitly reading from your exact template input elements
-    var usernameInput = document.getElementById("gateway-input-user").value;
-    var passwordInput = document.getElementById("gateway-input-pass").value;
-
-    if (feedback) {
-        feedback.style.color = "#007afb";
-        feedback.innerHTML = "⏳ Verificando credenciales...";
-    }
-
-    try {
-        var cleanUsername = String(usernameInput || "").trim();
-        var cleanPassword = String(passwordInput || "").trim();
-
-        if (!cleanUsername || !cleanPassword) {
-            throw new Error("Por favor, rellene todos los campos.");
-        }
-
-        // Connect to your profiles endpoint configuration
-        var queryUrl = API_URL + "profiles?username=eq." + encodeURIComponent(cleanUsername);
-        var res = await fetch(queryUrl, {
-            method: "GET",
-            headers: {
-                "apikey": API_KEY,
-                "Authorization": "Bearer " + API_KEY,
-                "Content-Type": "application/json"
-            }
-        });
-
-        if (!res.ok) {
-            throw new Error("Error de red con el servidor (" + res.status + ").");
-        }
-
-        var data = await res.json();
-
-        // 🛡️ Array verification check
-        if (!Array.isArray(data) || data.length === 0) {
-            throw new Error("Credenciales inválidas o usuario no registrado.");
-        }
-
-        // ✨ THE FIX: Pull the first index row record object cleanly out of the data collection array
-        var profileRecord = data[0];
-
-        // Verify password string matches perfectly
-        if (profileRecord.password_hash !== cleanPassword) {
-            throw new Error("Credenciales inválidas o usuario no registrado.");
-        }
-
-        // 🔒 Verify permissions mapping against the database column field
-        var verifiedRole = String(profileRecord.role || "").toLowerCase().trim();
-        if (verifiedRole !== "owner" && verifiedRole !== "purchase") {
-            throw new Error("⛔ ACCESO DENEGADO: Tu usuario no tiene permisos para esta terminal.");
-        }
-
-        // 🎉 SUCCESS ROUTINE: Hide the gateway lock layer wrapper
-        if (feedback) {
-            feedback.style.color = "#22c55e";
-            feedback.innerHTML = "🎉 Acceso autorizado.";
-        }
+        const feedbackEl = document.getElementById("gateway-login-error-feedback");
+        feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
         
-        var lockScreen = document.getElementById("security-gateway-lock-screen");
-        if (lockScreen) {
-            lockScreen.style.display = "none";
-        }
-
-        return profileRecord;
-
-    } catch (err) {
-        console.error("Authentication fault event:", err);
-        if (feedback) {
-            feedback.style.color = "#ef4444";
-            feedback.innerHTML = err.message || "❌ Credenciales inválidas o usuario no registrado.";
+        const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+        const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+        
+        try {
+            const headers = { "apikey": API_KEY };
+            const queryUrl = `${API_URL}profiles`; // Uses your standard native API_URL variable constant
+            
+            const res = await fetch(queryUrl, { headers }).then(r => r.json());
+            if (!Array.isArray(res) || res.length === 0) {
+                feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
+                return;
+            }
+            
+            let matchedProfile = null;
+            for (let i = 0; i < res.length; i++) {
+                const profileRow = res[i];
+                if (String(profileRow.username || "").toLowerCase().trim() === userInputVal || String(profileRow.email || "").toLowerCase().trim() === userInputVal) {
+                    matchedProfile = profileRow;
+                    break;
+                }
+            }
+            if (!matchedProfile) {
+                feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
+                return;
+            }
+            if (String(matchedProfile.password_hash) !== passInputVal) {
+                feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
+                return;
+            }
+            
+            // 🔒 SECURITY ROLE FILTER: Only 'purchase' or 'owner' profiles can access purchase-manager.html
+            const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+            if (userRole === "purchase" || userRole === "owner") {
+                feedbackEl.innerText = "";
+                document.getElementById("security-gateway-lock-screen").style.display = "none";
+                
+                // 🌟 PURCHASE APP STARTUP CHANNELS
+                console.log("Acceso autorizado para terminal de Compras.");
+                // Note: If your Purchase App has its own initial data load functions, 
+                // you can place them right here!
+                
+            } else {
+                feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene rango para esta terminal.";
+            }
+        } catch (err) {
+            console.error(err);
+            feedbackEl.innerText = "❌ Error de conexión con el servidor.";
         }
     }
-}
-
 
 // 🚪 Optional Utility: Global Log Out Trigger to lock the console manually
 function terminateActivePurchaseAppSession() {
