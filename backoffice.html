@@ -352,35 +352,43 @@
         <div id="view-mappings" class="view-pane">
             <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
                 
-                <!-- COLUMN A: THE MAPPING FORM -->
-                <div class="card" style="flex: 1; min-width: 320px;">
-                    <h3>Nueva Tasa de Conversión</h3>
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Enlaza empaques de compra de distribuidores a porciones de preparación.</p>
-                    
-                    <form id="mapping-form" onsubmit="createNewMapping(event)">
-                        <div style="margin-bottom: 12px;">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Ingrediente</label>
-                            <select id="map-ing-id" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
-                                <option value="">Cargando catálogo maestro...</option>
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 12px;">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Proveedor Oficial</label>
-                            <select id="map-prov-id" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
-                                <option value="">Cargando directorio de proveedores...</option>
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 12px;">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Unidad de Compraista (Saco, Caja, Botella)</label>
-                            <input type="text" id="map-purchase-uom" placeholder="Ej: Saco" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
-                        </div>
-                        <div style="margin-bottom: 12px;">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Equivale a cuántas Unidades de Receta</label>
-                            <input type="number" id="map-factor" step="0.0001" min="0.0001" placeholder="Ej: 25000" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
-                        </div>
-                        <button type="submit" class="btn btn-green" style="width:100%; background:var(--accent-green); color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Guardar Factor de Enlace</button>
-                    </form>
-                </div>
+<!-- COLUMN A: THE MAPPING FORM -->
+<div class="card" style="flex: 1; min-width: 320px;">
+    <h3>Nueva Tasa de Conversión</h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Enlaza empaques de compra de distribuidores a porciones de preparación.</p>
+    
+    <!-- 🔄 ADDED change listener to auto-populate the default commercial name -->
+    <form id="mapping-form" onsubmit="createNewMapping(event)">
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Ingrediente</label>
+            <select id="map-ing-id" required onchange="autoPopulateCommercialDefault()" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                <option value="">Cargando catálogo maestro...</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Seleccionar Proveedor Oficial</label>
+            <select id="map-prov-id" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                <option value="">Cargando directorio de proveedores...</option>
+            </select>
+        </div>
+        
+        <!-- ✨ NEW: Commercial Name Input Field -->
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Nombre Comercial del Proveedor (Opcional)</label>
+            <input type="text" id="map-commercial-name" placeholder="Ej: Harina Pan Especial (Blanca)" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Unidad de Compraista (Saco, Caja, Botella)</label>
+            <input type="text" id="map-purchase-uom" placeholder="Ej: Saco" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+        </div>
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px;">Equivale a cuántas Unidades de Receta</label>
+            <input type="number" id="map-factor" step="0.0001" min="0.0001" placeholder="Ej: 25000" required style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+        </div>
+        <button type="submit" class="btn btn-green" style="width:100%; background:var(--accent-green); color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Guardar Factor de Enlace</button>
+    </form>
+</div>
 
                 <!-- COLUMN B: THE DYNAMIC CONVERSIONS LIST WORKSPACE -->
                 <div class="card" style="flex: 2; min-width: 450px;">
@@ -2157,10 +2165,13 @@ function loadAndRenderSupplierFormats() {
             
             var friendlyIngredientName = _ingredientsCache[item.ingredient_id] || "Ingrediente #" + item.ingredient_id;
             
+            // 🛡️ FALLBACK: Display master ingredient name if commercial_name column is blank or null
+            var visualCommercialName = item.commercial_name || friendlyIngredientName;
+            
             html += `
             <div class="conversion-row" id="format-${item.id}" style="padding: 12px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background-color: ${isFrozen ? '#f1f5f9' : '#ffffff'}; opacity: ${isFrozen ? '0.85' : '1'}; transition: all 0.2s;">
                 
-                <!-- 🌟 NEW: PREFERRED SUPPLIER RADIO SELECTION LAYER -->
+                <!-- 🌟 PREFERRED SUPPLIER RADIO SELECTION LAYER -->
                 <div style="margin-right: 15px; display: flex; align-items: center; justify-content: center;" title="Marcar como proveedor preferencial">
                     <input type="radio" 
                            name="preferred-${item.ingredient_id}" 
@@ -2171,14 +2182,26 @@ function loadAndRenderSupplierFormats() {
 
                 <div class="row-info-group" style="flex: 1;">
                     <!-- Header Labels -->
-                    <div class="meta-label" style="margin-bottom: 6px;">
+                    <div class="meta-label" style="margin-bottom: 4px;">
                         <strong style="color: #1e293b; font-size: 0.95rem;">${friendlyIngredientName}</strong> 
                         <span class="supplier-tag" style="color: #64748b; font-size: 0.85rem; font-weight: 500;">(${item.provider_name})</span>
                         ${isPreferred ? '<span style="background-color:#d1fae5; color:#065f46; font-size:0.75rem; font-weight:bold; padding:2px 6px; border-radius:4px; margin-left:6px;">⭐ Preferido</span>' : ''}
                     </div>
                     
+                    <!-- ✨ NEW: REAL-TIME EDITABLE COMMERCIAL NAME INPUT LAYER -->
+                    <div class="commercial-input-wrapper" style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 0.78rem; font-weight: 600; color: #64748b; text-transform: uppercase; width: 85px;">Nom. Comercial:</span>
+                        <input type="text" 
+                               value="${visualCommercialName}" 
+                               onchange="updateSupabaseField('${item.id}', 'commercial_name', this.value.trim())"
+                               placeholder="Nombre del distribuidor..."
+                               style="flex: 1; max-width: 320px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.82rem; background: #fafafa;"
+                               ${isFrozen ? 'disabled' : ''}>
+                    </div>
+                    
                     <!-- Dynamic Input Workspace -->
                     <div class="edit-inputs-wrapper" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.78rem; font-weight: 600; color: #64748b; text-transform: uppercase; width: 85px;">Conversión:</span>
                         <input type="text" 
                                class="input-uom-desc" 
                                value="${item.purchase_uom || ''}" 
@@ -2205,7 +2228,7 @@ function loadAndRenderSupplierFormats() {
                         <span class="badge-frozen" style="color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">❄️ Congelado</span>
                     ` : `
                         <button class="btn-delete-format" 
-                                onclick="attemptDeleteFormat('${item.id}', '${item.ingredient_id}', '${item.provider_name}')"
+                                onclick="attemptDeleteFormat('\${item.id}', '\({item.ingredient_id}', '\){item.provider_name}')"
                                 style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: opacity 0.2s;"
                                 onmouseover="this.style.opacity='0.8'"
                                 onmouseout="this.style.opacity='1'">
@@ -2392,56 +2415,70 @@ function freezeFormatLine(id) {
     });
 }
 
-                // 🔗 LOGISTICS MODULE: Submit conversion data using your exact database columns and UUID string types
-        function createNewMapping(event) {
-            event.preventDefault();
-            
-            var ingSelect = document.getElementById("map-ing-id");
-            var provSelect = document.getElementById("map-prov-id");
-            var purchaseUom = document.getElementById("map-purchase-uom").value.trim();
-            var factorInput = parseFloat(document.getElementById("map-factor").value) || 0;
-
-            if (!ingSelect.value || !provSelect.value) { 
-                alert("Por favor, selecciona un ingrediente y un proveedor."); 
-                return; 
-            }
-
-            var providerTextName = provSelect.options[provSelect.selectedIndex].text.trim();
-
-        // FIXED TYPE SCHEMA MATCH: ingredient_id is passed as a string string to satisfy UUID format parameters
-var payload = {
-    ingredient_id: ingSelect.value, 
-    provider_name: providerTextName,
-    purchase_uom: purchaseUom,
-    units_per_purchase: factorInput,
-    is_frozen: false // ✨ ADD THIS LINE: Automatically initializes new inputs as unfrozen
-};
-
-fetch(API_URL + "supplier_formats", {
-    method: "POST",
-    headers: { 
-        "apikey": API_KEY, 
-        "Authorization": "Bearer " + API_KEY, 
-        "Content-Type": "application/json", 
-        "Prefer": "return=minimal" 
-    },
-    body: JSON.stringify(payload)
-}).then(function(res) {
-    if (res.ok) {
-        alert("✅ ¡Tasa de conversión registrada con éxito!");
-        document.getElementById("mapping-form").reset();
-        
-        // 🔄 CHANGE THIS LINE: Call the new renderer instead of the deleted one
-        loadAndRenderSupplierFormats(); 
-    } else {
-        alert("❌ Error 400: Conflicto en el tipo de dato del Servidor.");
+// ✨ NEW UTILITY: Safely extracts the visible text string of the selected option to use as fallback default
+function autoPopulateCommercialDefault() {
+    var ingSelect = document.getElementById("map-ing-id");
+    var commInput = document.getElementById("map-commercial-name");
+    if (!ingSelect || !commInput) return;
+    
+    // If the selector is populated and user hasn't typed anything custom yet, assign the master ingredient name
+    if (ingSelect.selectedIndex > 0 && !commInput.value.trim()) {
+        commInput.value = ingSelect.options[ingSelect.selectedIndex].text.trim();
     }
-}).catch(function(err) {
-    console.error("Critical submission fail:", err);
-});
+}
+
+// 🔗 LOGISTICS MODULE: Submit conversion data using your exact database columns and UUID string types
+function createNewMapping(event) {
+    event.preventDefault();
+    
+    var ingSelect = document.getElementById("map-ing-id");
+    var provSelect = document.getElementById("map-prov-id");
+    var commercialNameInput = document.getElementById("map-commercial-name").value.trim();
+    var purchaseUom = document.getElementById("map-purchase-uom").value.trim();
+    var factorInput = parseFloat(document.getElementById("map-factor").value) || 0;
+
+    if (!ingSelect.value || !provSelect.value) { 
+        alert("Por favor, selecciona un ingrediente y un proveedor."); 
+        return; 
+    }
+
+    var providerTextName = provSelect.options[provSelect.selectedIndex].text.trim();
+    var ingredientTextName = ingSelect.options[ingSelect.selectedIndex].text.trim();
+
+    // 🛡️ FALLBACK RULE: Use custom commercial name if filled, otherwise default to master ingredient name
+    var finalCommercialName = commercialNameInput || ingredientTextName;
+
+    // FIXED TYPE SCHEMA MATCH: payload variables aligned to Supabase storage parameters
+    var payload = {
+        ingredient_id: ingSelect.value, 
+        provider_name: providerTextName,
+        commercial_name: finalCommercialName, // 🚀 NEW DATABASE KEY FIELD DEFINED HERE
+        purchase_uom: purchaseUom,
+        units_per_purchase: factorInput,
+        is_frozen: false 
+    };
+
+    fetch(API_URL + "supplier_formats", {
+        method: "POST",
+        headers: { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json", 
+            "Prefer": "return=minimal" 
+        },
+        body: JSON.stringify(payload)
+    }).then(function(res) {
+        if (res.ok) {
+            alert("✅ ¡Tasa de conversión registrada con éxito con su Nombre Comercial!");
+            document.getElementById("mapping-form").reset();
+            loadAndRenderSupplierFormats(); 
+        } else {
+            alert("❌ Error 400: Conflicto en el tipo de dato del Servidor.");
         }
-
-
+    }).catch(function(err) {
+        console.error("Critical submission fail:", err);
+    });
+}
 
         // Phase 6: Post New Recipe Unit Ingredient Entry to Supabase
         function createNewIngredient(event) {
