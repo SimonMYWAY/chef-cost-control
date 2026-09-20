@@ -476,7 +476,7 @@ async function pullActiveStagedCalculationFromCloud() {
 
         });
 
-        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - FULLY REPAIRED]
+ // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - FULLY REPAIRED]
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
@@ -497,6 +497,10 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
+                
+                // ✨ THE FINAL FIX: Preserves your true custom commercial name inside the global application memory rows layer!
+                commercial_name: row.commercial_name || row.ingredient_name,
+                
                 faltante_base: calculatedRecipeFaltante, 
                 recipe_uom: String(realRecipeUnit).trim(),               
                 equivalencia: finalMultiplier,
