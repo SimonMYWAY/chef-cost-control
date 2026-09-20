@@ -137,8 +137,13 @@
 
 // 1. Initial execution block: Runs immediately on screen boot to check the current tab session
 document.addEventListener("DOMContentLoaded", function() {
-    // 🛡️ SECURITY FIX: Look ONLY inside the temporary, single-tab sessionStorage pool
+    // 🧹 PERMANENT HARDWARE PURGE OVERRIDE: 
+    // Force-deletes any old permanent tokens left behind from previous tests.
+    localStorage.removeItem("purchase_app_authorized_session_profile");
+
+    // 🛡️ TRANSIENT SESSION CHECK: Read strictly from temporary single-tab memory space
     var storedProfileSession = sessionStorage.getItem("purchase_app_authorized_session_profile");
+    var lockScreen = document.getElementById("security-gateway-lock-screen");
     
     if (storedProfileSession) {
         try {
@@ -148,7 +153,6 @@ document.addEventListener("DOMContentLoaded", function() {
             // Safeguard entry check: Validate that the session role holds the correct privileges
             if (authorizedRole === "owner" || authorizedRole === "purchase") {
                 console.log(`🔐 Access pre-authorized: Logged in as ${activeSessionData.username} (${authorizedRole})`);
-                var lockScreen = document.getElementById("security-gateway-lock-screen");
                 if (lockScreen) lockScreen.style.display = "none";
                 return;
             }
@@ -158,10 +162,9 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
     
-    // 🔒 EXTRA ENFORCEMENT GUARD: If no active single-tab session exists, ensure the shield stays visible
-    var lockScreenDefault = document.getElementById("security-gateway-lock-screen");
-    if (lockScreenDefault) {
-        lockScreenDefault.style.display = "flex";
+    // 🔒 ENFORCEMENT GUARD: Force the login screen to open if no active tab session is found
+    if (lockScreen) {
+        lockScreen.style.display = "flex";
     }
 });
 
