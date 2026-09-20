@@ -1228,7 +1228,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         var timeStampStr = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
         var shortDate = timeStampStr.split(",")[0];
         
-        // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
+                // --- STEP 1: INSTANT CLIPBOARD ENGAGEMENT (Clears Browser Permission Blocks) ---
         console.time("⏱️ STEP_1_CLIPBOARD_AND_TEXT_FORMATTING");
         var msg = "Hola " + supplierName + ",\n" +
                   "Adjunto orden de compra oficial para su revisión:\n\n" +
@@ -1246,8 +1246,12 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
             var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
             var displayUOM = String(item.supplier_uom || "Unidad").substring(0, 20).padEnd(20); 
             
+            // 🔒 SAFETY CHECK: Pull commercial_name from the row data cache, fallback to internal name if null
+            var finalItemNameForSupplier = item.commercial_name || item.ingredient_name;
+
+            // 🌟 SYNCED MESSAGING FORMAT (NOW UTILIZING THE SUPPLIER'S COMMERCIAL DESIGNATION):
             msg += "▶ " + displayQty + " " + displayUOM + "\n" +
-                   "  " + item.ingredient_name + "\n\n";
+                   "  " + finalItemNameForSupplier + "\n\n";
         });
 
         msg += "------------------------------\n" +
@@ -1523,9 +1527,12 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
         var displayQty = String(Math.ceil(item.approved_formats_quantity)).padEnd(4);
         var displayUOM = String(item.supplier_uom).substring(0, 20).padEnd(20); // Safe length crop
         
-        // 🌟 COMPACT TWO-LINE FORMAT WITH SPACING:
+        // 🔒 SAFETY CHECK: Pull commercial_name from the row payload data. Fallback to ingredient_name if blank.
+        var finalItemNameForSupplier = item.commercial_name || item.ingredient_name;
+
+        // 🌟 COMPACT TWO-LINE FORMAT WITH SPACING (NOW USING SUPPLIER COMMERCIAL NAME):
         txt += "▶ " + displayQty + " " + displayUOM + "\n" +
-               "  " + item.ingredient_name + "\n\n"; // Trailing blank line separates items clearly!
+               "  " + finalItemNameForSupplier + "\n\n"; // Trailing blank line separates items clearly!
     });
 
     txt += 
