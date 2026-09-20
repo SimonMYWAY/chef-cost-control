@@ -246,7 +246,7 @@ async function handleGatewaySubmit(event) {
                 feedbackEl.innerText = "";
                 
                 // Save session memory row
-                localStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
+                 sessionStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
                 
                 document.getElementById("security-gateway-lock-screen").style.display = "none";
                 console.log("🔓 Terminal Compras Autorizada Exitosamente.");
