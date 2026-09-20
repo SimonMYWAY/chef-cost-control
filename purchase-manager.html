@@ -193,8 +193,14 @@ async function handleGatewaySubmit(event) {
 
     // 🧠 UNIFIED LOCAL ENGINE: PURCHASE-MANAGER.HTML AUTH SHIELD
     async function executeNewLocalGatewayAuthenticationChallenge(event) {
-        event.preventDefault();
+        if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+        }
+        
         const feedbackEl = document.getElementById("gateway-login-error-feedback");
+        if (!feedbackEl) return;
+        
+        feedbackEl.style.color = "#007afb";
         feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
         
         const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
@@ -202,10 +208,11 @@ async function handleGatewaySubmit(event) {
         
         try {
             const headers = { "apikey": API_KEY };
-            const queryUrl = `${API_URL}profiles`; // Uses your standard native API_URL variable constant
+            const queryUrl = `${API_URL}profiles`; 
             
             const res = await fetch(queryUrl, { headers }).then(r => r.json());
             if (!Array.isArray(res) || res.length === 0) {
+                feedbackEl.style.color = "#ef4444";
                 feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
                 return;
             }
@@ -213,16 +220,19 @@ async function handleGatewaySubmit(event) {
             let matchedProfile = null;
             for (let i = 0; i < res.length; i++) {
                 const profileRow = res[i];
-                if (String(profileRow.username || "").toLowerCase().trim() === userInputVal || String(profileRow.email || "").toLowerCase().trim() === userInputVal) {
+                if (String(profileRow.username || "").toLowerCase().trim() === userInputVal || 
+                    String(profileRow.email || "").toLowerCase().trim() === userInputVal) {
                     matchedProfile = profileRow;
                     break;
                 }
             }
             if (!matchedProfile) {
+                feedbackEl.style.color = "#ef4444";
                 feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
                 return;
             }
             if (String(matchedProfile.password_hash) !== passInputVal) {
+                feedbackEl.style.color = "#ef4444";
                 feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
                 return;
             }
@@ -231,122 +241,23 @@ async function handleGatewaySubmit(event) {
             const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
             if (userRole === "purchase" || userRole === "owner") {
                 feedbackEl.innerText = "";
-                document.getElementById("security-gateway-lock-screen").style.display = "none";
                 
-                // 🌟 PURCHASE APP STARTUP CHANNELS
-                console.log("Acceso autorizado para terminal de Compras.");
-                // Note: If your Purchase App has its own initial data load functions, 
-                // you can place them right here!
+                // Save session memory row
+                localStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
+                
+                document.getElementById("security-gateway-lock-screen").style.display = "none";
+                console.log("🔓 Terminal Compras Autorizada Exitosamente.");
                 
             } else {
+                feedbackEl.style.color = "#ef4444";
                 feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene rango para esta terminal.";
             }
         } catch (err) {
             console.error(err);
+            feedbackEl.style.color = "#ef4444";
             feedbackEl.innerText = "❌ Error de conexión con el servidor.";
         }
     }
-
-// 🧠 UNIFIED LOCAL ENGINE: PURCHASE-MANAGER.HTML AUTH SHIELD
-async function executeNewLocalGatewayAuthenticationChallenge(event) {
-    if (event && typeof event.preventDefault === "function") {
-        event.preventDefault();
-    }
-
-    var feedbackEl = document.getElementById("gateway-login-error-feedback");
-    if (!feedbackEl) {
-        alert("🚨 Error Crítico: No se encontró el elemento HTML 'gateway-login-error-feedback'.");
-        return;
-    }
-    
-    feedbackEl.style.color = "#007afb";
-    feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
-    
-    // 🛡️ Safety check for missing system environment variables
-    if (typeof API_URL === "undefined" || typeof API_KEY === "undefined") {
-        feedbackEl.style.color = "#ef4444";
-        feedbackEl.innerText = "❌ Error Interno: Las variables de configuración API_URL o API_KEY no están definidas en este archivo.";
-        return;
-    }
-    
-    var userInputVal = "";
-    var passInputVal = "";
-    
-    try {
-        userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
-        passInputVal = document.getElementById("gateway-input-pass").value.trim();
-    } catch (inputErr) {
-        feedbackEl.style.color = "#ef4444";
-        feedbackEl.innerText = "❌ Error: Mismatch en los IDs de los inputs HTML (gateway-input-user / gateway-input-pass).";
-        return;
-    }
-    
-    try {
-        var headers = { "apikey": API_KEY };
-        var queryUrl = API_URL + "profiles"; 
-        
-        // Fetch raw data
-        var response = await fetch(queryUrl, { headers });
-        if (!response.ok) {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "❌ Error del servidor Supabase: " + response.status + " " + response.statusText;
-            return;
-        }
-        
-        var res = await response.json();
-        if (!Array.isArray(res) || res.length === 0) {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "❌ No se encontraron perfiles en el servidor.";
-            return;
-        }
-        
-        var matchedProfile = null;
-        for (var i = 0; i < res.length; i++) {
-            var profileRow = res[i];
-            var dbUsername = String(profileRow.username || "").toLowerCase().trim();
-            var dbEmail = String(profileRow.email || "").toLowerCase().trim();
-            
-            if (dbUsername === userInputVal || dbEmail === userInputVal) {
-                matchedProfile = profileRow;
-                break;
-            }
-        }
-        
-        if (!matchedProfile) {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "❌ Credenciales incorrectas. Intenta de nuevo.";
-            return;
-        }
-        
-        if (String(matchedProfile.password_hash) !== passInputVal) {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
-            return;
-        }
-        
-        // 🔒 SECURITY ROLE FILTER: Allow 'purchase' or 'owner' profiles
-        var userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
-        if (userRole === "purchase" || userRole === "owner") {
-            feedbackEl.innerText = "";
-            
-            // 💾 OPTIONAL: If your session persistence reads from localStorage, save it here
-            localStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
-            
-            var lockScreen = document.getElementById("security-gateway-lock-screen");
-            if (lockScreen) {
-                lockScreen.style.display = "none";
-            }
-            console.log("🔓 Acceso autorizado exitosamente.");
-        } else {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil (" + userRole + ") no tiene rango para esta terminal de Compras.";
-        }
-    } catch (err) {
-        console.error("Auth Runtime Crash:", err);
-        feedbackEl.style.color = "#ef4444";
-        feedbackEl.innerText = "❌ Fallo Crítico: " + (err.message || "Error de conexión.");
-    }
-}
 
 
 // ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - BULLETPROOF]
