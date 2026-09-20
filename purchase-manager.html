@@ -55,7 +55,7 @@
         <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
         <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Acceso Restringido</h2>
         <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar esta terminal de Compras.</p>
-        <form id="gateway-login-form" onsubmit="handleGatewaySubmit(event)"></form>
+        <form id="gateway-login-form" onsubmit="executeNewLocalGatewayAuthenticationChallenge(event); return false;"></form>
             <div style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Nombre de Usuario / Email</label>
                 <input type="text" id="gateway-input-user" required placeholder="ej: comprador.way" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
