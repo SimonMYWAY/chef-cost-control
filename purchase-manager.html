@@ -135,13 +135,15 @@
 // 🔐 GATEWAY SECURITY AUTHENTICATION VALVE MATRIX: PURCHASE PANEL
 // =======================================================================
 
-// 1. Initial execution block: Runs immediately on screen boot to preserve active logins
+// 1. Initial execution block: Runs immediately on screen boot to check the current tab session
 document.addEventListener("DOMContentLoaded", function() {
-    var storedProfileSession = localStorage.getItem("purchase_app_authorized_session_profile");
+    // 🛡️ SECURITY FIX: Look ONLY inside the temporary, single-tab sessionStorage pool
+    var storedProfileSession = sessionStorage.getItem("purchase_app_authorized_session_profile");
+    
     if (storedProfileSession) {
         try {
             var activeSessionData = JSON.parse(storedProfileSession);
-            var authorizedRole = String(activeSessionData.role).toLowerCase().trim();
+            var authorizedRole = String(activeSessionData.role || "").toLowerCase().trim();
 
             // Safeguard entry check: Validate that the session role holds the correct privileges
             if (authorizedRole === "owner" || authorizedRole === "purchase") {
@@ -152,10 +154,17 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         } catch (e) {
             console.warn("Expired or corrupt session profile detected, forcing re-authentication.");
-            localStorage.removeItem("purchase_app_authorized_session_profile");
+            sessionStorage.removeItem("purchase_app_authorized_session_profile");
         }
     }
+    
+    // 🔒 EXTRA ENFORCEMENT GUARD: If no active single-tab session exists, ensure the shield stays visible
+    var lockScreenDefault = document.getElementById("security-gateway-lock-screen");
+    if (lockScreenDefault) {
+        lockScreenDefault.style.display = "flex";
+    }
 });
+
 // 🎮 GATEWAY SUBMISSION ROUTER CONTROLLER
 async function handleGatewaySubmit(event) {
     // 🛡️ CRITICAL LOCK: Halts the browser from refreshing the webpage completely!
