@@ -296,8 +296,9 @@ async function pullActiveStagedCalculationFromCloud() {
             fetch(API_URL + "ingredients?select=id,name_es,uom", {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }),
-            fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred", {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
+            method: "GET", 
+            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }),
             fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc", {
                 method: "GET", 
