@@ -291,14 +291,16 @@ async function pullActiveStagedCalculationFromCloud() {
         LOCAL_STAGED_ROWS = [];
         console.log("✈️ Launching asynchronous parallel data streams...");
         
-        // 🌟 Concurrent execution prevents blocking chaining bottlenecks
+        // =======================================================================
+        // 📡 DATA SYNCHRONIZATION STAGE: PARALLEL DATABASE CONCURRENT LOADING
+        // =======================================================================
         const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             fetch(API_URL + "ingredients?select=id,name_es,uom", {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }),
             fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
-            method: "GET", 
-            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                method: "GET", 
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }),
             fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc", {
                 method: "GET", 
@@ -330,7 +332,7 @@ async function pullActiveStagedCalculationFromCloud() {
             }
         });
 
-        // --- MAP SUPPLIER FORMATS LOOKUP ---
+        // --- MAP SUPPLIER FORMATS LOOKUP (INDEXED SYSTEMICALLY BY INGREDIENT UUID) ---
         var supplierFormatsLookup = {};
         GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
             if (format.ingredient_id) {
@@ -340,7 +342,7 @@ async function pullActiveStagedCalculationFromCloud() {
                     purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
                     units_per_purchase: parseFloat(format.units_per_purchase || 1),
                     is_preferred: format.is_preferred === true || format.is_preferred === 'true',
-                    // ✨ NEW: Map the downloaded column field directly to the dictionary key cache
+                    // ✨ SAVED: Preserved column data mapped to matching array key
                     commercial_name: format.commercial_name ? String(format.commercial_name).trim() : null
                 };
             }
@@ -351,7 +353,6 @@ async function pullActiveStagedCalculationFromCloud() {
             ACTIVE_SHIPMENT_TIMESTAMP = null;
             return;
         }
-
         // --- EXTRACT HIGHEST SHIPMENT SEQUENCE WITH STRICT DEFENSIVE TYPE CHECKS ---
         var highestShipmentId = 0;
         allDraftOrders.forEach(function(o) {
@@ -422,7 +423,6 @@ async function pullActiveStagedCalculationFromCloud() {
         var absoluteNewestOrder = draftOrders[0];
         ACTIVE_SHIPMENT_TIMESTAMP = absoluteNewestOrder.created_at || new Date().toISOString();
 
-        // Store globally to window memory properties cleanly
         window.highestActiveShipmentIdGlobalValue = highestShipmentId;
 
         // 4. DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS
@@ -434,7 +434,6 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!itemsRes.ok) throw new Error("Fallo al descargar los ítems de las órdenes.");
         const allOrderLines = await itemsRes.json();
 
-        // Filter and build the structural array expected by your UI renderer functions
         var cloudRows = [];
         draftOrders.forEach(function(order) {
             var cleanOrderId = String(order.id || "").toLowerCase().trim();
@@ -444,17 +443,20 @@ async function pullActiveStagedCalculationFromCloud() {
                 return cleanItemPoId === cleanOrderId && cleanOrderId !== "";
             });
             
-                        matchedItems.forEach(function(item) {
-                // 🔍 NEW LOOKUP ENGINE LINK: Find the matching format data in your dictionary
-                var cleanIngKey = String(item.ingredient_name).toLowerCase().trim();
-                var matchedFormatData = supplierFormatsLookup[cleanIngKey] || {};
+            matchedItems.forEach(function(item) {
+                // 🔍 KEY CORRECTION SYSTEM: Find the correct matching UUID using the masterNameToUuidMap dictionary
+                var cleanTextName = String(item.ingredient_name).toLowerCase().trim();
+                var resolvedUuidFromMap = masterNameToUuidMap[cleanTextName] || "";
+                
+                // Query your format dictionary using the verified UUID key index
+                var matchedFormatData = supplierFormatsLookup[resolvedUuidFromMap] || {};
 
                 cloudRows.push({
                     id: item.id,
-                    ingredient_id: String(item.ingredient_name).trim(), 
+                    ingredient_id: resolvedUuidFromMap || cleanTextName, 
                     ingredient_name: item.ingredient_name,
                     
-                    // ✨ NEW: Map the dictionary lookup column string to your final dataset row item
+                    // ✨ SUCCESS: Captures the mapped commercial name directly from your database
                     commercial_name: matchedFormatData.commercial_name || item.ingredient_name,
                     
                     faltante_base: parseFloat(item.faltante_base || 0), 
@@ -473,10 +475,9 @@ async function pullActiveStagedCalculationFromCloud() {
                     db_status: order.status
                 });
             });
-
         });
 
- // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [Part 2 of 2 - FULLY REPAIRED]
+        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
@@ -498,7 +499,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
                 
-                // ✨ THE FINAL FIX: Preserves your true custom commercial name inside the global application memory rows layer!
+                // ✨ SYSTEM INTERFACE PIPELINE LINK: Passes data directly to the clipboard template loop
                 commercial_name: row.commercial_name || row.ingredient_name,
                 
                 faltante_base: calculatedRecipeFaltante, 
@@ -511,7 +512,6 @@ async function pullActiveStagedCalculationFromCloud() {
                 approved_formats_quantity: approvedCount, 
                 is_approved: row.is_approved !== undefined ? row.is_approved : true, 
                 
-                // 🌟 FIX: Preserves your true calculated cloud sequence integer down inside the row memory layers!
                 shipment_id: highestShipmentId,
                 sales_reference_date: row.created_at || "Fecha No Definida",
                 
@@ -536,16 +536,12 @@ async function pullActiveStagedCalculationFromCloud() {
             workspace.parentNode.insertBefore(headerBannerNode, workspace);
         }
 
-        // 🌟 DIRECT METRIC UI STAMP: Overwrite the bold text container explicitly right now!
         if (headerBannerNode) {
             headerBannerNode.innerHTML = `<div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${highestShipmentId}</strong></div>`;
-            // Keep a global window variable tracking copy safe just in case
             window.activeShipmentSequenceId = highestShipmentId;
         }
 
-        // Re-draw screen layout using the securely mapped variables
         renderInteractiveManagerSpreadsheetGrid();
-
 
     } catch (err) {
         console.error(err);
