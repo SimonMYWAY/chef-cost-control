@@ -880,7 +880,7 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     let name = nameInput ? nameInput.value.trim() : '';
@@ -910,7 +910,8 @@ async function submitRecipe() {
         
         cloudRecord = _loadedRevoCatalog.find(function(r) {
             const testDbName = r.name || "";
-            const existingNameClean = String(testDbName.includes("||") ? testDbName.split("||") : testDbName).toLowerCase().trim();
+            // 🛡️ FIX: Added [0] index key selector to string isolate before running trim!
+            const existingNameClean = String(testDbName.includes("||") ? testDbName.split("||")[0] : testDbName).toLowerCase().trim();
             return existingNameClean === visiblePickerText;
         });
         
@@ -925,7 +926,8 @@ async function submitRecipe() {
     // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
         var rawDbName = cloudRecord.name || "";
-        var oldNameClean = String(rawDbName.includes("||") ? rawDbName.split("||") : rawDbName).toLowerCase().trim();
+        // 🛡️ FIX: Added [0] index key selector to string isolate before running trim!
+        var oldNameClean = String(rawDbName.includes("||") ? rawDbName.split("||")[0] : rawDbName).toLowerCase().trim();
         var newNameClean = name.toLowerCase().replace(/clon/g, '').trim();
         var currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
 
@@ -966,7 +968,8 @@ async function submitRecipe() {
             if (recipeId && String(r.id) === String(recipeId)) return false; 
             
             var testDbName = r.name || "";
-            var existingNameClean = String(testDbName.includes("||") ? testDbName.split("||") : testDbName).toLowerCase().trim();
+            // 🛡️ FIX: Added [0] index key selector to string isolate before running trim!
+            var existingNameClean = String(testDbName.includes("||") ? testDbName.split("||")[0] : testDbName).toLowerCase().trim();
             return existingNameClean === normalizedNewName;
         });
 
@@ -996,7 +999,7 @@ async function submitRecipe() {
             if (!newRecipeResponse.ok) throw new Error("Could not create master row on Supabase cloud.");
             const newRecipeData = await newRecipeResponse.json();
             
-            // ✨ THE ATOMIC PAYLOAD FIX: Correctly extract index slot [0] from the array
+            // 🛡️ FIX: Correctly extract [0] index slot from the array representation payload!
             if (Array.isArray(newRecipeData) && newRecipeData.length > 0) {
                 recipeId = newRecipeData[0].id;
             } else if (newRecipeData && newRecipeData.id) {
@@ -1019,7 +1022,6 @@ async function submitRecipe() {
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar los encabezados de la receta.");
         }
-
         // --- GATE B: BUNDLE AND TRANSLATE INGREDIENT MAPS ---
         const ingCards = document.querySelectorAll('.ing-card');
         const localIngredientsList = [];
