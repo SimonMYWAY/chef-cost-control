@@ -880,7 +880,7 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - BULLETPROOF TRACKING]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED STRING LOGIC]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     let name = nameInput ? nameInput.value.trim() : '';
@@ -895,43 +895,26 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
-    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Prioritize runtime window token variables
+    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Secure execution by reading your true validated global tracking variable
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
     let cloudRecord = null;
-    
-    // Step A: Attempt standard lookup using the active recipe UUID string token
     if (recipeId && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
         cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
     }
 
-    // ✨ Step B: FALLBACK LOOKUP - If ID was lost, trace the recipe by matching its visible picker text description name!
-    if (!cloudRecord && pickerEl && pickerEl.selectedIndex > 0 && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        // Read the original selected name text right out of the HTML picker dropdown option slot
-        const visiblePickerText = pickerEl.options[pickerEl.selectedIndex].text.split('||')[0].trim().toLowerCase();
-        
-        cloudRecord = _loadedRevoCatalog.find(function(r) {
-            const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
-            return existingNameClean === visiblePickerText;
-        });
-        
-        if (cloudRecord) {
-            recipeId = cloudRecord.id;
-            _selectedRecipeId = recipeId; // Re-anchor your global variable token so it doesn't duplicate
-            console.log("🎯 Fallback Match Success: Re-anchored lost recipe ID to:", recipeId);
-        }
-    }
-
-    console.log("🔍 Diagnosis Check - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
+    console.log("🔍 Running Safe Check - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
 
     // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
-        const oldNameClean = (cloudRecord.name || "").toLowerCase().split('||')[0].trim();
-        const newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
-        const currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
+        // ✨ FIXED: Extract the raw name string safely without chaining trim directly onto an array block!
+        var rawDbName = cloudRecord.name || "";
+        var oldNameClean = String(rawDbName.includes("||") ? rawDbName.split("||") : rawDbName).toLowerCase().trim();
+        var newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+        var currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
 
-        console.log("📋 Comparing Names - Old:", oldNameClean, "New:", newNameClean, "Status:", currentStatus);
+        console.log("📋 String Compare Metrics - Old:", oldNameClean, "New:", newNameClean, "Status:", currentStatus);
 
         // Rule A: If name changed and the recipe is Locked (Approved or Waiting)
         if (oldNameClean !== newNameClean && (currentStatus === "approved" || currentStatus === "waiting")) {
@@ -968,7 +951,9 @@ async function submitRecipe() {
         const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
         const separateDuplicateFound = _loadedRevoCatalog.find(function(r) {
             if (recipeId && String(r.id) === String(recipeId)) return false; // ignore current
-            const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
+            
+            var testDbName = r.name || "";
+            var existingNameClean = String(testDbName.includes("||") ? testDbName.split("||") : testDbName).toLowerCase().trim();
             return existingNameClean === normalizedNewName;
         });
 
@@ -984,7 +969,6 @@ async function submitRecipe() {
     try {
         // --- GATE A: UPSERT MASTER HEADER DOCUMENT ---
         if (!recipeId) {
-            // POST block creates a completely clean standalone UUID tracking line index
             const newRecipeResponse = await fetch(API_URL + "recipes", {
                 method: "POST",
                 headers: { 
@@ -999,17 +983,15 @@ async function submitRecipe() {
             if (!newRecipeResponse.ok) throw new Error("Could not create master row on Supabase cloud.");
             const newRecipeData = await newRecipeResponse.json();
             
-            // Handle representation array parsing safely
-            if (Array.isArray(newRecipeData) && newRecipeData[0]) {
-                recipeId = newRecipeData[0].id;
+            if (Array.isArray(newRecipeData) && newRecipeData) {
+                recipeId = newRecipeData.id;
             } else if (newRecipeData && newRecipeData.id) {
                 recipeId = newRecipeData.id;
             }
             
-            _selectedRecipeId = recipeId; // Anchor into global reference tokens slots
+            _selectedRecipeId = recipeId; 
             if (pickerEl) pickerEl.value = recipeId;
         } else {
-            // PATCH block updates the existing recipe record without creating duplicate entries
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
                 headers: { 
