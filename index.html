@@ -822,7 +822,7 @@
     }
 
 // =======================================================================
-// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 1 OF 2 - REPAIRED]
+// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 1 OF 2 - SECURED]
 // =======================================================================
 
 // 🛠️ SHARED RELATIONAL MUTATOR: Atomic overwrite engine for child ingredients
@@ -904,8 +904,24 @@ async function submitRecipe() {
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
+    // 🛡️ THE BULLETPROOF FALLBACK SHIELD: If memory variables dropped out, re-locate by reading picker text option list
+    if (!recipeId && pickerEl && pickerEl.selectedIndex > 0 && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
+        const selectedTextOption = pickerEl.options[pickerEl.selectedIndex].text.toLowerCase().replace(/[\u274c\ud83d\udd34\ud83d\udd35\u2b1b]/g, '').trim();
+        
+        const backupMatch = _loadedRevoCatalog.find(function(r) {
+            const cleanDbName = (r.name || "").toLowerCase().split('||')[0].trim();
+            return cleanDbName === selectedTextOption;
+        });
+
+        if (backupMatch) {
+            recipeId = backupMatch.id;
+            _selectedRecipeId = recipeId; // Re-anchor globally
+            console.log("🎯 Dynamic Overwrite Intercept: Re-secured matching recipe UUID:", recipeId);
+        }
+    }
+
     try {
-        // A. True Creation from Scratch if no active file exists
+        // A. True Creation from Scratch (Only fires if there is genuinely no old recipe active on screen)
         if (!recipeId) {
             const response = await fetch(API_URL + "recipes", {
                 method: "POST",
@@ -915,7 +931,6 @@ async function submitRecipe() {
             if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
-            // ✨ THE FIX: Explicitly extracts from index [0] to protect global tracking keys
             recipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
             _selectedRecipeId = recipeId;
             if (pickerEl) pickerEl.value = recipeId;
@@ -956,8 +971,9 @@ async function submitRecipe() {
         localStorage.removeItem(`recipe_draft_${recipeId}`);
         if (nameInput) nameInput.className = 'status-saved';
 
-        // Custom status feedback log
-        console.log("✅ Borrador actualizado con éxito en la nube.");
+        // Display confirmation alert block to operator on standard save execution clicks
+        alert(currentLang === 'en' ? 'Changes saved successfully to the cloud borrador!' : '¡Cambios guardados con éxito en la nube!');
+        if (typeof initRevoDownload === "function") await initRevoDownload();
 
     } catch (err) {
         console.error("Mutation fault:", err);
@@ -965,7 +981,7 @@ async function submitRecipe() {
     }
 }
 // =======================================================================
-// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 2 OF 2 - REPAIRED]
+// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 2 OF 2 - SECURED]
 // =======================================================================
 
 // 🧬 CLONE ENGINE: Explicitly branches the current workspace out into a brand-new separate recipe variant row
@@ -1003,7 +1019,6 @@ async function cloneActiveRecipeAsVariant() {
         if (!response.ok) throw new Error("Fallo al insertar la nueva variante.");
         const data = await response.json();
         
-        // ✨ THE FIX: Extract index [0] to secure new variant assignments
         const newRecipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
         if (!newRecipeId) throw new Error("No se obtuvo un ID válido del servidor.");
 
@@ -1026,7 +1041,6 @@ async function cloneActiveRecipeAsVariant() {
 async function saveAndSubmitForApprovalPipeline() {
     const pickerEl = document.getElementById('revo-recipe-picker');
     
-    // 🛡️ REPAIRED: Blocking alert converted to a background console log for continuous execution
     console.log("⏳ Auto-saving active screen inputs first...");
     await submitRecipe();
 
