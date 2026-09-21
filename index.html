@@ -895,18 +895,19 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
-    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Secure your strict running layout token key
+    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Prioritize runtime window token variables with picker list fallbacks
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
-    if (recipeId === "null" || recipeId === "") recipeId = null;
+    if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
     let cloudRecord = null;
-    if (recipeId && typeof _loadedRevoCatalog !== 'undefined') {
+    if (recipeId && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
         cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
     }
 
-    // ⚡ PROPOSED DISPATCH STRATEGY RULES MATRIXENGAGE
+    // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
-        const oldNameClean = (cloudRecord.name || "").split('||')[0].trim().toLowerCase();
+        // ✨ FIXED: Added explicit [0] index key selectors to isolate strings cleanly before trimming
+        const oldNameClean = (cloudRecord.name || "").toLowerCase().split('||')[0].trim();
         const newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
         const currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
 
@@ -917,6 +918,7 @@ async function submitRecipe() {
                 : 'ℹ️ Receta Aprobada/En Espera. ¡El sistema forzará automáticamente la creación de una copia/variante independiente!'
             );
             recipeId = null; // Forces a POST request to clone it into a separate row
+            _selectedRecipeId = null;
             name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
             if (nameInput) nameInput.value = name;
         } 
@@ -924,13 +926,14 @@ async function submitRecipe() {
         // Rule B: If name changed and the recipe is a fluid DRAFT
         else if (oldNameClean !== newNameClean && currentStatus === "draft") {
             const userChoiceConfirm = confirm(currentLang === 'en'
-                ? `You changed the name of this draft.\n\n• Click OK to JUST RENAME the existing draft.\n• Click CANCEL to CREATE A NEW COPY/VARIANT.`
+                ? `You changed the name of this draft.\n\n• Click OK (Aceptar) to JUST RENAME the existing draft.\n• Click CANCEL (Cancelar) to CREATE A NEW COPY/VARIANT.`
                 : `Has cambiado el nombre de este borrador.\n\n• Haz clic en ACEPTAR para SOLO CAMBIAR EL NOMBRE de la receta actual.\n• Haz clic en CANCELAR para CREAR UNA COPIA/VARIANTE NUEVA.`
             );
 
             if (!userChoiceConfirm) {
                 // User wants a separate clone variant! Fork parameters out
                 recipeId = null; // Disconnects UUID to force a brand new POST creation row
+                _selectedRecipeId = null;
                 name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
                 if (nameInput) nameInput.value = name;
             }
@@ -974,7 +977,13 @@ async function submitRecipe() {
             if (!newRecipeResponse.ok) throw new Error("Could not create master row on Supabase cloud.");
             const newRecipeData = await newRecipeResponse.json();
             
-            recipeId = newRecipeData[0].id;
+            // Handle representation array parsing safely
+            if (Array.isArray(newRecipeData) && newRecipeData[0]) {
+                recipeId = newRecipeData[0].id;
+            } else if (newRecipeData && newRecipeData.id) {
+                recipeId = newRecipeData.id;
+            }
+            
             _selectedRecipeId = recipeId; // Anchor into global workspace reference token memory slots
             if (pickerEl) pickerEl.value = recipeId;
         } else {
