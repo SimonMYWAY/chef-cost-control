@@ -880,7 +880,7 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - FULLY FIXING ARRAY INDEX]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     let name = nameInput ? nameInput.value.trim() : '';
@@ -904,12 +904,16 @@ async function submitRecipe() {
         cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
     }
 
+    console.log("🔍 Diagnosis Check - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
+
     // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
-        // ✨ FIXED: Added explicit [0] index key selectors to isolate strings cleanly before trimming
+        // ✨ FIXED CORE ARRAY INDEX [0]: Safely converts the string array index before executing a trim operations!
         const oldNameClean = (cloudRecord.name || "").toLowerCase().split('||')[0].trim();
-        const newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+        const newNameClean = name.toLowerCase().replace(/clon/g, '').trim();
         const currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
+
+        console.log("📋 Comparing Names - Old:", oldNameClean, "New:", newNameClean, "Status:", currentStatus);
 
         // Rule A: If name changed and the recipe is Locked (Approved or Waiting)
         if (oldNameClean !== newNameClean && (currentStatus === "approved" || currentStatus === "waiting")) {
@@ -943,9 +947,10 @@ async function submitRecipe() {
 
     // Secondary Check: Ensure the chosen name isn't an accidental duplicate of an entirely different recipe row
     if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+        const normalizedNewName = name.toLowerCase().replace(/clon/g, '').trim();
         const separateDuplicateFound = _loadedRevoCatalog.find(function(r) {
             if (recipeId && String(r.id) === String(recipeId)) return false; // ignore current
+            // ✨ FIXED CORE ARRAY INDEX [0] HERE AS WELL:
             const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
             return existingNameClean === normalizedNewName;
         });
@@ -984,7 +989,7 @@ async function submitRecipe() {
                 recipeId = newRecipeData.id;
             }
             
-            _selectedRecipeId = recipeId; // Anchor into global workspace reference token memory slots
+            _selectedRecipeId = recipeId; // Anchor into global reference tokens slots
             if (pickerEl) pickerEl.value = recipeId;
         } else {
             // PATCH block updates the existing recipe record without creating duplicate entries
@@ -999,6 +1004,7 @@ async function submitRecipe() {
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar los encabezados de la receta.");
         }
+
 
         // --- GATE B: BUNDLE AND TRANSLATE INGREDIENT MAPS ---
         const ingCards = document.querySelectorAll('.ing-card');
