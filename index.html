@@ -886,7 +886,7 @@ async function overwriteChildIngredients(recipeId) {
     }
 }
 
-// 💾 OVERWRITE ENGINE: Explicitly updates the current open recipe via PATCH (No duplicates possible!)
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     const name = nameInput ? nameInput.value.trim() : '';
@@ -901,28 +901,22 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
+    
+    // 🛡️ ARCHITECTURAL ANCHOR FIX: Lock down the selection strictly using your global runtime variable token
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
-    // 🛡️ THE BULLETPROOF FALLBACK SHIELD: If memory variables dropped out, re-locate by reading picker text option list
-    if (!recipeId && pickerEl && pickerEl.selectedIndex > 0 && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        const selectedTextOption = pickerEl.options[pickerEl.selectedIndex].text.toLowerCase().replace(/[\u274c\ud83d\udd34\ud83d\udd35\u2b1b]/g, '').trim();
-        
-        const backupMatch = _loadedRevoCatalog.find(function(r) {
-            const cleanDbName = (r.name || "").toLowerCase().split('||')[0].trim();
-            return cleanDbName === selectedTextOption;
-        });
-
-        if (backupMatch) {
-            recipeId = backupMatch.id;
-            _selectedRecipeId = recipeId; // Re-anchor globally
-            console.log("🎯 Dynamic Overwrite Intercept: Re-secured matching recipe UUID:", recipeId);
-        }
+    let cloudRecord = null;
+    if (recipeId && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
+        cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
     }
+
+    console.log("🔍 Running Safe Overwrite Anchor - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
 
     try {
         // A. True Creation from Scratch (Only fires if there is genuinely no old recipe active on screen)
         if (!recipeId) {
+            console.log("🚀 Creating a completely brand new recipe entry row via POST...");
             const response = await fetch(API_URL + "recipes", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
@@ -931,20 +925,22 @@ async function submitRecipe() {
             if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
+            // Map freshly generated server UUID securely
             recipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
             _selectedRecipeId = recipeId;
             if (pickerEl) pickerEl.value = recipeId;
         } 
-        // B. Standard Safe Overwrite Updates via PATCH
+        // B. Standard Safe Overwrite Updates via PATCH (Guarantees no duplicates can form!)
         else {
             if (typeof _loadedRevoCatalog !== 'undefined') {
-                const cloudRecord = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
-                if (cloudRecord && cloudRecord.status === 'approved') {
+                const cloudRecordCheck = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
+                if (cloudRecordCheck && cloudRecordCheck.status === 'approved') {
                     alert(currentLang === 'en' ? '⚠️ Locked! Recipe is approved.' : '⚠️ ¡Bloqueado! La receta está aprobada.');
                     return;
                 }
             }
 
+            console.log("📝 Issuing clean PATCH update overwrite query to database row ID:", recipeId);
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -968,10 +964,10 @@ async function submitRecipe() {
             activeItem.servings = servings;
         }
 
+        // 🧹 LOCK DOWN: Explicitly delete local storage draft logs to prevent state pollution
         localStorage.removeItem(`recipe_draft_${recipeId}`);
         if (nameInput) nameInput.className = 'status-saved';
 
-        // Display confirmation alert block to operator on standard save execution clicks
         alert(currentLang === 'en' ? 'Changes saved successfully to the cloud borrador!' : '¡Cambios guardados con éxito en la nube!');
         if (typeof initRevoDownload === "function") await initRevoDownload();
 
@@ -980,6 +976,7 @@ async function submitRecipe() {
         alert("❌ Error: " + err.message);
     }
 }
+
 // =======================================================================
 // 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 2 OF 2 - SECURED]
 // =======================================================================
