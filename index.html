@@ -976,6 +976,7 @@ async function submitRecipe() {
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar los encabezados de la receta.");
         }
+
         // --- GATE B: BUNDLE AND TRANSLATE INGREDIENT MAPS ---
         const ingCards = document.querySelectorAll('.ing-card');
         const localIngredientsList = [];
