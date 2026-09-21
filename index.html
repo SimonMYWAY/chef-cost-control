@@ -822,7 +822,7 @@
     }
 
 // =======================================================================
-// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 1 OF 2]
+// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 1 OF 2 - REPAIRED]
 // =======================================================================
 
 // 🛠️ SHARED RELATIONAL MUTATOR: Atomic overwrite engine for child ingredients
@@ -915,6 +915,7 @@ async function submitRecipe() {
             if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
+            // ✨ THE FIX: Explicitly extracts from index [0] to protect global tracking keys
             recipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
             _selectedRecipeId = recipeId;
             if (pickerEl) pickerEl.value = recipeId;
@@ -955,8 +956,8 @@ async function submitRecipe() {
         localStorage.removeItem(`recipe_draft_${recipeId}`);
         if (nameInput) nameInput.className = 'status-saved';
 
-        alert(currentLang === 'en' ? 'Changes saved directly to the cloud!' : '¡Cambios guardados directamente en la nube!');
-        if (typeof initRevoDownload === "function") await initRevoDownload();
+        // Custom status feedback log
+        console.log("✅ Borrador actualizado con éxito en la nube.");
 
     } catch (err) {
         console.error("Mutation fault:", err);
@@ -964,7 +965,7 @@ async function submitRecipe() {
     }
 }
 // =======================================================================
-// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 2 OF 2]
+// 🔐 CHEF RECIPE FLOW ARCHITECTURE MATRIX [PART 2 OF 2 - REPAIRED]
 // =======================================================================
 
 // 🧬 CLONE ENGINE: Explicitly branches the current workspace out into a brand-new separate recipe variant row
@@ -1002,7 +1003,7 @@ async function cloneActiveRecipeAsVariant() {
         if (!response.ok) throw new Error("Fallo al insertar la nueva variante.");
         const data = await response.json();
         
-        // Fix array extractor indices securely
+        // ✨ THE FIX: Extract index [0] to secure new variant assignments
         const newRecipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
         if (!newRecipeId) throw new Error("No se obtuvo un ID válido del servidor.");
 
@@ -1025,8 +1026,8 @@ async function cloneActiveRecipeAsVariant() {
 async function saveAndSubmitForApprovalPipeline() {
     const pickerEl = document.getElementById('revo-recipe-picker');
     
-    // 🛡️ CRITICAL BUG FIX LINK: First execute an automatic full overwrite save to commit screen edits to the cloud
-    alert(currentLang === 'en' ? '⏳ Auto-saving active screen inputs first...' : '⏳ Guardando automáticamente los cambios de la pantalla primero... ');
+    // 🛡️ REPAIRED: Blocking alert converted to a background console log for continuous execution
+    console.log("⏳ Auto-saving active screen inputs first...");
     await submitRecipe();
 
     // Re-verify ID now that the auto-save sequence has completed tracking steps
