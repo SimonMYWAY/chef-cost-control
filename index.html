@@ -880,7 +880,7 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - FULLY FIXING ARRAY INDEX]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - BULLETPROOF TRACKING]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     let name = nameInput ? nameInput.value.trim() : '';
@@ -895,22 +895,40 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
-    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Prioritize runtime window token variables with picker list fallbacks
+    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Prioritize runtime window token variables
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
     let cloudRecord = null;
+    
+    // Step A: Attempt standard lookup using the active recipe UUID string token
     if (recipeId && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
         cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
+    }
+
+    // ✨ Step B: FALLBACK LOOKUP - If ID was lost, trace the recipe by matching its visible picker text description name!
+    if (!cloudRecord && pickerEl && pickerEl.selectedIndex > 0 && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
+        // Read the original selected name text right out of the HTML picker dropdown option slot
+        const visiblePickerText = pickerEl.options[pickerEl.selectedIndex].text.split('||')[0].trim().toLowerCase();
+        
+        cloudRecord = _loadedRevoCatalog.find(function(r) {
+            const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
+            return existingNameClean === visiblePickerText;
+        });
+        
+        if (cloudRecord) {
+            recipeId = cloudRecord.id;
+            _selectedRecipeId = recipeId; // Re-anchor your global variable token so it doesn't duplicate
+            console.log("🎯 Fallback Match Success: Re-anchored lost recipe ID to:", recipeId);
+        }
     }
 
     console.log("🔍 Diagnosis Check - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
 
     // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
-        // ✨ FIXED CORE ARRAY INDEX [0]: Safely converts the string array index before executing a trim operations!
         const oldNameClean = (cloudRecord.name || "").toLowerCase().split('||')[0].trim();
-        const newNameClean = name.toLowerCase().replace(/clon/g, '').trim();
+        const newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
         const currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
 
         console.log("📋 Comparing Names - Old:", oldNameClean, "New:", newNameClean, "Status:", currentStatus);
@@ -947,10 +965,9 @@ async function submitRecipe() {
 
     // Secondary Check: Ensure the chosen name isn't an accidental duplicate of an entirely different recipe row
     if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        const normalizedNewName = name.toLowerCase().replace(/clon/g, '').trim();
+        const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
         const separateDuplicateFound = _loadedRevoCatalog.find(function(r) {
             if (recipeId && String(r.id) === String(recipeId)) return false; // ignore current
-            // ✨ FIXED CORE ARRAY INDEX [0] HERE AS WELL:
             const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
             return existingNameClean === normalizedNewName;
         });
@@ -1004,7 +1021,6 @@ async function submitRecipe() {
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar los encabezados de la receta.");
         }
-
 
         // --- GATE B: BUNDLE AND TRANSLATE INGREDIENT MAPS ---
         const ingCards = document.querySelectorAll('.ing-card');
