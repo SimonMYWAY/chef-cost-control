@@ -886,7 +886,7 @@ async function overwriteChildIngredients(recipeId) {
     }
 }
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED DROPDOWN LINK]
+// 💾 AUTOMATED CLOUD ENGINE: Pure ID-Driven Persistence Layer (No Name Dependencies)
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     const name = nameInput ? nameInput.value.trim() : '';
@@ -902,31 +902,46 @@ async function submitRecipe() {
 
     const pickerEl = document.getElementById('revo-recipe-picker');
     
-    // 🛡️ ARCHITECTURAL ANCHOR: Lock the identification strictly onto the dropdown HTML value.
-    // This remains stable even if text box edits reset your JavaScript variables!
-    let recipeId = pickerEl ? pickerEl.value : null;
+    // 🛡️ THE TRUTH: Read exclusively from your primary database tracking keys
+    let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
-    console.log("🔍 Running Overwrite Anchor - ID sourced from Dropdown Element:", recipeId);
+    console.log("🔒 DATABASE MATRIX ENGAGED - Targeting ID:", recipeId);
 
     try {
-        // A. True Creation from Scratch (Only fires if the dropdown is empty/set to "New")
+        // 🚀 SCENARIO A: BRAND NEW ENTRY (Only triggers if recipeId is genuinely null)
         if (!recipeId) {
-            console.log("🚀 Sourcing ID empty. Creating a brand new recipe entry row via POST...");
+            console.log("➡️ Executing POST: Inserting brand-new recipe row...");
             const response = await fetch(API_URL + "recipes", {
                 method: "POST",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY, 
+                    "Content-Type": "application/json", 
+                    "Prefer": "return=representation" 
+                },
                 body: JSON.stringify({ name: name, category: category, servings: servings, is_approved: false, status: "draft" })
             });
+
             if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
-            // Map freshly generated server UUID securely
-            recipeId = (Array.isArray(data) && data.length > 0) ? data[0].id : data.id;
+            // ✨ THE ARRAY FIX: Extract the unique UUID safely out of index slot 0
+            if (Array.isArray(data) && data.length > 0) {
+                recipeId = data[0].id;
+            } else if (data && data.id) {
+                recipeId = data.id;
+            }
+
+            if (!recipeId) throw new Error("No se pudo recuperar el UUID generado por el servidor.");
+
+            // Hard lock the ID into your runtime memory workspace immediately
             _selectedRecipeId = recipeId;
             if (pickerEl) pickerEl.value = recipeId;
+            console.log("🎯 Fresh UUID captured and locked in memory:", recipeId);
         } 
-        // B. Standard Safe Overwrite Updates via PATCH (Guarantees no duplicates can form!)
+        
+        // 📝 SCENARIO B: CLEAN OVERWRITE (Triggers if an ID is active, completely ignoring any text or name changes!)
         else {
             if (typeof _loadedRevoCatalog !== 'undefined') {
                 const cloudRecordCheck = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
@@ -936,19 +951,23 @@ async function submitRecipe() {
                 }
             }
 
-            console.log("📝 Sourcing ID found. Issuing clean PATCH update overwrite query to row ID:", recipeId);
+            console.log("➡️ Executing PATCH: Overwriting database row ID:", recipeId);
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY,
+                    "Content-Type": "application/json" 
+                },
                 body: JSON.stringify({ name: name, category: category, servings: servings })
             });
-            if (!patchResponse.ok) throw new Error("Fallo al actualizar la cabecera maestro.");
+            if (!patchResponse.ok) throw new Error("Fallo al actualizar la cabecera maestro via PATCH.");
         }
 
-        // Atomic update for child ingredients mapping
+        // Run your atomic child ingredients upload using the verified ID
         await overwriteChildIngredients(recipeId);
 
-        // Sync catalog tracking lists in runtime memory cache
+        // Sync local catalog memory maps
         if (typeof _loadedRevoCatalog !== 'undefined') {
             let activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
             if (!activeItem) {
@@ -963,11 +982,11 @@ async function submitRecipe() {
         localStorage.removeItem(`recipe_draft_${recipeId}`);
         if (nameInput) nameInput.className = 'status-saved';
 
-        alert(currentLang === 'en' ? 'Changes saved successfully to the cloud borrador!' : '¡Cambios guardados con éxito en la nube!');
+        alert(currentLang === 'en' ? 'Changes saved successfully!' : '¡Cambios guardados con éxito!');
         if (typeof initRevoDownload === "function") await initRevoDownload();
 
     } catch (err) {
-        console.error("Mutation fault:", err);
+        console.error("Database sync failure:", err);
         alert("❌ Error: " + err.message);
     }
 }
