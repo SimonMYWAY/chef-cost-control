@@ -2631,23 +2631,37 @@ function approveRecipe(id) {
             });
         });
     })
-    // ... [Scroll to the very bottom success layer inside your approveRecipe function] ...
-    .then(async function(res) { 
-        if (res !== undefined) {
-            alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
+    
+    // =======================================================================
+    // 🎉 FINAL SUCCESS LAYER: SECURED ANIMATION DISPATCH EXIT ENGINE
+    // =======================================================================
+    .then(async function() { 
+        // ✨ THE ATOMIC UI REPAIR: Find the specific container div element and vaporize it instantly!
+        var pendingRowNode = document.getElementById("recipe-row-" + id);
+        if (pendingRowNode) {
+            // Smooth slide-fade exit transition animation layer
+            pendingRowNode.style.opacity = "0";
+            pendingRowNode.style.transform = "translateX(30px)";
+            pendingRowNode.style.transition = "all 0.3s ease";
             
-            // 🌟 FORCE SYNCHRONOUS TABLE RE-PAINTS:
-            // This tells the UI to execute your fresh async fetch loop immediately
-            if (typeof renderMasterIngredientsTable === "function") {
-                await renderMasterIngredientsTable(); // ✨ Added await to guarantee instant redraw!
-            }
-            
-            if (typeof loadMasterCatalog === "function") {
-                loadMasterCatalog(); 
-            }
-            if (typeof loadQueue === "function") {
-                loadQueue(); 
-            }
+            // Wait for the animation to finish before removing from document layout entirely
+            await new Promise(function(resolve) { setTimeout(resolve, 300); });
+            pendingRowNode.remove();
+        }
+
+        alert("✅ ¡Proceso completado con éxito! El catálogo maestro y las fórmulas están sincronizadas en la nube."); 
+        
+        // 🌟 FORCE SYNCHRONOUS TABLE RE-PAINTS:
+        if (typeof renderMasterIngredientsTable === "function") {
+            await renderMasterIngredientsTable(); // ✨ Added await to guarantee instant redraw!
+        }
+        
+        if (typeof loadMasterCatalog === "function") {
+            loadMasterCatalog(); 
+        }
+        
+        if (typeof loadQueue === "function") {
+            loadQueue(); 
         }
     })
 
@@ -2658,6 +2672,7 @@ function approveRecipe(id) {
         if (typeof loadQueue === "function") loadQueue();
     });
 }
+
         function closeModal() { document.getElementById("recipe-modal").style.display = "none"; }
         function escapeHtml(str) { return str.replace(/'/g, "\\'"); }
 
