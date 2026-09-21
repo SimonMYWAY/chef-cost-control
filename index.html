@@ -880,10 +880,10 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - SANITIZED]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
-    const name = nameInput ? nameInput.value.trim() : '';
+    let name = nameInput ? nameInput.value.trim() : '';
     const categorySelect = document.getElementById('recipe-category');
     const category = categorySelect ? categorySelect.value : '';
     const servingsInput = document.getElementById('servings');
@@ -895,45 +895,71 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
-    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Prioritize your strict runtime window token variable
+    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Secure your strict running layout token key
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "") recipeId = null;
 
+    let cloudRecord = null;
+    if (recipeId && typeof _loadedRevoCatalog !== 'undefined') {
+        cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
+    }
+
+    // ⚡ PROPOSED DISPATCH STRATEGY RULES MATRIXENGAGE
+    if (cloudRecord) {
+        const oldNameClean = (cloudRecord.name || "").split('||')[0].trim().toLowerCase();
+        const newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+        const currentStatus = String(cloudRecord.status || "draft").toLowerCase().trim();
+
+        // Rule A: If name changed and the recipe is Locked (Approved or Waiting)
+        if (oldNameClean !== newNameClean && (currentStatus === "approved" || currentStatus === "waiting")) {
+            alert(currentLang === 'en' 
+                ? 'ℹ️ Approved/Waiting recipe. System will automatically fork a new unique recipe copy variant!' 
+                : 'ℹ️ Receta Aprobada/En Espera. ¡El sistema forzará automáticamente la creación de una copia/variante independiente!'
+            );
+            recipeId = null; // Forces a POST request to clone it into a separate row
+            name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
+            if (nameInput) nameInput.value = name;
+        } 
+        
+        // Rule B: If name changed and the recipe is a fluid DRAFT
+        else if (oldNameClean !== newNameClean && currentStatus === "draft") {
+            const userChoiceConfirm = confirm(currentLang === 'en'
+                ? `You changed the name of this draft.\n\n• Click OK to JUST RENAME the existing draft.\n• Click CANCEL to CREATE A NEW COPY/VARIANT.`
+                : `Has cambiado el nombre de este borrador.\n\n• Haz clic en ACEPTAR para SOLO CAMBIAR EL NOMBRE de la receta actual.\n• Haz clic en CANCELAR para CREAR UNA COPIA/VARIANTE NUEVA.`
+            );
+
+            if (!userChoiceConfirm) {
+                // User wants a separate clone variant! Fork parameters out
+                recipeId = null; // Disconnects UUID to force a brand new POST creation row
+                name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
+                if (nameInput) nameInput.value = name;
+            }
+            // If they clicked OK, recipeId stays intact, running a clean overwrite PATCH on the same line item!
+        }
+    }
+
+    // Secondary Check: Ensure the chosen name isn't an accidental duplicate of an entirely different recipe row
     if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        const normalizedNewName = name.toLowerCase().replace(/clon/g, '').trim();
-        const duplicateFound = _loadedRevoCatalog.find(function(r) {
-            // Skip checking the recipe we are currently editing
-            if (recipeId && String(r.id) === String(recipeId)) return false;
-            
-            // ✨ FIXED: split('||')[0].trim() isolates the base name string correctly
+        const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
+        const separateDuplicateFound = _loadedRevoCatalog.find(function(r) {
+            if (recipeId && String(r.id) === String(recipeId)) return false; // ignore current
             const existingNameClean = (r.name || "").toLowerCase().split('||')[0].trim();
             return existingNameClean === normalizedNewName;
         });
 
-        if (duplicateFound) {
+        if (separateDuplicateFound) {
             alert(currentLang === 'en'
-                ? `⚠️ Error: The recipe name "${name}" already exists! Please use a unique name.`
-                : `⚠️ Error: ¡El nombre de receta "${name}" ya existe en el sistema! Por favor use un nombre único.`
+                ? `⚠️ Name Conflict: "${name}" matches another independent recipe item. Please assign a completely unique designation string.`
+                : `⚠️ Conflicto de Nombre: "${name}" ya coincide con otra receta independiente en el catálogo. Por favor asigna una denominación única.`
             );
             return;
         }
     }
 
     try {
-        if (recipeId && typeof _loadedRevoCatalog !== 'undefined') {
-            const cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
-            if (cloudRecord && cloudRecord.status === 'approved') {
-                alert(currentLang === 'en' 
-                    ? '⚠️ This recipe is currently APPROVED and locked. Please request management to click "Liberar" in the backoffice to allow modifications!' 
-                    : '⚠️ Esta receta está APROBADA y bloqueada. ¡Por favor solicite a la administración hacer clic en "Liberar" en el backoffice para modificarla!'
-                );
-                return;
-            }
-        }
-
         // --- GATE A: UPSERT MASTER HEADER DOCUMENT ---
         if (!recipeId) {
-            // ✨ NEW RECIPE CREATION: Explicitly forces status to "draft" so it never leaks to the Backoffice queue early
+            // POST block creates a completely clean standalone UUID tracking line index
             const newRecipeResponse = await fetch(API_URL + "recipes", {
                 method: "POST",
                 headers: { 
@@ -942,29 +968,17 @@ async function submitRecipe() {
                     "Content-Type": "application/json", 
                     "Prefer": "return=representation" 
                 },
-                body: JSON.stringify({ 
-                    name: name, 
-                    category: category, 
-                    servings: servings, 
-                    is_approved: false, 
-                    status: "draft" // 🛡️ Safely locked away as a draft initially
-                })
+                body: JSON.stringify({ name: name, category: category, servings: servings, is_approved: false, status: "draft" })
             });
 
             if (!newRecipeResponse.ok) throw new Error("Could not create master row on Supabase cloud.");
             const newRecipeData = await newRecipeResponse.json();
             
-            // Map the freshly generated server UUID securely from representation response
-            if (newRecipeData && newRecipeData[0]) {
-                recipeId = newRecipeData[0].id;
-            } else {
-                recipeId = newRecipeData.id;
-            }
-            
-            _selectedRecipeId = recipeId; // Bind globally right away
+            recipeId = newRecipeData[0].id;
+            _selectedRecipeId = recipeId; // Anchor into global workspace reference token memory slots
             if (pickerEl) pickerEl.value = recipeId;
         } else {
-            // ✨ REPAIRED TEXT OVERWRITE PATHWAY: Sends a PATCH request to update the record without creating a duplicate
+            // PATCH block updates the existing recipe record without creating duplicate entries
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
                 headers: { 
