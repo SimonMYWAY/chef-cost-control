@@ -886,7 +886,7 @@ async function overwriteChildIngredients(recipeId) {
     }
 }
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED DROPDOWN LINK]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     const name = nameInput ? nameInput.value.trim() : '';
@@ -902,21 +902,17 @@ async function submitRecipe() {
 
     const pickerEl = document.getElementById('revo-recipe-picker');
     
-    // 🛡️ ARCHITECTURAL ANCHOR FIX: Lock down the selection strictly using your global runtime variable token
-    let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
+    // 🛡️ ARCHITECTURAL ANCHOR: Lock the identification strictly onto the dropdown HTML value.
+    // This remains stable even if text box edits reset your JavaScript variables!
+    let recipeId = pickerEl ? pickerEl.value : null;
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
-    let cloudRecord = null;
-    if (recipeId && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
-        cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
-    }
-
-    console.log("🔍 Running Safe Overwrite Anchor - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
+    console.log("🔍 Running Overwrite Anchor - ID sourced from Dropdown Element:", recipeId);
 
     try {
-        // A. True Creation from Scratch (Only fires if there is genuinely no old recipe active on screen)
+        // A. True Creation from Scratch (Only fires if the dropdown is empty/set to "New")
         if (!recipeId) {
-            console.log("🚀 Creating a completely brand new recipe entry row via POST...");
+            console.log("🚀 Sourcing ID empty. Creating a brand new recipe entry row via POST...");
             const response = await fetch(API_URL + "recipes", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
@@ -940,7 +936,7 @@ async function submitRecipe() {
                 }
             }
 
-            console.log("📝 Issuing clean PATCH update overwrite query to database row ID:", recipeId);
+            console.log("📝 Sourcing ID found. Issuing clean PATCH update overwrite query to row ID:", recipeId);
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -964,7 +960,6 @@ async function submitRecipe() {
             activeItem.servings = servings;
         }
 
-        // 🧹 LOCK DOWN: Explicitly delete local storage draft logs to prevent state pollution
         localStorage.removeItem(`recipe_draft_${recipeId}`);
         if (nameInput) nameInput.className = 'status-saved';
 
