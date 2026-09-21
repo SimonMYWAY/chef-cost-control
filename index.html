@@ -290,17 +290,21 @@
         }
 
         async function handleRevoSelection() {
-            const id = document.getElementById('revo-recipe-picker').value;
-            const nameInput = document.getElementById('recipe-name');
-            const categorySelect = document.getElementById('recipe-category');
-            const servingsInput = document.getElementById('servings');
-            _selectedRecipeId = id;
-            
-            if (!id) {
-                if (nameInput) nameInput.value = '';
-                if (nameInput) nameInput.className = 'status-creating';
-                return;
-            }
+    const id = document.getElementById('revo-recipe-picker').value;
+    const nameInput = document.getElementById('recipe-name');
+    const categorySelect = document.getElementById('recipe-category');
+    const servingsInput = document.getElementById('servings');
+    
+    // 🛡️ LOCK THE SNAPSHOT: Save a permanent copy to window memory that cannot be erased
+    _selectedRecipeId = id;
+    window.ACTIVE_WORKSPACE_UUID = id || null;
+    
+    if (!id) {
+        if (nameInput) nameInput.value = '';
+        if (nameInput) nameInput.className = 'status-creating';
+        return;
+    }
+    // ... (rest of your handleRevoSelection function stays the same)
 
             const match = _loadedRevoCatalog.find(r => String(r.id) === String(id));
             if (match) {
@@ -886,7 +890,7 @@ async function overwriteChildIngredients(recipeId) {
     }
 }
 
-// 💾 AUTOMATED CLOUD ENGINE: Pure ID-Driven Persistence Layer (No Name Dependencies)
+// 💾 AUTOMATED CLOUD ENGINE: Pure ID-Driven Persistence Layer (Window Secured)
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     const name = nameInput ? nameInput.value.trim() : '';
@@ -902,31 +906,25 @@ async function submitRecipe() {
 
     const pickerEl = document.getElementById('revo-recipe-picker');
     
-    // 🛡️ THE TRUTH: Read exclusively from your primary database tracking keys
-    let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
+    // 🛡️ READ STRICLY FROM WINDOW SNAPSHOT: Protects against background dropdown resets
+    let recipeId = window.ACTIVE_WORKSPACE_UUID || _selectedRecipeId;
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
     console.log("🔒 DATABASE MATRIX ENGAGED - Targeting ID:", recipeId);
 
     try {
-        // 🚀 SCENARIO A: BRAND NEW ENTRY (Only triggers if recipeId is genuinely null)
+        // 🚀 SCENARIO A: BRAND NEW ENTRY
         if (!recipeId) {
             console.log("➡️ Executing POST: Inserting brand-new recipe row...");
             const response = await fetch(API_URL + "recipes", {
                 method: "POST",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY, 
-                    "Content-Type": "application/json", 
-                    "Prefer": "return=representation" 
-                },
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
                 body: JSON.stringify({ name: name, category: category, servings: servings, is_approved: false, status: "draft" })
             });
 
-            if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
+            if (!newRecipeResponse.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
-            // ✨ THE ARRAY FIX: Extract the unique UUID safely out of index slot 0
             if (Array.isArray(data) && data.length > 0) {
                 recipeId = data[0].id;
             } else if (data && data.id) {
@@ -935,13 +933,14 @@ async function submitRecipe() {
 
             if (!recipeId) throw new Error("No se pudo recuperar el UUID generado por el servidor.");
 
-            // Hard lock the ID into your runtime memory workspace immediately
+            // Lock the ID into window memory
+            window.ACTIVE_WORKSPACE_UUID = recipeId;
             _selectedRecipeId = recipeId;
             if (pickerEl) pickerEl.value = recipeId;
             console.log("🎯 Fresh UUID captured and locked in memory:", recipeId);
         } 
         
-        // 📝 SCENARIO B: CLEAN OVERWRITE (Triggers if an ID is active, completely ignoring any text or name changes!)
+        // 📝 SCENARIO B: CLEAN OVERWRITE (PATCH)
         else {
             if (typeof _loadedRevoCatalog !== 'undefined') {
                 const cloudRecordCheck = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
@@ -954,17 +953,13 @@ async function submitRecipe() {
             console.log("➡️ Executing PATCH: Overwriting database row ID:", recipeId);
             const patchResponse = await fetch(`${API_URL}recipes?id=eq.${recipeId}`, {
                 method: "PATCH",
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY,
-                    "Content-Type": "application/json" 
-                },
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                 body: JSON.stringify({ name: name, category: category, servings: servings })
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar la cabecera maestro via PATCH.");
         }
 
-        // Run your atomic child ingredients upload using the verified ID
+        // Run atomic child ingredients upload using the verified ID
         await overwriteChildIngredients(recipeId);
 
         // Sync local catalog memory maps
@@ -983,7 +978,15 @@ async function submitRecipe() {
         if (nameInput) nameInput.className = 'status-saved';
 
         alert(currentLang === 'en' ? 'Changes saved successfully!' : '¡Cambios guardados con éxito!');
-        if (typeof initRevoDownload === "function") await initRevoDownload();
+        
+        if (typeof initRevoDownload === "function") {
+            await initRevoDownload();
+            // Restore window memory positions after refresh
+            window.ACTIVE_WORKSPACE_UUID = recipeId;
+            _selectedRecipeId = recipeId;
+            var pickerElCheck = document.getElementById('revo-recipe-picker');
+            if (pickerElCheck) pickerElCheck.value = recipeId;
+        }
 
     } catch (err) {
         console.error("Database sync failure:", err);
