@@ -880,7 +880,7 @@ async function submitForApproval() {
 }
 
 
-// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED STRING LOGIC]
+// 💾 AUTOMATED CLOUD ENGINE: Saves live inputs directly to Supabase [Part 1 of 2 - REPAIRED LOGIC FLOW]
 async function submitRecipe() {
     const nameInput = document.getElementById('recipe-name');
     let name = nameInput ? nameInput.value.trim() : '';
@@ -895,7 +895,7 @@ async function submitRecipe() {
     }
 
     const pickerEl = document.getElementById('revo-recipe-picker');
-    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Secure execution by reading your true validated global tracking variable
+    // 🛡️ RE-ANCHOR UUID PRIVILEGES: Secure running layer tokens
     let recipeId = _selectedRecipeId || (pickerEl ? pickerEl.value : null);
     if (recipeId === "null" || recipeId === "" || recipeId === "select") recipeId = null;
 
@@ -904,11 +904,26 @@ async function submitRecipe() {
         cloudRecord = _loadedRevoCatalog.find(function(r) { return String(r.id) === String(recipeId); });
     }
 
+    // ✨ Step B: FALLBACK LOOKUP - If ID was lost, trace the recipe by matching its visible picker text description name!
+    if (!cloudRecord && pickerEl && pickerEl.selectedIndex > 0 && typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
+        const visiblePickerText = pickerEl.options[pickerEl.selectedIndex].text.toLowerCase().replace(/[\u274c\ud83d\udd34\ud83d\udd35\u2b1b]/g, '').trim();
+        
+        cloudRecord = _loadedRevoCatalog.find(function(r) {
+            const testDbName = r.name || "";
+            const existingNameClean = String(testDbName.includes("||") ? testDbName.split("||") : testDbName).toLowerCase().trim();
+            return existingNameClean === visiblePickerText;
+        });
+        
+        if (cloudRecord) {
+            recipeId = cloudRecord.id;
+            _selectedRecipeId = recipeId; 
+        }
+    }
+
     console.log("🔍 Running Safe Check - recipeId:", recipeId, "cloudRecord found:", !!cloudRecord);
 
     // ⚡ INTERACTIVE CLONE vs OVERWRITE CONFIRMATION MATRIX
     if (cloudRecord) {
-        // ✨ FIXED: Extract the raw name string safely without chaining trim directly onto an array block!
         var rawDbName = cloudRecord.name || "";
         var oldNameClean = String(rawDbName.includes("||") ? rawDbName.split("||") : rawDbName).toLowerCase().trim();
         var newNameClean = name.toLowerCase().replace(/\(clon\)/g, '').trim();
@@ -922,7 +937,7 @@ async function submitRecipe() {
                 ? 'ℹ️ Approved/Waiting recipe. System will automatically fork a new unique recipe copy variant!' 
                 : 'ℹ️ Receta Aprobada/En Espera. ¡El sistema forzará automáticamente la creación de una copia/variante independiente!'
             );
-            recipeId = null; // Forces a POST request to clone it into a separate row
+            recipeId = null; 
             _selectedRecipeId = null;
             name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
             if (nameInput) nameInput.value = name;
@@ -936,13 +951,11 @@ async function submitRecipe() {
             );
 
             if (!userChoiceConfirm) {
-                // User wants a separate clone variant! Fork parameters out
-                recipeId = null; // Disconnects UUID to force a brand new POST creation row
+                recipeId = null; 
                 _selectedRecipeId = null;
                 name = (currentLang === 'en' ? 'Copy of ' : 'Copia de ') + name;
                 if (nameInput) nameInput.value = name;
             }
-            // If they clicked OK, recipeId stays intact, running a clean overwrite PATCH on the same line item!
         }
     }
 
@@ -950,7 +963,7 @@ async function submitRecipe() {
     if (typeof _loadedRevoCatalog !== 'undefined' && Array.isArray(_loadedRevoCatalog)) {
         const normalizedNewName = name.toLowerCase().replace(/\(clon\)/g, '').trim();
         const separateDuplicateFound = _loadedRevoCatalog.find(function(r) {
-            if (recipeId && String(r.id) === String(recipeId)) return false; // ignore current
+            if (recipeId && String(r.id) === String(recipeId)) return false; 
             
             var testDbName = r.name || "";
             var existingNameClean = String(testDbName.includes("||") ? testDbName.split("||") : testDbName).toLowerCase().trim();
@@ -983,11 +996,14 @@ async function submitRecipe() {
             if (!newRecipeResponse.ok) throw new Error("Could not create master row on Supabase cloud.");
             const newRecipeData = await newRecipeResponse.json();
             
-            if (Array.isArray(newRecipeData) && newRecipeData) {
-                recipeId = newRecipeData.id;
+            // ✨ THE ATOMIC PAYLOAD FIX: Correctly extract index from the database representation array
+            if (Array.isArray(newRecipeData) && newRecipeData.length > 0) {
+                recipeId = newRecipeData[0].id;
             } else if (newRecipeData && newRecipeData.id) {
                 recipeId = newRecipeData.id;
             }
+            
+            if (!recipeId) throw new Error("Failed to capture a valid UUID sequence from server response.");
             
             _selectedRecipeId = recipeId; 
             if (pickerEl) pickerEl.value = recipeId;
@@ -1003,7 +1019,6 @@ async function submitRecipe() {
             });
             if (!patchResponse.ok) throw new Error("Fallo al actualizar los encabezados de la receta.");
         }
-
         // --- GATE B: BUNDLE AND TRANSLATE INGREDIENT MAPS ---
         const ingCards = document.querySelectorAll('.ing-card');
         const localIngredientsList = [];
@@ -1085,7 +1100,6 @@ async function submitRecipe() {
         // 🔄 Sync local app catalog visibility state variables
         let activeItem = _loadedRevoCatalog.find(r => String(r.id) === String(recipeId));
         
-        // If it's a brand new recipe creation, instantiate its local structural record
         if (!activeItem) {
             activeItem = { id: recipeId, status: "draft" };
             _loadedRevoCatalog.push(activeItem);
@@ -1096,14 +1110,12 @@ async function submitRecipe() {
             activeItem.category = category;
             activeItem.servings = servings;
             
-            // 🛡️ STATUS RESTRICTION MATRIX: Keeps it strictly as a draft, preventing early leaks to the Backoffice
             if (!activeItem.status || activeItem.status === "new" || activeItem.status === "rejected") {
                 activeItem.status = "draft";
             }
             activeItem.recipe_uom = (category === "tier2") ? (document.getElementById("recipe-uom") || document.getElementById("tier2-uom") || document.querySelector("input[id*='uom']"))?.value?.trim() || "gr" : "";
         }
 
-        // Clean out any local storage legacy blocks just in case
         localStorage.removeItem(`recipe_draft_${recipeId}`);
 
         if (nameInput) {
@@ -1112,7 +1124,6 @@ async function submitRecipe() {
         
         alert(currentLang === 'en' ? 'Changes committed straight to the cloud!' : '¡Cambios guardados directamente en la nube con éxito!');
      
-        // 🛡️ RE-ANCHOR DROPDOWN SELECTION: Explicitly lock the screen value right before the background list updates
         if (typeof initRevoDownload === "function") {
             await initRevoDownload(); 
             const pickerElCheck = document.getElementById('revo-recipe-picker');
