@@ -39,10 +39,33 @@
 </head>
 <body>
 
+<!-- 🔐 SECURITY GATEWAY: Bypasses extension overlays and handles transient tab restrictions -->
+<div id="security-gateway-lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 400px; padding: 30px; border-radius: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">🛡️</div>
+        <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Terminal de Recepción</h2>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar el Control de Muelles.</p>
+        
+        <div style="text-align: left; margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Usuario / Email</label>
+            <input type="text" id="gateway-input-user" required placeholder="ej: guardia.seguridad" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+        </div>
+        <div style="text-align: left; margin-bottom: 22px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 5px; text-transform: uppercase;">Contraseña</label>
+            <input type="password" id="gateway-input-pass" required placeholder="••••••••" style="width: 100%; padding: 11px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; background: #f8fafc;" />
+        </div>
+        
+        <button type="button" onclick="executeNewLocalGatewayAuthenticationChallenge(null)" style="width: 100%; background: #007afb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer;">
+            🔓 Entrar a Recepción
+        </button>
+        <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
+    </div>
+</div>
+
 <div class="container">
     <div class="header">
         <h1>📦 Control de Recepción y Muelles</h1>
-        <div id="user-badge" style="font-size: 0.9rem; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 6px;">👤 Operador: Seguridad / Control</div>
+        <div id="user-badge" style="font-size: 0.9rem; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 6px;">Cargando Terminal...</div>
     </div>
 
     <!-- Filtro de Búsqueda -->
@@ -57,14 +80,73 @@
 <script>
     // 📡 CONFIGURATION ENVIRONMENT MATRIX
     const API_URL = "https://supabase.co";
-    const API_KEY = "YOUR_SUPABASE_API_KEY_HERE"; // 🛡️ Replace with your standard system global key
+    const API_KEY = "YOUR_SUPABASE_API_KEY_HERE"; // 🛡️ Replace with your system's global key
     
     let MASTER_ORDERS_CACHE = [];
 
-    document.addEventListener("DOMContentLoaded", async function() {
-        await loadReceivingDashboard();
+    document.addEventListener("DOMContentLoaded", function() {
+        // Transient security check: look only inside single-tab sessionStorage memory pools
+        var activeSession = sessionStorage.getItem("receiving_app_authorized_session_profile");
+        var lockScreen = document.getElementById("security-gateway-lock-screen");
+        
+        if (activeSession) {
+            try {
+                var profile = JSON.parse(activeSession);
+                document.getElementById("user-badge").innerText = `👤 Operador: ${profile.username || 'Control'}`;
+                if (lockScreen) lockScreen.style.display = "none";
+                loadReceivingDashboard();
+            } catch(e) {
+                if (lockScreen) lockScreen.style.display = "flex";
+            }
+        } else {
+            if (lockScreen) lockScreen.style.display = "flex";
+        }
     });
 
+    // 🔒 AUTH MATRIX VALVE: Authenticates guards/admin profiles and opens dashboard
+    async function executeNewLocalGatewayAuthenticationChallenge() {
+        const feedbackEl = document.getElementById("gateway-login-error-feedback");
+        if (!feedbackEl) return;
+        feedbackEl.style.color = "#007afb";
+        feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+        
+        const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+        const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+        
+        try {
+            const res = await fetch(`${API_URL}profiles`, { headers: { "apikey": API_KEY } }).then(r => r.json());
+            let matchedProfile = null;
+            
+            for (let i = 0; i < res.length; i++) {
+                let row = res[i];
+                if (String(row.username || "").toLowerCase().trim() === userInputVal || String(row.email || "").toLowerCase().trim() === userInputVal) {
+                    matchedProfile = row;
+                    break;
+                }
+            }
+            if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
+                feedbackEl.style.color = "#ef4444";
+                feedbackEl.innerText = "❌ Credenciales incorrectas.";
+                return;
+            }
+            
+            // Allow guard/security access (fallback allows owners too)
+            const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+            if (userRole === "guard" || userRole === "owner" || userRole === "admin") {
+                feedbackEl.innerText = "";
+                sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
+                document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
+                document.getElementById("security-gateway-lock-screen").style.display = "none";
+                loadReceivingDashboard();
+            } else {
+                feedbackEl.style.color = "#ef4444";
+                feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
+            }
+        } catch (err) {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "❌ Error de conexión remota.";
+        }
+    }
     // 🔄 CORE REFRESH LOOP: Downloads pending and received orders concurrently
     async function loadReceivingDashboard() {
         const pendingGrid = document.getElementById("pending-grid");
@@ -74,9 +156,9 @@
         pendingGrid.innerHTML = "<div>Cargando cargamentos en camino...</div>";
 
         try {
-            // Fetch parent purchase orders with active dispatched or received statuses
             const ordersUrl = `${API_URL}purchase_orders?status=in.(dispatched,received)&order=po_number.desc`;
-            const itemsUrl = `${API_URL}purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia`;
+            // Capture ingredient_id to calculate standard inventory differences later
+            const itemsUrl = `${API_URL}purchase_order_items?select=id,po_id,ingredient_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia`;
 
             const [ordersRes, itemsRes] = await Promise.all([
                 fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(r => r.json()),
@@ -85,7 +167,6 @@
 
             if (ordersRes.message || itemsRes.message) throw new Error("Database validation mapping error.");
 
-            // Nest child lines inside parent matrices safely using mapping loops
             MASTER_ORDERS_CACHE = ordersRes.map(order => {
                 order.items = itemsRes.filter(item => String(item.po_id) === String(order.id));
                 return order;
@@ -98,6 +179,7 @@
             pendingGrid.innerHTML = `<div style="color:red;">❌ Error al sincronizar muelles: ${err.message}</div>`;
         }
     }
+
     // 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History
     function renderDashboardGrids() {
         const pendingGrid = document.getElementById("pending-grid");
@@ -105,16 +187,13 @@
         
         pendingGrid.innerHTML = "";
         historyGrid.innerHTML = "";
-
-        let pendingCount = 0;
-        let historyCount = 0;
+        let pendingCount = 0; let historyCount = 0;
 
         MASTER_ORDERS_CACHE.forEach(order => {
             const isReceived = order.status === "received";
-            
             let itemsHtml = "";
+            
             order.items.forEach(item => {
-                // Fallback default delivers quantity directly matching what was ordered initially
                 const defaultDeliveredQty = item.quantity_delivered !== null ? item.quantity_delivered : item.quantity_ordered;
                 const isDisabledAttr = isReceived ? "disabled" : "";
 
@@ -123,7 +202,7 @@
                         <div style="font-weight: 500; text-align: left;">${item.ingredient_name}</div>
                         <div style="color: var(--text-muted); text-transform: capitalize;">${item.supplier_uom || 'Uds'}</div>
                         <div>
-                            <input type="number" class="qty-input" data-item-id="${item.id}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr}>
+                            <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-id="${item.ingredient_id}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr}>
                             <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
                         </div>
                     </div>
@@ -139,53 +218,37 @@
                         </div>
                         <span class="po-badge">${order.po_number}</span>
                     </div>
-                    
                     <div class="invoice-box">
                         <label>No. de Factura / Remisión</label>
                         <input type="text" class="invoice-input" id="invoice-${order.id}" value="${order.invoice_number || ''}" placeholder="Ej: FAC-10492" ${isReceived ? 'disabled' : ''}>
                     </div>
-
                     <div style="margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1fr 1fr; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
                         <span style="text-align: left;">Producto</span>
                         <span>Formato</span>
                         <span>Cant Real Recibida</span>
                     </div>
-                    
                     <div class="items-list-container">${itemsHtml}</div>
-
                     ${isReceived ? '' : `<button type="button" class="btn-receive" onclick="processIncomingDelivery('\${order.id}')">Efectuar Recepción ✔️</button>`}
                 </div>
             `;
 
-            if (isReceived) {
-                historyGrid.insertAdjacentHTML("beforeend", cardHtml);
-                historyCount++;
-            } else {
-                pendingGrid.insertAdjacentHTML("beforeend", cardHtml);
-                pendingCount++;
-            }
+            if (isReceived) { historyGrid.insertAdjacentHTML("beforeend", cardHtml); historyCount++; } 
+            else { pendingGrid.insertAdjacentHTML("beforeend", cardHtml); pendingCount++; }
         });
 
         if (pendingCount === 0) pendingGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:30px; color:var(--text-muted); font-style:italic;'>🟢 No hay recepciones pendientes en muelle. Todo procesado.</div>";
         if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
     }
 
-    // 🔍 FILTER BAR SEARCH: Real-time client side scanning metrics
     function filterCards() {
         const query = document.getElementById("search-field").value.toLowerCase().trim();
-        const cards = document.querySelectorAll(".po-card");
-
-        cards.forEach(card => {
+        document.querySelectorAll(".po-card").forEach(card => {
             const supplier = card.getAttribute("data-supplier") || "";
             const po = card.getAttribute("data-po") || "";
-            if (supplier.includes(query) || po.includes(query)) {
-                card.style.display = "";
-            } else {
-                card.style.display = "none";
-            }
+            card.style.display = (supplier.includes(query) || po.includes(query)) ? "" : "none";
         });
     }
-    // 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves data logs and adjusts inventory math
+    // 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels
     async function processIncomingDelivery(orderId) {
         const cardNode = document.getElementById(`po-card-${orderId}`);
         const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -202,15 +265,17 @@
         try {
             const itemInputs = cardNode.querySelectorAll(".qty-input");
             const updateItemPromises = [];
+            const inventoryAdjustmentPromises = [];
 
-            // 1. Loop through item inputs to build database updates and adjust stock values
+            // 1. Loop through item inputs to build data structures and log standard stock fluctuations
             for (let input of itemInputs) {
                 const itemId = input.getAttribute("data-item-id");
+                const ingUuid = input.getAttribute("data-ing-id");
                 const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
                 const deliveredQty = parseFloat(input.value || 0);
                 const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
 
-                // Update individual item row logs inside Supabase
+                // Update delivered counts inside your logs table
                 const itemPatch = fetch(`${API_URL}purchase_order_items?id=eq.${itemId}`, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -218,21 +283,34 @@
                 });
                 updateItemPromises.push(itemPatch);
 
-                // 🌟 INVENTORY MATHEMATICS: If there's a variation, calculate discrepancies in Recipe Units
-                if (deliveredQty !== orderedQty) {
-                    const packagesDifference = deliveredQty - orderedQty; 
-                    const recipeUnitsDifference = packagesDifference * equivalenceMultiplier; // Transforms to baseline Kg/Lts/Uds
+                // 🌟 THE INVENTORY STOCK SHIELD LINK: If discrepancies exist, update ingredients.std_inventory right away!
+                if (deliveredQty !== orderedQty && ingUuid && ingUuid !== "null") {
+                    const packagesDifference = deliveredQty - orderedQty;
+                    const recipeUnitsDifference = packagesDifference * equivalenceMultiplier; // Translates formats into baseline quantities
 
-                    console.log(`⚠️ Variation detected. Packages mismatch: ${packagesDifference}. Adjusting recipe stock by: ${recipeUnitsDifference}`);
-                    // Note: In the next iteration we can write the explicit fetch request 
-                    // to add/subtract this recipeUnitsDifference directly to your stock table column!
+                    console.log(`⚖️ Recalculating stock rules. Ingredient UUID: ${ingUuid}. Difference: ${recipeUnitsDifference}`);
+                    
+                    // A. Fetch current standard inventory level
+                    const stockRes = await fetch(`${API_URL}ingredients?id=eq.${ingUuid}`, { headers: { "apikey": API_KEY } }).then(r => r.json());
+                    if (Array.isArray(stockRes) && stockRes.length > 0) {
+                        const currentStdInventory = parseFloat(stockRes[0].std_inventory || 0);
+                        // B. Add the incoming difference to make your next purchase generation more accurate
+                        const updatedNewStockTarget = currentStdInventory + recipeUnitsDifference;
+
+                        const inventoryPatch = fetch(`${API_URL}ingredients?id=eq.${ingUuid}`, {
+                            method: "PATCH",
+                            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                            body: JSON.stringify({ std_inventory: updatedNewStockTarget })
+                        });
+                        inventoryAdjustmentPromises.push(inventoryPatch);
+                    }
                 }
             }
 
-            // Await child row mutations execution paths
-            await Promise.all(updateItemPromises);
+            // Execute line item updates and inventory stock adjustments concurrently
+            await Promise.all([...updateItemPromises, ...inventoryAdjustmentPromises]);
 
-            // 2. Overwrite the Master Parent Purchase Order Document Header state parameters
+            // 2. Complete order lifecycle updates inside parent document header
             const orderPatchResponse = await fetch(`${API_URL}purchase_orders?id=eq.${orderId}`, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -245,17 +323,16 @@
 
             if (!orderPatchResponse.ok) throw new Error("Error al modificar el estado general de la Orden.");
 
-            // 🌟 SMOOTH INTERFACE TRANSITION ANIMATION: Eject card from view and repaint layout grids
+            // Smooth exit slide transition animation
             if (cardNode) {
                 cardNode.style.opacity = "0";
                 cardNode.style.transform = "scale(0.8) translateY(-40px)";
                 cardNode.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-                
                 await new Promise(r => setTimeout(r, 400));
             }
 
-            alert("✅ ¡Recepción procesada exitosamente! Inventarios y bitácoras actualizados.");
-            await loadReceivingDashboard(); // Repaints screens components
+            alert("✅ ¡Recepción procesada exitosamente! Insumos y existencias de std_inventory calibrados con precisión.");
+            await loadReceivingDashboard();
 
         } catch (err) {
             console.error("Receiving pipeline collapse:", err);
@@ -265,3 +342,4 @@
 </script>
 </body>
 </html>
+
