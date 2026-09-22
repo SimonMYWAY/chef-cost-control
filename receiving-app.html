@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal de Recepción de Mercancía</title>
+    <style>
+        :root {
+            --bg-slate: #0f172a;
+            --surface: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --primary: #007afb;
+            --accent-green: #22c55e;
+            --accent-orange: #f59e0b;
+            --border: #e2e8f0;
+        }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: var(--text-main); margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-slate); color: white; padding: 15px 20px; border-radius: 12px; }
+        .header h1 { margin: 0; font-size: 1.4rem; }
+        .search-bar { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; margin-bottom: 20px; box-sizing: border-box; }
+        .grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; }
+        .po-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: all 0.3s ease; }
+        .po-card.received { opacity: 0.5; filter: grayscale(40%); background: #f1f5f9; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; }
+        .supplier-name { font-weight: 700; font-size: 1.1rem; color: var(--bg-slate); }
+        .po-badge { font-size: 0.8rem; background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+        .invoice-box { margin-bottom: 15px; text-align: left; }
+        .invoice-box label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; text-transform: uppercase; color: var(--text-muted); }
+        .invoice-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; }
+        .item-line { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border); font-size: 0.9rem; }
+        .item-line:last-child { border-bottom: none; }
+        .qty-input { width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; text-align: center; font-weight: 600; }
+        .btn-receive { width: 100%; background: var(--accent-green); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 15px; transition: opacity 0.2s; }
+        .btn-receive:hover { opacity: 0.9; }
+        .section-title { font-size: 1.2rem; font-weight: 700; margin: 30px 0 15px 0; color: var(--bg-slate); border-bottom: 2px solid var(--border); padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>📦 Control de Recepción y Muelles</h1>
+        <div id="user-badge" style="font-size: 0.9rem; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 6px;">👤 Operador: Seguridad / Control</div>
+    </div>
+
+    <!-- Filtro de Búsqueda -->
+    <input type="text" id="search-field" oninput="filterCards()" placeholder="🔍 Buscar por proveedor o número de Orden de Compra (PO)..." class="search-bar">
+
+    <div class="section-title">📥 Órdenes Pendientes en Camino</div>
+    <div id="pending-grid" class="grid-layout"></div>
+
+    <div class="section-title">⏳ Historial de Entregas (Hoy)</div>
+    <div id="history-grid" class="grid-layout"></div>
+</div>
+<script>
+    // 📡 CONFIGURATION ENVIRONMENT MATRIX
+    const API_URL = "https://supabase.co";
+    const API_KEY = "YOUR_SUPABASE_API_KEY_HERE"; // 🛡️ Replace with your standard system global key
+    
+    let MASTER_ORDERS_CACHE = [];
+
+    document.addEventListener("DOMContentLoaded", async function() {
+        await loadReceivingDashboard();
+    });
+
+    // 🔄 CORE REFRESH LOOP: Downloads pending and received orders concurrently
+    async function loadReceivingDashboard() {
+        const pendingGrid = document.getElementById("pending-grid");
+        const historyGrid = document.getElementById("history-grid");
+        if (!pendingGrid || !historyGrid) return;
+
+        pendingGrid.innerHTML = "<div>Cargando cargamentos en camino...</div>";
+
+        try {
+            // Fetch parent purchase orders with active dispatched or received statuses
+            const ordersUrl = `${API_URL}purchase_orders?status=in.(dispatched,received)&order=po_number.desc`;
+            const itemsUrl = `${API_URL}purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia`;
+
+            const [ordersRes, itemsRes] = await Promise.all([
+                fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(itemsUrl, { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ]);
+
+            if (ordersRes.message || itemsRes.message) throw new Error("Database validation mapping error.");
+
+            // Nest child lines inside parent matrices safely using mapping loops
+            MASTER_ORDERS_CACHE = ordersRes.map(order => {
+                order.items = itemsRes.filter(item => String(item.po_id) === String(order.id));
+                return order;
+            });
+
+            renderDashboardGrids();
+
+        } catch (err) {
+            console.error(err);
+            pendingGrid.innerHTML = `<div style="color:red;">❌ Error al sincronizar muelles: ${err.message}</div>`;
+        }
+    }
+    // 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History
+    function renderDashboardGrids() {
+        const pendingGrid = document.getElementById("pending-grid");
+        const historyGrid = document.getElementById("history-grid");
+        
+        pendingGrid.innerHTML = "";
+        historyGrid.innerHTML = "";
+
+        let pendingCount = 0;
+        let historyCount = 0;
+
+        MASTER_ORDERS_CACHE.forEach(order => {
+            const isReceived = order.status === "received";
+            
+            let itemsHtml = "";
+            order.items.forEach(item => {
+                // Fallback default delivers quantity directly matching what was ordered initially
+                const defaultDeliveredQty = item.quantity_delivered !== null ? item.quantity_delivered : item.quantity_ordered;
+                const isDisabledAttr = isReceived ? "disabled" : "";
+
+                itemsHtml += `
+                    <div class="item-line">
+                        <div style="font-weight: 500; text-align: left;">${item.ingredient_name}</div>
+                        <div style="color: var(--text-muted); text-transform: capitalize;">${item.supplier_uom || 'Uds'}</div>
+                        <div>
+                            <input type="number" class="qty-input" data-item-id="${item.id}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr}>
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const cardHtml = `
+                <div class="po-card ${isReceived ? 'received' : ''}" id="po-card-${order.id}" data-supplier="${order.supplier_name.toLowerCase()}" data-po="${order.po_number.toLowerCase()}">
+                    <div class="card-header">
+                        <div>
+                            <div class="supplier-name">${order.supplier_name}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; text-align: left;">Despachado: ${new Date(order.created_at).toLocaleDateString()}</div>
+                        </div>
+                        <span class="po-badge">${order.po_number}</span>
+                    </div>
+                    
+                    <div class="invoice-box">
+                        <label>No. de Factura / Remisión</label>
+                        <input type="text" class="invoice-input" id="invoice-${order.id}" value="${order.invoice_number || ''}" placeholder="Ej: FAC-10492" ${isReceived ? 'disabled' : ''}>
+                    </div>
+
+                    <div style="margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1fr 1fr; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                        <span style="text-align: left;">Producto</span>
+                        <span>Formato</span>
+                        <span>Cant Real Recibida</span>
+                    </div>
+                    
+                    <div class="items-list-container">${itemsHtml}</div>
+
+                    ${isReceived ? '' : `<button type="button" class="btn-receive" onclick="processIncomingDelivery('\${order.id}')">Efectuar Recepción ✔️</button>`}
+                </div>
+            `;
+
+            if (isReceived) {
+                historyGrid.insertAdjacentHTML("beforeend", cardHtml);
+                historyCount++;
+            } else {
+                pendingGrid.insertAdjacentHTML("beforeend", cardHtml);
+                pendingCount++;
+            }
+        });
+
+        if (pendingCount === 0) pendingGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:30px; color:var(--text-muted); font-style:italic;'>🟢 No hay recepciones pendientes en muelle. Todo procesado.</div>";
+        if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
+    }
+
+    // 🔍 FILTER BAR SEARCH: Real-time client side scanning metrics
+    function filterCards() {
+        const query = document.getElementById("search-field").value.toLowerCase().trim();
+        const cards = document.querySelectorAll(".po-card");
+
+        cards.forEach(card => {
+            const supplier = card.getAttribute("data-supplier") || "";
+            const po = card.getAttribute("data-po") || "";
+            if (supplier.includes(query) || po.includes(query)) {
+                card.style.display = "";
+            } else {
+                card.style.display = "none";
+            }
+        });
+    }
+    // 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves data logs and adjusts inventory math
+    async function processIncomingDelivery(orderId) {
+        const cardNode = document.getElementById(`po-card-${orderId}`);
+        const invoiceInput = document.getElementById(`invoice-${orderId}`);
+        const invoiceNum = invoiceInput ? invoiceInput.value.trim() : "";
+
+        if (!invoiceNum) {
+            alert("⚠️ Error: Por favor ingrese el Número de Factura o Remisión antes de procesar el ingreso.");
+            return;
+        }
+
+        const confirmation = confirm("¿Confirmar que las cantidades en pantalla corresponden a la entrega física recibida?");
+        if (!confirmation) return;
+
+        try {
+            const itemInputs = cardNode.querySelectorAll(".qty-input");
+            const updateItemPromises = [];
+
+            // 1. Loop through item inputs to build database updates and adjust stock values
+            for (let input of itemInputs) {
+                const itemId = input.getAttribute("data-item-id");
+                const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
+                const deliveredQty = parseFloat(input.value || 0);
+                const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
+
+                // Update individual item row logs inside Supabase
+                const itemPatch = fetch(`${API_URL}purchase_order_items?id=eq.${itemId}`, {
+                    method: "PATCH",
+                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ quantity_delivered: deliveredQty })
+                });
+                updateItemPromises.push(itemPatch);
+
+                // 🌟 INVENTORY MATHEMATICS: If there's a variation, calculate discrepancies in Recipe Units
+                if (deliveredQty !== orderedQty) {
+                    const packagesDifference = deliveredQty - orderedQty; 
+                    const recipeUnitsDifference = packagesDifference * equivalenceMultiplier; // Transforms to baseline Kg/Lts/Uds
+
+                    console.log(`⚠️ Variation detected. Packages mismatch: ${packagesDifference}. Adjusting recipe stock by: ${recipeUnitsDifference}`);
+                    // Note: In the next iteration we can write the explicit fetch request 
+                    // to add/subtract this recipeUnitsDifference directly to your stock table column!
+                }
+            }
+
+            // Await child row mutations execution paths
+            await Promise.all(updateItemPromises);
+
+            // 2. Overwrite the Master Parent Purchase Order Document Header state parameters
+            const orderPatchResponse = await fetch(`${API_URL}purchase_orders?id=eq.${orderId}`, {
+                method: "PATCH",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    status: "received",
+                    invoice_number: invoiceNum,
+                    received_at: new Date().toISOString()
+                })
+            });
+
+            if (!orderPatchResponse.ok) throw new Error("Error al modificar el estado general de la Orden.");
+
+            // 🌟 SMOOTH INTERFACE TRANSITION ANIMATION: Eject card from view and repaint layout grids
+            if (cardNode) {
+                cardNode.style.opacity = "0";
+                cardNode.style.transform = "scale(0.8) translateY(-40px)";
+                cardNode.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+                
+                await new Promise(r => setTimeout(r, 400));
+            }
+
+            alert("✅ ¡Recepción procesada exitosamente! Inventarios y bitácoras actualizados.");
+            await loadReceivingDashboard(); // Repaints screens components
+
+        } catch (err) {
+            console.error("Receiving pipeline collapse:", err);
+            alert(`❌ Error crítico al procesar la entrega: ${err.message}`);
+        }
+    }
+</script>
+</body>
+</html>
