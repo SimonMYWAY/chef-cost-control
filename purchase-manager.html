@@ -657,7 +657,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
         }
     })();
 
-    // Loop 2: Draw elements in their sorted physical arrangement order [Part 2 of 2]
+    // Loop 2: Draw elements in their sorted physical arrangement order [Part 2 of 2 - REPAIRED STATE ENGINE]
     sortedSupplierKeys.forEach(function(supplierName) {
         var group = groupedData[supplierName];
         var blockKey = supplierName.replace(/\s+/g, '-');
@@ -666,22 +666,30 @@ function renderInteractiveManagerSpreadsheetGrid() {
         var blockDiv = document.createElement("div");
         blockDiv.id = "supplier-card-" + blockKey;
         
-        // 🔒 DETERMINISTIC STATE SELECTION: Detect if this card belongs to an executed or dispatched transaction
-        var isCardFrozen = (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched');
+        // 🔒 DETERMINISTIC STATE SELECTION: Freeze cards if they are saved, dispatched, OR received!
+        var isCardFrozen = (group.dbStatus === 'saved_pending_whatsapp' || group.dbStatus === 'dispatched' || group.dbStatus === 'received');
         var isDisabledAttr = isCardFrozen ? ' disabled ' : '';
 
+        // ✨ THE VISUAL ALIGNMENT FIX: Handle both dispatched and received cards with the exact same blurry styles
         if (group.dbStatus === 'saved_pending_whatsapp') {
             blockDiv.className = "supplier-block status-saved-pending";
             blockDiv.style.borderLeft = "5px solid #f1c40f";
-        } else if (group.dbStatus === 'dispatched') {
-            blockDiv.className = "supplier-block status-dispatched";
+            blockDiv.style.opacity = "1";
+            blockDiv.style.filter = "none";
+            blockDiv.style.pointerEvents = "auto";
+        } else if (group.dbStatus === 'dispatched' || group.dbStatus === 'received') {
+            blockDiv.className = group.dbStatus === 'received' ? "supplier-block status-received" : "supplier-block status-dispatched";
             blockDiv.style.opacity = "0.35";
             blockDiv.style.filter = "grayscale(100%) blur(0.5px)";
             blockDiv.style.pointerEvents = "none";
         } else {
             blockDiv.className = "supplier-block";
+            blockDiv.style.opacity = "1";
+            blockDiv.style.filter = "none";
+            blockDiv.style.pointerEvents = "auto";
         }
 
+        // ✨ THE BAR INDICATOR ROUTER: Print the distinct tracking header depending on active lifecycle rules
         var statusPlaceholderHtml = '<div class="status-indicator-placeholder">';
         if (group.dbStatus === 'saved_pending_whatsapp') {
             statusPlaceholderHtml += `
@@ -692,6 +700,11 @@ function renderInteractiveManagerSpreadsheetGrid() {
             statusPlaceholderHtml += `
                 <div class="status-indicator state-complete" style="background: #2ecc71; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
                     ✅ Despachado y Removido de Puerto
+                </div>`;
+        } else if (group.dbStatus === 'received') {
+            statusPlaceholderHtml += `
+                <div class="status-indicator state-complete" style="background: #007afb; color: #fff; padding: 6px; font-weight: bold; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+                    ✔️ Entregado y Recibido en Muelle
                 </div>`;
         }
         statusPlaceholderHtml += '</div>';
@@ -704,7 +717,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             '</div>' +
             '<div class="rows-container">';
 
-                group.items.forEach(function(item) {
+        group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
             // 🔒 INSULATED RELATION TRANSLATION ENGINE: Converts row text name into format UUID for dropdown rendering
@@ -1876,7 +1889,8 @@ function applyLiveHistoricalSearchMatrixFilters() {
 
         var cardDiv = document.createElement("div");
         cardDiv.className = "supplier-card historical-blurry-card-state";
-        cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); filter: opacity(0.75) blur(0.2px) grayscale(15%); pointer-events: auto; transition: filter 0.2s;");
+        // 🎨 UPDATED HISTORICAL CARD PAINTER: Explicitly locks ALL history entries into the same read-only blurry state
+        cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); opacity: 0.35; filter: grayscale(100%) blur(0.5px); pointer-events: none;");
 
         var itemsHtml = "";
         group.items.forEach(function(item) {
