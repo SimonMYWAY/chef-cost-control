@@ -291,26 +291,27 @@ async function pullActiveStagedCalculationFromCloud() {
         LOCAL_STAGED_ROWS = [];
         console.log("✈️ Launching asynchronous parallel data streams...");
         
-        // =======================================================================
-        // 📡 DATA SYNCHRONIZATION STAGE: PARALLEL DATABASE CONCURRENT LOADING
-        // =======================================================================
-        const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
-            fetch(API_URL + "ingredients?select=id,name_es,uom", {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            }),
-            fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
-                method: "GET", 
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            }),
-            fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched)&order=po_number.desc", {
-                method: "GET", 
-                headers: { 
-                    "apikey": API_KEY, 
-                    "Authorization": "Bearer " + API_KEY,
-                    "Cache-Control": "no-cache, no-store, must-revalidate"
-                }
-            })
-        ]);
+// =======================================================================
+// 📡 DATA SYNCHRONIZATION STAGE: PARALLEL DATABASE CONCURRENT LOADING
+// =======================================================================
+const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
+    fetch(API_URL + "ingredients?select=id,name_es,uom", {
+        method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+    }),
+    fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
+        method: "GET", 
+        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+    }),
+    // 🌟 THE FIX: Added 'received' to the array parameter so delivered cards stay anchored on your active dashboard screen!
+    fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched,received)&order=po_number.desc", {
+        method: "GET", 
+        headers: { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY,
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
+    })
+]);
 
         if (!ingResponse.ok || !formatsResponse.ok || !ordersResponse.ok) {
             throw new Error("Una de las conexiones paralelas con Supabase falló.");
@@ -703,10 +704,10 @@ function renderInteractiveManagerSpreadsheetGrid() {
             '</div>' +
             '<div class="rows-container">';
 
-        group.items.forEach(function(item) {
+                group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
-                       // 🔒 INSULATED RELATION TRANSLATION ENGINE: Converts row text name into format UUID for dropdown rendering
+            // 🔒 INSULATED RELATION TRANSLATION ENGINE: Converts row text name into format UUID for dropdown rendering
             var currentItemNameLower = String(item.ingredient_name || "").toLowerCase().trim();
             var resolvedIngredientUuid = masterNameToUuidMap[currentItemNameLower] || "";
 
@@ -714,7 +715,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 var formatUuidKey = String(f.ingredient_id || "").toLowerCase().trim();
                 return formatUuidKey === resolvedIngredientUuid && resolvedIngredientUuid !== "";
             });
-
 
             var supplierDropdownOptions = '';
             if (item.supplier_name && item.supplier_name !== "Proveedor No Asignado") {
@@ -736,7 +736,6 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var equivalenceMultiplier = parseFloat(item.equivalencia || 1.0);
             
             // 🌟 FIXED PERMANENT STARTING POINT ENGINE:
-            // Calculate the true wholesale suggested amount from the immutable raw kitchen shortfall deficit!
             var permanentSuggestedPackages = 0;
             if (equivalenceMultiplier > 0) {
                 permanentSuggestedPackages = Math.ceil(baseMissingQty / equivalenceMultiplier);
@@ -747,9 +746,49 @@ function renderInteractiveManagerSpreadsheetGrid() {
             var currentEquivalenceWeightValue = (approvedCount * equivalenceMultiplier).toFixed(2);
             var displayRecipeUOM = item.recipe_uom || "unidad";
 
+            // ✨ THE RECEIVED LIFE-CYCLE DETECTOR CHECK:
+            // Checks if this active row has already been delivered and processed by security
+            var isItemReceived = item.db_status === "received" || item.db_saved_status === "received";
+            
+            // Default delivered value mirrors approved if it was never modified in the receiving app
+            var deliveredQtyValue = (item.quantity_delivered !== null && item.quantity_delivered !== undefined) 
+                ? parseFloat(item.quantity_delivered) 
+                : approvedCount;
+            // 🏷️ DYNAMIC QUANTITY DISPLAY BOX ROUTER: Default layout configuration for pending/draft grids
+            var quantityBoxHtml = `
+                <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
+                    <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
+                    <div class="box-val" style="margin-top:2px;">
+                        <input type="number" class="edit-input" value="${approvedCount}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
+                    </div>
+                </div>
+            `;
+
+            // If the order has been successfully delivered and processed by the security app
+            if (isItemReceived) {
+                var shortageWarningTagHtml = "";
+                var receivedBoxStyleHtml = "border: 1px solid #10b981; background: #f0fdf4; color: #15803d;"; // Clean green delivery theme
+                
+                // 🛑 VISUAL SHORTAGE WARNING FLASH: If received quantity is lower than ordered, apply red alert highlights
+                if (deliveredQtyValue < approvedCount) {
+                    receivedBoxStyleHtml = "border: 1px solid #ef4444; background: #fef2f2; color: #b91c1c;"; // Bold red warning theme
+                    shortageWarningTagHtml = ` <span style="font-size: 0.72rem; display: block; font-weight: 700; margin-top: 2px;">⚠️ FALTA: -${(approvedCount - deliveredQtyValue).toFixed(1)}</span>`;
+                }
+
+                quantityBoxHtml = `
+                    <div class="data-box" style="${receivedBoxStyleHtml}">
+                        <div class="box-label" style="color: inherit;">Cant Recibida</div>
+                        <div class="box-val" style="font-weight: 700; margin-top: 4px;">
+                            ${deliveredQtyValue} ${item.supplier_uom || 'Unidad'}
+                            ${shortageWarningTagHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
             blockHtml += `
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
-                    <div class="item-title">${item.ingredient_name}</div>
+                    <div class="item-title" style="text-align: left; font-weight: 600;">${item.ingredient_name}</div>
                     <div class="fields-grid">
                         <div class="data-box">
                             <div class="box-label">Faltante Base</div>
@@ -762,41 +801,36 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         <div class="data-box" style="grid-column: span 2;">
                             <div class="box-label">Proveedor Asignado</div>
                             <div class="box-val" style="margin-top:3px;">
-                                <select class="select-dropdown" ${isDisabledAttr} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                <select class="select-dropdown" ${isDisabledAttr || isItemReceived ? 'disabled' : ''} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
                                     ${supplierDropdownOptions}
                                 </select>
                             </div>
                         </div>
                         
-                        <!-- 🌟 UPGRADED: Permanent Sugerido Display Anchor Box -->
+                        <!-- Permanent Sugerido Display Anchor Box -->
                         <div class="data-box">
                             <div class="box-label">Pedido Sugerido</div>
-                            <!-- Displays the immutable baseline recommendation regardless of what the user manually approves! -->
                             <div class="box-val" style="color:var(--muted);">${permanentSuggestedPackages} ${item.supplier_uom || 'Unidad'}</div>
                         </div>
 
-                        <div class="data-box" style="border: 1px solid var(--primary); background: #f0f7ff;">
-                            <div class="box-label" style="color:var(--primary);">Cant Aprobada</div>
-                            <div class="box-val" style="margin-top:2px;">
-                                <input type="number" class="edit-input" value="${approvedCount}" min="0" ${isDisabledAttr} onchange="updateLiveRowApprovedQuantity(${trueMasterIdx}, this.value)" />
-                            </div>
-                        </div>
+                        <!-- ✨ DYNAMICALLY ROUTED QUANTITY BOX (Editable Input vs Frozen Received Alert Box) -->
+                        ${quantityBoxHtml}
+
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
                             <div class="box-label">Equivalencia en Receta UOM (Peso Neto)</div>
-                            <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace;">
+                            <div class="box-val" id="equivalence-display-node-${trueMasterIdx}" style="color:#0f172a; font-family:monospace; text-align: left;">
                                 <strong>${currentEquivalenceWeightValue} ${displayRecipeUOM}</strong> (Factor: 1x ${equivalenceMultiplier})
                             </div>
                         </div>
                     </div>
-                    <div class="row-footer">
-                        <label class="approve-toggle">
-                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} ${isDisabledAttr} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
-                            <span>Línea Aprobada</span>
+                    <div class="row-footer" style="text-align: left; margin-top: 8px;">
+                        <label class="approve-toggle" style="display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} ${isDisabledAttr || isItemReceived ? 'disabled' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                            <span style="font-weight: 500;">${isItemReceived ? 'Línea Procesada e Ingresada' : 'Línea Aprobada'}</span>
                         </label>
                     </div>
                 </div>
             `;
-
         });
 
         // Resolve actions panel button configurations and style layers inline
