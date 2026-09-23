@@ -370,11 +370,14 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             }
         });
 
-        // =======================================================================
+            // =======================================================================
         // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (RE-ALIGNED & DEFENSIVE)
         // =======================================================================
         var legacyOrdersToPurge = allDraftOrders.filter(function(o) {
-            var isNotDispatched = o.status !== 'dispatched';
+            // ✨ THE SECURITY CURE: Explicitly verify that the order is NEITHER dispatched NOR received 
+            // before allowing the system to wipe it out from the server tables!
+            var isLegacyDraftOrPending = o.status !== 'dispatched' && o.status !== 'received';
+            
             var currentShipId = 0;
             var poStr = o.po_number ? String(o.po_number).trim() : "";
             
@@ -384,7 +387,9 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
                     currentShipId = parseInt(splitParts[1].split("-")[0], 10);
                 }
             }
-            return isNotDispatched && currentShipId > 0 && currentShipId < highestShipmentId;
+            
+            // Only purge if it's an un-dispatched legacy draft from a previous shipment cycle
+            return isLegacyDraftOrPending && currentShipId > 0 && currentShipId < highestShipmentId;
         });
 
         if (legacyOrdersToPurge.length > 0) {
@@ -613,11 +618,24 @@ function renderInteractiveManagerSpreadsheetGrid() {
         groupedData[sup].items.push(row);
     });
 
-    // Chronological sorting to keep dispatched elements stacked at the bottom edge indexes
-    var sortedSupplierKeys = Object.keys(groupedData).sort(function(a, b) {
-        var statusA = groupedData[a].dbStatus === 'dispatched' ? 1 : 0;
-        var statusB = groupedData[b].dbStatus === 'dispatched' ? 1 : 0;
-        return statusA - statusB; 
+        // 🔤 STEP-BY-STEP SORTING ENGINE WITH CLOSED CARD SINKING FORCED
+    var sortedSupplierKeys = Object.keys(groupedData);
+    
+    sortedSupplierKeys.sort(function(a, b) {
+        var groupA = groupedData[a];
+        var groupB = groupedData[b];
+        
+        var isAClosed = (groupA.dbStatus === 'dispatched' || groupA.dbStatus === 'received');
+        var isBClosed = (groupB.dbStatus === 'dispatched' || groupB.dbStatus === 'received');
+        
+        // 1. If one is closed and the other is active, sink the closed one to the bottom
+        if (isAClosed && !isBClosed) return 1;
+        if (!isAClosed && isBClosed) return -1;
+        
+        // 2. If both share the same execution state, fall back onto clean alphabetical sorting
+        var nameA = String(a).toLowerCase().trim();
+        var nameB = String(b).toLowerCase().trim();
+        return nameA.localeCompare(nameB);
     });
 
     // 🚀 NEW CLOUD FETCH ENGINE: Read the precise informative milestone date directly from Supabase
