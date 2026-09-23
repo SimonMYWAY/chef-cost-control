@@ -1074,7 +1074,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
             }
         }
 
-// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft
+// 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft [REPAIRED FIREWALL]
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     
     // =======================================================================
@@ -1082,11 +1082,9 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     // =======================================================================
     try {
         if (LOCAL_STAGED_ROWS && LOCAL_STAGED_ROWS.length > 0) {
-            // 🌟 DIRECT MEMORY SELECTION: Read the ship ID straight from the local array cache
             var firstStagedRow = LOCAL_STAGED_ROWS[0];
             var screenShipId = parseInt(firstStagedRow.shipment_id || 0, 10);
 
-            // Fallback parsing engine if shipment_id wasn't saved explicitly on the row object
             if (screenShipId === 0 && firstStagedRow.forced_po_number) {
                 var poParts = firstStagedRow.forced_po_number.split("-SHIP-");
                 if (poParts.length > 1) {
@@ -1095,7 +1093,6 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
 
             if (screenShipId > 0) {
-                // Query the true master sequence status from Supabase
                 const seedCheck = await fetch(API_URL + "system_settings?key=eq.current_shipment_sequence", {
                     method: "GET", headers: { "apikey": API_KEY }
                 });
@@ -1105,11 +1102,10 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                     if (seedData && seedData.length > 0) {
                         var trueCloudShipId = parseInt(seedData[0].value_numeric || seedData[0].value_text, 10);
                         
-                        // 🚨 INTERCEPT BARRIER: If a new ship has arrived, reject the transaction!
                         if (!isNaN(trueCloudShipId) && trueCloudShipId !== screenShipId) {
                             alert(`🚨 OPERACIÓN BLOQUEADA POR SEGURIDAD:\n\nEl Backoffice ha emitido un nuevo embarque (#${trueCloudShipId}). Esta terminal está mostrando un embarque obsoleto (#${screenShipId}).\n\nNo se guardó ningún cambio. La página se recargará para descargar el nuevo pedido.`);
                             location.reload();
-                            return; // Halt function execution completely
+                            return; 
                         }
                     }
                 }
@@ -1118,6 +1114,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     } catch (firewallErr) {
         console.warn("Logistics security checkpoint bypassed or failed:", firewallErr);
     }
+    
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -1143,10 +1140,8 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         if (checkPoRes.ok) {
             const existingPoData = await checkPoRes.json();
             if (existingPoData && existingPoData.length > 0) {
-                // 🌟 FIX: Explicitly target index [0] to get the true ID field
                 generatedPoUuid = existingPoData[0].id;
                 
-                // Update header row to exact standard lowercase 'pending' status
                 await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
                     method: "PATCH",
                     headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -1176,33 +1171,21 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         }
 
-        // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicate items from alternative PO documents
-        for (var i = 0; i < filteredLines.length; i++) {
-            var item = filteredLines[i];
-            if (item.ingredient_name) {
-                await fetch(API_URL + "purchase_order_items?ingredient_name=eq." + encodeURIComponent(item.ingredient_name) + "&po_id=neq." + generatedPoUuid, {
-                    method: "DELETE",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                });
-            }
+        // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicates ONLY inside the current active order shell
+        // ✨ THE FIREWALL FIX: We completely removed the blind text-based global fetch DELETE call.
+        // Instead of executing an unsafe global query that wipes out your past shipments, we clean old lines 
+        // linked specifically to this active order block via generatedPoUuid, keeping received history 100% safe!
+        if (generatedPoUuid) {
+            await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
+                method: "DELETE",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
         }
 
         // 3️⃣ SAVE OR UPDATE OPERATIONAL LINE ITEMS
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            const checkItemRes = await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid + "&ingredient_name=eq." + encodeURIComponent(item.ingredient_name), {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            var existingItemId = null;
-            if (checkItemRes.ok) {
-                const itemData = await checkItemRes.json();
-                if (itemData && itemData.length > 0) {
-                    existingItemId = itemData[0].id;
-                }
-            }
-
             var childPayload = {
                 po_id: generatedPoUuid,
                 ingredient_name: item.ingredient_name,
@@ -1213,19 +1196,13 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                 recipe_uom: item.recipe_uom || "unidad"
             };
 
-            if (existingItemId) {
-                await fetch(API_URL + "purchase_order_items?id=eq." + existingItemId, {
-                    method: "PATCH",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify(childPayload) // 🌟 FIX: Passed flat object without braces
-                });
-            } else {
-                await fetch(API_URL + "purchase_order_items", {
-                    method: "POST",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify(childPayload) // 🌟 FIX: Passed flat object without braces
-                });
-            }
+            // Since we ran a clean delete on the active order shell above, we can directly issue a safe POST 
+            // for every line item, completely eliminating nested loop race conditions!
+            await fetch(API_URL + "purchase_order_items", {
+                method: "POST",
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify(childPayload)
+            });
         }
 
         if (supplierCard) {
