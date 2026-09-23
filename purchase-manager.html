@@ -407,12 +407,23 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
         }
         // =======================================================================
 
+                // =======================================================================
+        // 🛡️ RE-ENGINEERED DRAFT FILTER: Keeps current drafts AND retains past 
+        // dispatched/received orders so they stay locked on screen!
+        // =======================================================================
         const draftOrders = allDraftOrders.filter(function(o) {
+            // Rule A: If the order has already been dispatched or received, ALWAYS keep it on screen
+            if (o.status === "dispatched" || o.status === "received") {
+                return true;
+            }
+
+            // Rule B: For raw working drafts/pending orders, only keep them if they match the active shipment sequence ID
             var poStr = o.po_number ? String(o.po_number).trim() : "";
             if (poStr && poStr.includes("-SHIP-")) {
                 var splitParts = poStr.split("-SHIP-");
                 if (splitParts.length > 1 && splitParts[1]) {
-                    var currentNum = parseInt(splitParts[1].split("-")[0], 10);
+                    var sequenceSegment = splitParts[1].split("-")[0];
+                    var currentNum = parseInt(sequenceSegment, 10);
                     return currentNum === highestShipmentId;
                 }
             }
