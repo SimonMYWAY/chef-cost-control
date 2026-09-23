@@ -197,7 +197,7 @@ async function loadReceivingDashboard() {
     }
 }
 
-// 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History [PART 2 OF 2]
+// 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History [PART 2 OF 2 - REPAIRED]
 function renderDashboardGrids() {
     const pendingGrid = document.getElementById("pending-grid");
     const historyGrid = document.getElementById("history-grid");
@@ -233,6 +233,11 @@ function renderDashboardGrids() {
             `;
         });
 
+        // ✨ THE FIX: Cleared the accidental backslashes so the button template renders perfectly
+        const actionButtonHtml = isReceived 
+            ? '' 
+            : `<button type="button" class="btn-receive" onclick="processIncomingDelivery('${order.id}')">Efectuar Recepción ✔️</button>`;
+
         const cardHtml = `
             <div class="po-card ${isReceived ? 'received' : ''}" id="po-card-${order.id}" data-supplier="${order.supplier_name.toLowerCase()}" data-po="${order.po_number.toLowerCase()}">
                 <div class="card-header">
@@ -252,7 +257,7 @@ function renderDashboardGrids() {
                     <span>Cant Real Recibida</span>
                 </div>
                 <div class="items-list-container">${itemsHtml}</div>
-                \${isReceived ? '' : \`<button type="button" class="btn-receive" onclick="processIncomingDelivery('\${order.id}')">Efectuar Recepción ✔️</button>\`}
+                ${actionButtonHtml}
             </div>
         `;
 
