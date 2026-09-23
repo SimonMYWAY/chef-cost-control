@@ -1674,22 +1674,19 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         return;
     }
 
-    // 🌟 MEMORY SYSTEM CORRECTION: Read your true shipment ID out of the active data objects array
+    // 🛡️ THE ARCHITECTURAL FIX: Prioritize your strict global window tracking constant variable 
+    // that we set during database initialization, ensuring it remains locked even after charging a batch!
     var currentScreenShipId = "00";
-    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
+    if (window.activeShipmentSequenceId) {
+        currentScreenShipId = String(window.activeShipmentSequenceId).trim();
+    } else if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
         var baseObjectRow = LOCAL_STAGED_ROWS[0];
-        // Read shipment_id, fallback to extracting it from a forced PO number string text loop
         if (baseObjectRow.shipment_id) {
             currentScreenShipId = String(baseObjectRow.shipment_id).trim();
-        } else if (baseObjectRow.forced_po_number && baseObjectRow.forced_po_number.includes("-SHIP-")) {
-            var parts = baseObjectRow.forced_po_number.split("-SHIP-");
-            if (parts.length > 1) {
-                currentScreenShipId = parts[1].split("-")[0].trim();
-            }
         }
     }
 
-    // Secondary UI fallback check if memory arrays are in a shifting state
+    // If it's still "00", check the header tag text profile as a secondary fallback link
     if (currentScreenShipId === "00") {
         var headerNode = document.getElementById("terminal-cargo-meta-header");
         if (headerNode) {
@@ -1708,12 +1705,11 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     contentRack.style.display = "flex";
 
     try {
-        // 🔒 IRONCLAD EXCLUSION PATTERN: Force an explicit string match filter to omit the current ship from history completely
-        var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? `&po_number=not.ilike.*-SHIP-${currentScreenShipId}-*` : "";
-        console.log(`🔍 Historical Firewall: Fetching history excluding active shipment #${currentScreenShipId}`);
+        // 🔒 FIREWALL LOOKUP: Only exclude the active shipment ID if it is legitimately open on the spreadsheet grid
+        var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? "&po_number=not.ilike.*-SHIP-" + currentScreenShipId + "-*" : "";
+        console.log("🔍 Historical Firewall Anchor - Excluding current shipment ID sequence:", currentScreenShipId);
 
-        // ✨ THE FIX: Changed status to check for "in.(dispatched,received)" and appended quantity_delivered inside the select child parameters list
-        const queryPath = API_URL + `purchase_orders?status=in.(dispatched,received)${exclusionFilter}&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)&order=created_at.desc`;
+        const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + exclusionFilter + "&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)&order=created_at.desc";
 
         const response = await fetch(queryPath, {
             headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
@@ -1725,6 +1721,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         if (!Array.isArray(relationalOrdersBatch)) throw new Error("No se obtuvo una colección válida.");
 
         GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
+
         relationalOrdersBatch.forEach(function(order) {
             var innerChildLinesList = order.purchase_order_items || [];
             if (innerChildLinesList.length === 0) {
@@ -1744,7 +1741,6 @@ async function toggleHistoricalArchiveOnDemandEngine() {
                 });
             } else {
                 innerChildLinesList.forEach(function(line) {
-                    // ✨ NEW ENTRY FIELDS: Pull status, invoice reference number, and delivered counts securely into cache memory rows
                     GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
                         po_id: order.id, 
                         po_number: order.po_number || "PO-DESPACHADA",
@@ -1766,30 +1762,27 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         actionBtn.innerHTML = "🔒 Ocultar Historial";
         actionBtn.style.backgroundColor = "#ef4444";
         
-        // 🚀 CRITICAL UPDATE LINK: Make sure your distinct layout painter script handles the display swapping rule!
         if (typeof applyLiveHistoricalSearchMatrixFilters === "function") {
             applyLiveHistoricalSearchMatrixFilters();
         }
 
     } catch (err) {
         console.error("Historical recall failure:", err);
-        contentRack.innerHTML = `<div style="color:#ef4444; text-align:center; padding:20px; font-weight:bold;">❌ Error al cargar historial: ${err.message}</div>`;
+        contentRack.innerHTML = "<div style='color:#ef4444; text-align:center; padding:20px; font-weight:bold;'>❌ Error al cargar historial: " + err.message + "</div>";
         actionBtn.innerHTML = "❌ Reintentar Historial";
         actionBtn.style.backgroundColor = "#ef4444";
     }
 }
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2 - PART 1]
+// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2 - REPAIRED SANITIZATION]
 function applyLiveHistoricalSearchMatrixFilters() {
     var contentRack = document.getElementById("historical-archive-workspace-rack");
     if (!contentRack) return;
 
-    // 1️⃣ Gather the text keyword strings from the UI inputs
     var supplierFilter = document.getElementById("filter-hist-supplier")?.value.trim().toLowerCase() || "";
     var ingredientFilter = document.getElementById("filter-hist-ingredient")?.value.trim().toLowerCase() || "";
     var poFilter = document.getElementById("filter-hist-po")?.value.trim().toLowerCase() || "";
 
-    // 2️⃣ Filter the raw master memory array checklist matrix
     var filteredRows = GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.filter(function(row) {
         var matchSupplier = String(row.supplier_name).toLowerCase().includes(supplierFilter);
         var matchIngredient = String(row.ingredient_name).toLowerCase().includes(ingredientFilter);
@@ -1802,7 +1795,6 @@ function applyLiveHistoricalSearchMatrixFilters() {
         return;
     }
 
-    // 3️⃣ Group rows into discrete PO documents to reconstruct the manager cards layout
     var cardGroups = {};
     filteredRows.forEach(function(row) {
         var key = row.po_number;
@@ -1811,7 +1803,6 @@ function applyLiveHistoricalSearchMatrixFilters() {
                 po_number: row.po_number,
                 supplier_name: row.supplier_name,
                 created_at: row.created_at,
-                // ✨ PROPERTIES INJECTED: Pass status and invoice codes safely down to the painter layout loops
                 po_status: row.po_status || "dispatched",
                 invoice_number: row.invoice_number || null,
                 items: []
@@ -1821,7 +1812,7 @@ function applyLiveHistoricalSearchMatrixFilters() {
     });
 
     contentRack.innerHTML = "";
-    // 🎨 UI RENDER LOOP BLOCK: Loops rows, applies dynamic labels and flags short-ships in bold red [PART 2]
+
     var uniquePoKeys = Object.keys(cardGroups);
     uniquePoKeys.forEach(function(poKey) {
         var group = cardGroups[poKey];
@@ -1831,30 +1822,31 @@ function applyLiveHistoricalSearchMatrixFilters() {
 
         var cardDiv = document.createElement("div");
         cardDiv.className = "supplier-card historical-blurry-card-state";
-        
-        // 🎨 BLURRY STATE VISUAL ANCHOR: Applies a beautiful background-faded glass look to past logs
         cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); filter: opacity(0.75) blur(0.2px) grayscale(15%); pointer-events: auto; transition: filter 0.2s;");
 
-        // Build the inner spreadsheet data lines matching your active card row layout
         var itemsHtml = "";
         group.items.forEach(function(item) {
             const orderedQty = parseFloat(item.quantity_ordered || 0);
-            // Default delivered value mirrors ordered if it was never modified in the receiving app
             const deliveredQty = item.quantity_delivered !== null ? parseFloat(item.quantity_delivered) : orderedQty;
 
-            // 🏷️ DYNAMIC LABEL ROUTER: Default layout metrics for pending dispatched shipments
             let quantityColumnLabel = "Cant Ordenada";
             let finalDisplayedQty = orderedQty;
             let displayStyleHtml = "font-weight: 700; color: #1e293b; flex: 1; text-align: right;";
 
-            // If the order has been successfully delivered and processed by security
+            // ✨ THE STRING CONCATENATION FIX: Split the item string using standard concatenation addition operators 
+            // instead of nested backticks inside backticks to guarantee clean text printing outputs!
+            let shortageTextLabel = "";
+
             if (isReceivedAndDelivered) {
                 quantityColumnLabel = "Cant Recibida";
                 finalDisplayedQty = deliveredQty;
 
-                // 🛑 VISUAL SHORTAGE WARNING FLASH: If received quantity is lower than ordered, apply red alert highlights
                 if (deliveredQty < orderedQty) {
                     displayStyleHtml = "font-weight: 700; color: #ef4444; flex: 1; text-align: right; background-color: #fef2f2; border: 1px solid #fca5a5; padding: 2px 4px; border-radius: 4px; display: inline-block; min-width: 60px;";
+                    
+                    // Construct string text cleanly using standard plus addition operators
+                    var diffCalculated = (orderedQty - deliveredQty).toFixed(1);
+                    shortageTextLabel = ' <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(⚠️ Falta: -' + diffCalculated + ')</span>';
                 }
             }
 
@@ -1862,7 +1854,7 @@ function applyLiveHistoricalSearchMatrixFilters() {
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 6px 0; font-size: 0.88rem;">
                     <div style="font-weight: 600; color: #334155; flex: 2; text-align: left;">
                         ${item.ingredient_name}
-                        ${(isReceivedAndDelivered && deliveredQty < orderedQty) ? ` <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(⚠️ Falta: -\${(orderedQty - deliveredQty).toFixed(1)})</span>` : ""}
+                        ${shortageTextLabel}
                     </div>
                     <div style="color: #64748b; flex: 1; text-align: center;">${item.faltante_base.toFixed(2)} ${item.recipe_uom}</div>
                     <div style="${displayStyleHtml}">
@@ -1872,12 +1864,10 @@ function applyLiveHistoricalSearchMatrixFilters() {
                 </div>`;
         });
 
-        // Dynamic Header Customization: Update color accents based on real document status
         const statusBadgeStyle = isReceivedAndDelivered ? "background: #d1fae5; color: #065f46;" : "background: #e2e8f0; color: #475569;";
         const statusTextLabel = isReceivedAndDelivered ? "✔️ RECIBIDO" : "📦 DESPACHADO";
-        const invoiceSubtext = group.invoice_number ? `Factura Ref: ${group.invoice_number}` : "Sin Factura Registrada";
+        const invoiceSubtext = group.invoice_number ? "Factura Ref: " + group.invoice_number : "Sin Factura Registrada";
 
-        // Exact match mapping for the wrapper text labels
         cardDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px;">
                 <div style="text-align: left;">
