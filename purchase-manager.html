@@ -1690,7 +1690,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     }
 
     // Secondary UI fallback check if memory arrays are in a shifting state
-    if (currentScreenShipId === "00" || currentScreenShipId === "00") {
+    if (currentScreenShipId === "00") {
         var headerNode = document.getElementById("terminal-cargo-meta-header");
         if (headerNode) {
             var strongElement = headerNode.querySelector("strong");
@@ -1712,7 +1712,10 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? `&po_number=not.ilike.*-SHIP-${currentScreenShipId}-*` : "";
         console.log(`🔍 Historical Firewall: Fetching history excluding active shipment #${currentScreenShipId}`);
 
-        const response = await fetch(API_URL + `purchase_orders?status=eq.dispatched${exclusionFilter}&select=*,purchase_order_items(*)&order=created_at.desc`, {
+        // ✨ THE FIX: Changed status to check for "in.(dispatched,received)" and appended quantity_delivered inside the select child parameters list
+        const queryPath = API_URL + `purchase_orders?status=in.(dispatched,received)${exclusionFilter}&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)&order=created_at.desc`;
+
+        const response = await fetch(queryPath, {
             headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
         });
 
@@ -1722,22 +1725,39 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         if (!Array.isArray(relationalOrdersBatch)) throw new Error("No se obtuvo una colección válida.");
 
         GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = [];
-
         relationalOrdersBatch.forEach(function(order) {
             var innerChildLinesList = order.purchase_order_items || [];
             if (innerChildLinesList.length === 0) {
                 GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
-                    po_id: order.id, po_number: order.po_number || "PO-DESPACHADA",
-                    supplier_name: order.supplier_name || "Proveedor No Asignado", created_at: order.created_at,
-                    ingredient_name: "Sin ítems registrados", supplier_uom: "-", quantity_ordered: 0, faltante_base: 0, recipe_uom: "-"
+                    po_id: order.id, 
+                    po_number: order.po_number || "PO-DESPACHADA",
+                    supplier_name: order.supplier_name || "Proveedor No Asignado", 
+                    created_at: order.created_at,
+                    invoice_number: order.invoice_number || null,
+                    po_status: order.status || "dispatched",
+                    ingredient_name: "Sin ítems registrados", 
+                    supplier_uom: "-", 
+                    quantity_ordered: 0, 
+                    quantity_delivered: null,
+                    faltante_base: 0, 
+                    recipe_uom: "-"
                 });
             } else {
                 innerChildLinesList.forEach(function(line) {
+                    // ✨ NEW ENTRY FIELDS: Pull status, invoice reference number, and delivered counts securely into cache memory rows
                     GLOBAL_RECALLED_HISTORIC_ROWS_CACHE.push({
-                        po_id: order.id, po_number: order.po_number || "PO-DESPACHADA",
-                        supplier_name: order.supplier_name || "Proveedor No Asignado", created_at: order.created_at,
-                        ingredient_name: line.ingredient_name || "Insumo", supplier_uom: line.supplier_uom || "Unidad",
-                        quantity_ordered: parseFloat(line.quantity_ordered || 0), faltante_base: parseFloat(line.faltante_base || 0), recipe_uom: line.recipe_uom || "UOM"
+                        po_id: order.id, 
+                        po_number: order.po_number || "PO-DESPACHADA",
+                        supplier_name: order.supplier_name || "Proveedor No Asignado", 
+                        created_at: order.created_at,
+                        invoice_number: order.invoice_number || null,
+                        po_status: order.status || "dispatched",
+                        ingredient_name: line.ingredient_name || "Insumo", 
+                        supplier_uom: line.supplier_uom || "Unidad",
+                        quantity_ordered: parseFloat(line.quantity_ordered || 0), 
+                        quantity_delivered: line.quantity_delivered !== null && line.quantity_delivered !== undefined ? parseFloat(line.quantity_delivered) : null,
+                        faltante_base: parseFloat(line.faltante_base || 0), 
+                        recipe_uom: line.recipe_uom || "UOM"
                     });
                 });
             }
@@ -1745,7 +1765,11 @@ async function toggleHistoricalArchiveOnDemandEngine() {
 
         actionBtn.innerHTML = "🔒 Ocultar Historial";
         actionBtn.style.backgroundColor = "#ef4444";
-        applyLiveHistoricalSearchMatrixFilters();
+        
+        // 🚀 CRITICAL UPDATE LINK: Make sure your distinct layout painter script handles the display swapping rule!
+        if (typeof applyLiveHistoricalSearchMatrixFilters === "function") {
+            applyLiveHistoricalSearchMatrixFilters();
+        }
 
     } catch (err) {
         console.error("Historical recall failure:", err);
@@ -1755,7 +1779,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     }
 }
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2]
+// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2 - PART 1]
 function applyLiveHistoricalSearchMatrixFilters() {
     var contentRack = document.getElementById("historical-archive-workspace-rack");
     if (!contentRack) return;
@@ -1787,6 +1811,9 @@ function applyLiveHistoricalSearchMatrixFilters() {
                 po_number: row.po_number,
                 supplier_name: row.supplier_name,
                 created_at: row.created_at,
+                // ✨ PROPERTIES INJECTED: Pass status and invoice codes safely down to the painter layout loops
+                po_status: row.po_status || "dispatched",
+                invoice_number: row.invoice_number || null,
                 items: []
             };
         }
@@ -1794,46 +1821,80 @@ function applyLiveHistoricalSearchMatrixFilters() {
     });
 
     contentRack.innerHTML = "";
-
-    // 4️⃣ Loop and draw the exact same visual spreadsheet layout cards (Blurred State)
+    // 🎨 UI RENDER LOOP BLOCK: Loops rows, applies dynamic labels and flags short-ships in bold red [PART 2]
     var uniquePoKeys = Object.keys(cardGroups);
-    uniquePoKeys.forEach(function(poKey, idx) {
+    uniquePoKeys.forEach(function(poKey) {
         var group = cardGroups[poKey];
         var formattedDate = group.created_at ? new Date(group.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit' }) : "Sin Fecha";
+
+        var isReceivedAndDelivered = group.po_status === "received";
 
         var cardDiv = document.createElement("div");
         cardDiv.className = "supplier-card historical-blurry-card-state";
         
         // 🎨 BLURRY STATE VISUAL ANCHOR: Applies a beautiful background-faded glass look to past logs
-        cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); filter: opacity(0.7) blur(0.3px) grayscale(20%); pointer-events: none; transition: filter 0.2s;");
+        cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); filter: opacity(0.75) blur(0.2px) grayscale(15%); pointer-events: auto; transition: filter 0.2s;");
 
         // Build the inner spreadsheet data lines matching your active card row layout
         var itemsHtml = "";
         group.items.forEach(function(item) {
+            const orderedQty = parseFloat(item.quantity_ordered || 0);
+            // Default delivered value mirrors ordered if it was never modified in the receiving app
+            const deliveredQty = item.quantity_delivered !== null ? parseFloat(item.quantity_delivered) : orderedQty;
+
+            // 🏷️ DYNAMIC LABEL ROUTER: Default layout metrics for pending dispatched shipments
+            let quantityColumnLabel = "Cant Ordenada";
+            let finalDisplayedQty = orderedQty;
+            let displayStyleHtml = "font-weight: 700; color: #1e293b; flex: 1; text-align: right;";
+
+            // If the order has been successfully delivered and processed by security
+            if (isReceivedAndDelivered) {
+                quantityColumnLabel = "Cant Recibida";
+                finalDisplayedQty = deliveredQty;
+
+                // 🛑 VISUAL SHORTAGE WARNING FLASH: If received quantity is lower than ordered, apply red alert highlights
+                if (deliveredQty < orderedQty) {
+                    displayStyleHtml = "font-weight: 700; color: #ef4444; flex: 1; text-align: right; background-color: #fef2f2; border: 1px solid #fca5a5; padding: 2px 4px; border-radius: 4px; display: inline-block; min-width: 60px;";
+                }
+            }
+
             itemsHtml += `
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 6px 0; font-size: 0.88rem;">
-                    <div style="font-weight: 600; color: #334155; flex: 2; text-align: left;">${item.ingredient_name}</div>
+                    <div style="font-weight: 600; color: #334155; flex: 2; text-align: left;">
+                        ${item.ingredient_name}
+                        ${(isReceivedAndDelivered && deliveredQty < orderedQty) ? ` <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(⚠️ Falta: -\${(orderedQty - deliveredQty).toFixed(1)})</span>` : ""}
+                    </div>
                     <div style="color: #64748b; flex: 1; text-align: center;">${item.faltante_base.toFixed(2)} ${item.recipe_uom}</div>
-                    <div style="font-weight: 700; color: #1e293b; flex: 1; text-align: right;">${item.quantity_ordered} ${item.supplier_uom}</div>
+                    <div style="${displayStyleHtml}">
+                        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500; display: block; margin-bottom: 1px; text-transform: uppercase;">${quantityColumnLabel}</span>
+                        ${finalDisplayedQty} ${item.supplier_uom}
+                    </div>
                 </div>`;
         });
+
+        // Dynamic Header Customization: Update color accents based on real document status
+        const statusBadgeStyle = isReceivedAndDelivered ? "background: #d1fae5; color: #065f46;" : "background: #e2e8f0; color: #475569;";
+        const statusTextLabel = isReceivedAndDelivered ? "✔️ RECIBIDO" : "📦 DESPACHADO";
+        const invoiceSubtext = group.invoice_number ? `Factura Ref: ${group.invoice_number}` : "Sin Factura Registrada";
 
         // Exact match mapping for the wrapper text labels
         cardDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px;">
                 <div style="text-align: left;">
                     <h3 style="margin: 0; font-size: 1.05rem; color: #0f172a; font-weight: 700;">${group.supplier_name}</h3>
-                    <span style="font-size: 0.78rem; color: #64748b; font-family: monospace;">${group.po_number}</span>
+                    <div style="font-size: 0.78rem; color: #64748b; font-family: monospace; margin-top: 2px;">
+                        <span>${group.po_number}</span> | <span style="color:#475569; font-weight:600;">${invoiceSubtext}</span>
+                    </div>
                 </div>
                 <div style="text-align: right;">
-                    <span style="font-size: 0.75rem; font-weight: 700; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 12px; text-transform: uppercase;">📦 DESPACHADO</span>
+                    <span style="font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; ${statusBadgeStyle}">${statusTextLabel}</span>
                     <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">${formattedDate}</div>
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 6px;">
                 <div style="flex: 2; text-align: left;">Insumo</div>
                 <div style="flex: 1; text-align: center;">Faltante Base</div>
-                <div style="flex: 1; text-align: right;">Cant Pedida</div>
+                <div style="flex: 1; text-align: right;">Cantidad</div>
             </div>
             <div>
                 ${itemsHtml}
