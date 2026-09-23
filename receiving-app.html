@@ -104,49 +104,59 @@
     });
 
     // 🔒 AUTH MATRIX VALVE: Authenticates guards/admin profiles and opens dashboard
-    async function executeNewLocalGatewayAuthenticationChallenge() {
-        const feedbackEl = document.getElementById("gateway-login-error-feedback");
-        if (!feedbackEl) return;
-        feedbackEl.style.color = "#007afb";
-        feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+async function executeNewLocalGatewayAuthenticationChallenge() {
+    const feedbackEl = document.getElementById("gateway-login-error-feedback");
+    if (!feedbackEl) return;
+    feedbackEl.style.color = "#007afb";
+    feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+    
+    const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+    const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+    
+    try {
+        // ✨ THE SOLID LINK FIX: Explicitly constructs the correct URL path via string addition
+        const queryUrl = API_URL + "profiles";
         
-        const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
-        const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+        const res = await fetch(queryUrl, { 
+            headers: { "apikey": API_KEY } 
+        }).then(function(r) { return r.json(); });
         
-        try {
-            const res = await fetch(`${API_URL}profiles`, { headers: { "apikey": API_KEY } }).then(r => r.json());
-            let matchedProfile = null;
-            
-            for (let i = 0; i < res.length; i++) {
-                let row = res[i];
-                if (String(row.username || "").toLowerCase().trim() === userInputVal || String(row.email || "").toLowerCase().trim() === userInputVal) {
-                    matchedProfile = row;
-                    break;
-                }
+        let matchedProfile = null;
+        
+        for (let i = 0; i < res.length; i++) {
+            let row = res[i];
+            if (String(row.username || "").toLowerCase().trim() === userInputVal || 
+                String(row.email || "").toLowerCase().trim() === userInputVal) {
+                matchedProfile = row;
+                break;
             }
-            if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
-                feedbackEl.style.color = "#ef4444";
-                feedbackEl.innerText = "❌ Credenciales incorrectas.";
-                return;
-            }
-            
-            // Allow guard/security access (fallback allows owners too)
-            const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
-            if (userRole === "guard" || userRole === "owner" || userRole === "admin") {
-                feedbackEl.innerText = "";
-                sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
-                document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
-                document.getElementById("security-gateway-lock-screen").style.display = "none";
-                loadReceivingDashboard();
-            } else {
-                feedbackEl.style.color = "#ef4444";
-                feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
-            }
-        } catch (err) {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "❌ Error de conexión remota.";
         }
+        
+        if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "❌ Credenciales incorrectas.";
+            return;
+        }
+        
+        // Allow guard/security access (fallback allows owners/admins too)
+        const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+        if (userRole === "guard" || userRole === "owner" || userRole === "admin") {
+            feedbackEl.innerText = "";
+            sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
+            document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
+            document.getElementById("security-gateway-lock-screen").style.display = "none";
+            loadReceivingDashboard();
+        } else {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
+        }
+    } catch (err) {
+        console.error("Authentication query fault:", err);
+        feedbackEl.style.color = "#ef4444";
+        feedbackEl.innerText = "❌ Error de conexión remota.";
     }
+}
+
     // 🔄 CORE REFRESH LOOP: Downloads pending and received orders concurrently
     async function loadReceivingDashboard() {
         const pendingGrid = document.getElementById("pending-grid");
