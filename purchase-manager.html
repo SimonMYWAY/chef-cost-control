@@ -1674,28 +1674,48 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         return;
     }
 
-    // 🛡️ THE ARCHITECTURAL FIX: Prioritize your strict global window tracking constant variable 
-    // that we set during database initialization, ensuring it remains locked even after charging a batch!
+    // =======================================================================
+    // 🛡️ THE STICKY MEMORY ANCHOR LAYER: Secure active sequence parameters
+    // =======================================================================
     var currentScreenShipId = "00";
-    if (window.activeShipmentSequenceId) {
+
+    // 1. Try to read your true active integer directly out of our fresh sticky session memory backup block
+    var stickyBackupId = sessionStorage.getItem("sticky_active_shipment_id");
+    
+    if (stickyBackupId && stickyBackupId !== "00" && stickyBackupId !== "") {
+        currentScreenShipId = String(stickyBackupId).trim();
+    } 
+    // 2. Fallback: If session storage is fresh, check your active global window variables constant
+    else if (window.activeShipmentSequenceId) {
         currentScreenShipId = String(window.activeShipmentSequenceId).trim();
-    } else if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
+        sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
+    } 
+    // 3. Secondary Fallback: Trace active data cache objects matrices
+    else if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
         var baseObjectRow = LOCAL_STAGED_ROWS[0];
         if (baseObjectRow.shipment_id) {
             currentScreenShipId = String(baseObjectRow.shipment_id).trim();
+            sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
         }
     }
 
-    // If it's still "00", check the header tag text profile as a secondary fallback link
+    // 4. Final Fallback: Scan text profiles if everything else has dropped layout values
     if (currentScreenShipId === "00") {
         var headerNode = document.getElementById("terminal-cargo-meta-header");
         if (headerNode) {
             var strongElement = headerNode.querySelector("strong");
             if (strongElement) {
-                currentScreenShipId = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+                var extractedDigits = strongElement.innerText.replace(/[^0-9]/g, "").trim();
+                if (extractedDigits) {
+                    currentScreenShipId = extractedDigits;
+                    sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
+                }
             }
         }
     }
+
+    console.log("🔒 HISTORICAL SECURE ANCHOR - Fixed Firewall ID parameter:", currentScreenShipId);
+    // =======================================================================
 
     actionBtn.innerHTML = "⏳ Descargando Historial...";
     actionBtn.style.backgroundColor = "#64748b";
@@ -1707,7 +1727,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     try {
         // 🔒 FIREWALL LOOKUP: Only exclude the active shipment ID if it is legitimately open on the spreadsheet grid
         var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? "&po_number=not.ilike.*-SHIP-" + currentScreenShipId + "-*" : "";
-        console.log("🔍 Historical Firewall Anchor - Excluding current shipment ID sequence:", currentScreenShipId);
+        console.log("🔍 Historical Firewall Query Routing - Filter String appended:", exclusionFilter);
 
         const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + exclusionFilter + "&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)&order=created_at.desc";
 
