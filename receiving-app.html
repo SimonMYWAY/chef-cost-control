@@ -168,8 +168,8 @@ async function loadReceivingDashboard() {
     try {
         const ordersUrl = API_URL + "purchase_orders?status=in.(dispatched,received)&order=po_number.desc";
         
-        // ✨ THE FIX: Explicitly added ingredient_id to the query parameter string list
-        const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia";
+        // ✨ THE FIX: Removed the nonexistent "ingredient_id" column entirely from the select query string list
+        const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia";
 
         const [ordersRes, itemsRes] = await Promise.all([
             fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); }),
@@ -298,16 +298,21 @@ async function processIncomingDelivery(orderId) {
 
     try {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
+        const updateItemPromises = [];
         
+        // ✨ THE FIX: Download the master ingredients mapping dictionary on demand to match string names to true UUID codes
+        const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
+        if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
+
         // 🛡️ STEP 1: Process child rows sequentially to eliminate asynchronous race conditions
         for (let input of itemInputs) {
             const itemId = input.getAttribute("data-item-id");
-            const ingUuid = input.getAttribute("data-ing-id");
+            const ingTextName = input.getAttribute("data-ing-name"); // Sourced from the data-ing-name tag
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
 
-            console.log(`📦 Processing Item - ID: ${itemId}, Ing UUID: ${ingUuid}, Ordered: ${orderedQty}, Delivered: ${deliveredQty}`);
+            console.log(`📦 Processing Item - ID: ${itemId}, Ing Name: ${ingTextName}, Ordered: ${orderedQty}, Delivered: ${deliveredQty}`);
 
             // A. Instantly save the custom delivered quantity to the individual purchase order item line log
             const itemPatchRes = await fetch(API_URL + "purchase_order_items?id=eq." + itemId, {
@@ -318,29 +323,26 @@ async function processIncomingDelivery(orderId) {
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
 
             // B. 🌟 SEQUENTIAL THEORETICAL STOCK ADJUSTMENT: Run stock calculation if a variation is logged
-            if (deliveredQty !== orderedQty && ingUuid && ingUuid !== "null" && ingUuid !== "") {
+            if (deliveredQty !== orderedQty && ingTextName) {
                 const packagesDifference = deliveredQty - orderedQty; // Negative value if short-shipped (e.g., 8 - 10 = -2)
                 const recipeUnitsDifference = packagesDifference * equivalenceMultiplier; // Transforms to baseline unit scales (Kg/Lts/Uds)
 
-                console.log(`⚖️ Discrepancy detected! Packages variation: ${packagesDifference}. Adjusting running stock by: ${recipeUnitsDifference}`);
-                
-                // C. Fetch the current verified standard inventory level from the cloud live
-                const stockGetRes = await fetch(API_URL + "ingredients?id=eq." + ingUuid, { 
-                    headers: { "apikey": API_KEY } 
+                // Locate the matching ingredient row in the master catalog using a clean text comparison
+                const matchedIngredient = masterIngredients.find(function(i) {
+                    const dbNameClean = String(i.name_es || "").toLowerCase().trim();
+                    const itemNameClean = String(ingTextName).toLowerCase().trim();
+                    return dbNameClean === itemNameClean;
                 });
-                
-                if (!stockGetRes.ok) throw new Error(`No se pudo consultar el stock del insumo ${ingUuid}`);
-                const stockData = await stockGetRes.json();
-                
-                if (Array.isArray(stockData) && stockData.length > 0) {
-                    // Read your master running theoretical stock record column
-                    const currentStdInventory = parseFloat(stockData[0].std_inventory || 0);
+
+                if (matchedIngredient) {
+                    const ingUuid = matchedIngredient.id;
+                    const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
                     
                     // 🧮 ROCK-SOLID THEORETICAL INVENTORY CORRECTION:
                     // Adding a negative discrepancy naturally decreases your running stock balance! (e.g., 50 + (-2) = 48)
                     const updatedNewStockTarget = currentStdInventory + recipeUnitsDifference;
 
-                    console.log(`🚀 Adjusting Theoretical Balance - Insumo: ${ingUuid}, Old std_inventory: ${currentStdInventory}, New std_inventory: ${updatedNewStockTarget}`);
+                    console.log(`⚖️ Discrepancy caught! Insumo: ${ingTextName} (UUID: ${ingUuid}), Old std_inventory: ${currentStdInventory}, New std_inventory: ${updatedNewStockTarget}`);
 
                     const inventoryPatchRes = await fetch(API_URL + "ingredients?id=eq." + ingUuid, {
                         method: "PATCH",
@@ -348,9 +350,9 @@ async function processIncomingDelivery(orderId) {
                         body: JSON.stringify({ std_inventory: updatedNewStockTarget })
                     });
                     
-                    if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingUuid}`);
+                    if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
                 } else {
-                    console.warn(`⚠️ Warning: No target row found in ingredients table for UUID: ${ingUuid}`);
+                    console.warn(`⚠️ Warning: No matching row found in ingredients catalog for name description text: ${ingTextName}`);
                 }
             }
         }
@@ -385,6 +387,7 @@ async function processIncomingDelivery(orderId) {
         alert(`❌ Error crítico al procesar la entrega: ${err.message}`);
     }
 }
+
 
 </script>
 </body>
