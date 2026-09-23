@@ -275,7 +275,7 @@ async function handleGatewaySubmit(event) {
     }
 
 
-// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - BULLETPROOF]
+// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - IMMUNE PURGE FIREWALL]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -291,27 +291,26 @@ async function pullActiveStagedCalculationFromCloud() {
         LOCAL_STAGED_ROWS = [];
         console.log("✈️ Launching asynchronous parallel data streams...");
         
-// =======================================================================
-// 📡 DATA SYNCHRONIZATION STAGE: PARALLEL DATABASE CONCURRENT LOADING
-// =======================================================================
-const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
-    fetch(API_URL + "ingredients?select=id,name_es,uom", {
-        method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-    }),
-    fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
-        method: "GET", 
-        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-    }),
-    // 🌟 THE FIX: Added 'received' to the array parameter so delivered cards stay anchored on your active dashboard screen!
-    fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched,received)&order=po_number.desc", {
-        method: "GET", 
-        headers: { 
-            "apikey": API_KEY, 
-            "Authorization": "Bearer " + API_KEY,
-            "Cache-Control": "no-cache, no-store, must-revalidate"
-        }
-    })
-]);
+        // =======================================================================
+        // 📡 DATA SYNCHRONIZATION STAGE: PARALLEL DATABASE CONCURRENT LOADING
+        // =======================================================================
+        const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
+            fetch(API_URL + "ingredients?select=id,name_es,uom", {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            }),
+            fetch(API_URL + "supplier_formats?select=ingredient_id,provider_name,purchase_uom,units_per_purchase,is_preferred,commercial_name", {
+                method: "GET", 
+                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            }),
+            fetch(API_URL + "purchase_orders?status=in.(draft,pending,saved_pending_whatsapp,dispatched,received)&order=po_number.desc", {
+                method: "GET", 
+                headers: { 
+                    "apikey": API_KEY, 
+                    "Authorization": "Bearer " + API_KEY,
+                    "Cache-Control": "no-cache, no-store, must-revalidate"
+                }
+            })
+        ]);
 
         if (!ingResponse.ok || !formatsResponse.ok || !ordersResponse.ok) {
             throw new Error("Una de las conexiones paralelas con Supabase falló.");
@@ -333,7 +332,7 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             }
         });
 
-        // --- MAP SUPPLIER FORMATS LOOKUP (INDEXED SYSTEMICALLY BY INGREDIENT UUID) ---
+        // --- MAP SUPPLIER FORMATS LOOKUP ---
         var supplierFormatsLookup = {};
         GLOBAL_SUPPLIER_FORMATS_LIST.forEach(function(format) {
             if (format.ingredient_id) {
@@ -343,7 +342,6 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
                     purchase_uom: format.purchase_uom ? String(format.purchase_uom).trim() : null,
                     units_per_purchase: parseFloat(format.units_per_purchase || 1),
                     is_preferred: format.is_preferred === true || format.is_preferred === 'true',
-                    // ✨ SAVED: Preserved column data mapped to matching array key
                     commercial_name: format.commercial_name ? String(format.commercial_name).trim() : null
                 };
             }
@@ -354,7 +352,8 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             ACTIVE_SHIPMENT_TIMESTAMP = null;
             return;
         }
-        // --- EXTRACT HIGHEST SHIPMENT SEQUENCE WITH STRICT DEFENSIVE TYPE CHECKS ---
+        
+        // --- EXTRACT HIGHEST SHIPMENT SEQUENCE ---
         var highestShipmentId = 0;
         allDraftOrders.forEach(function(o) {
             var poStr = o.po_number ? String(o.po_number).trim() : "";
@@ -370,13 +369,19 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             }
         });
 
-            // =======================================================================
-        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (RE-ALIGNED & DEFENSIVE)
+        // =======================================================================
+        // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (EXPLICIT WHITELIST CONSTRAINTS)
         // =======================================================================
         var legacyOrdersToPurge = allDraftOrders.filter(function(o) {
-            // ✨ THE SECURITY CURE: Explicitly verify that the order is NEITHER dispatched NOR received 
-            // before allowing the system to wipe it out from the server tables!
-            var isLegacyDraftOrPending = o.status !== 'dispatched' && o.status !== 'received';
+            // 🛡️ THE EXPLICIT WHITELIST GUARD: 
+            // The system is ONLY allowed to select an order for deletion if it is explicitly a 'draft' or 'pending' row.
+            // If the status is 'dispatched', 'received', or anything else, it is physically blocked from entering the purge list.
+            var currentStatus = String(o.status || "").toLowerCase().trim();
+            var isTargetableForPurge = (currentStatus === 'draft' || currentStatus === 'pending' || currentStatus === 'saved_pending_whatsapp');
+            
+            if (!isTargetableForPurge) {
+                return false;
+            }
             
             var currentShipId = 0;
             var poStr = o.po_number ? String(o.po_number).trim() : "";
@@ -388,24 +393,26 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
                 }
             }
             
-            // Only purge if it's an un-dispatched legacy draft from a previous shipment cycle
-            return isLegacyDraftOrPending && currentShipId > 0 && currentShipId < highestShipmentId;
+            // Only old uncompleted entries from previous shipments can be deleted
+            return currentShipId > 0 && currentShipId < highestShipmentId;
         });
 
         if (legacyOrdersToPurge.length > 0) {
             console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} legacy entries...`);
             var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
-            var purgePoNumbersList = legacyOrdersToPurge.map(function(o) { return o.po_number; }).join(',');
             
+            // Delete child lines belonging specifically to those old draft IDs
             fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }).catch(e => console.warn("Background child cleanup delayed:", e));
 
-            fetch(API_URL + "purchase_orders?po_number=in.(" + purgePoNumbersList + ")", {
+            // Delete parent records strictly by their unique UUID id key string
+            fetch(API_URL + "purchase_orders?id=in.(" + purgeIdsList + ")", {
                 method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             }).catch(e => console.warn("Background parent cleanup delayed:", e));
         }
         // =======================================================================
+
 
                 // =======================================================================
         // 🛡️ RE-ENGINEERED DRAFT FILTER: Keeps current drafts AND retains past 
