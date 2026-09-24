@@ -665,14 +665,18 @@
                 </div>
 
                 <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                    <thead>
-                        <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0;">
-                            <th style="padding:10px; text-align:left; color:#64748b;">Usuario / Email</th>
-                            <th style="padding:10px; text-align:center; color:#64748b;">Rol del Sistema</th>
-                            <th style="padding:10px; text-align:center; color:#64748b;">Accesos Autorizados</th>
-                            <th style="padding:10px; text-align:center; color:#64748b;">Acciones</th>
-                        </tr>
-                    </thead>
+                    <!-- 🚨 TABLE HEADER WRAPPER ADJUSTMENT REMINDER -->
+<thead>
+    <tr>
+        <th style="padding:10px; text-align:left;">Personal / Email</th>
+        <th style="padding:10px; text-align:center;">Rol Asignado</th>
+        <th style="padding:10px; text-align:center;">Terminales Autorizados</th>
+        <th style="padding:10px; text-align:center;">Contraseña</th>
+        <th style="padding:10px; text-align:center;">Estado</th>
+        <th style="padding:10px; text-align:center;">Acciones</th>
+    </tr>
+</thead>
+
                     <tbody id="users-table-rows">
                         <tr><td colspan="4" style="text-align:center; color:#64748b; font-style:italic; padding:20px;">Cargando perfiles de personal...</td></tr>
                     </tbody>
@@ -3235,7 +3239,7 @@ function executeLiveTableDataSearch(inputBoxFieldId, targetTableBodyContainerId)
         }
     }
 }
-// 📡 USER SECURITY DIRECTORY LOGIC ENGINE - FULLY CALIBRATED WITH ALL 6 TERMINALS
+// 📡 USER SECURITY DIRECTORY LOGIC ENGINE - FULLY MANAGED UPDATES IN-LINE
 async function fetchActiveStaffProfiles() {
     var rowsTarget = document.getElementById("users-table-rows");
     if (!rowsTarget) return;
@@ -3244,55 +3248,75 @@ async function fetchActiveStaffProfiles() {
         var profiles = await res.json();
         rowsTarget.innerHTML = "";
         if (!Array.isArray(profiles) || profiles.length === 0) {
-            rowsTarget.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:15px; color:#64748b;'>No hay perfiles registrados.</td></tr>";
+            rowsTarget.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:15px; color:#64748b;'>No hay perfiles registrados.</td></tr>";
             return;
         }
         var html = "";
         for (var i = 0; i < profiles.length; i++) {
             var user = profiles[i];
             var systemRole = String(user.role || "kitchen").toLowerCase().trim();
+            var isUserCurrentlyActive = user.is_active !== false; // Baseline default logic fallback
+            
             var appsBadgeHTML = "";
             var roleLabelHTML = "";
             
-            // 🏷️ COMPREHENSIVE STRUCTURAL LIFECYCLE ROUTER MATRIX (ALL 6 LOGISTICS ROLES)
+            // Comprehensive structural lifecycle classification matrix
             if (systemRole === "owner") {
                 roleLabelHTML = "<span style='background:#fef3c7; color:#d97706; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>💼 Owner</span>";
-                appsBadgeHTML = "<span style='color:#22c55e; font-weight:600;'>Todo Acceso (Ecosistema Total)</span>";
+                appsBadgeHTML = "<span style='color:#22c55e; font-weight:600;'>Ecosistema Total</span>";
             } else if (systemRole === "chef") {
                 roleLabelHTML = "<span style='background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>👨‍🍳 Chef</span>";
-                appsBadgeHTML = "<span style='color:#007afb; font-weight:600;'>index.html, kitchen.html</span>";
+                appsBadgeHTML = "<span style='color:#007afb; font-weight:600;'>index, kitchen</span>";
             } else if (systemRole === "purchase") {
                 roleLabelHTML = "<span style='background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🛒 Purchase</span>";
-                appsBadgeHTML = "<span style='color:#16a34a; font-weight:600;'>purchase-manager.html</span>";
-            } 
-            // 🌟 NEW LOGISTICAL TERMINAL A: Recepción y Control de Muelles de Seguridad
-            else if (systemRole === "receiving" || systemRole === "guard") {
+                appsBadgeHTML = "<span style='color:#16a34a; font-weight:600;'>purchase-manager</span>";
+            } else if (systemRole === "receiving" || systemRole === "guard") {
                 roleLabelHTML = "<span style='background:#e0e7ff; color:#4338ca; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🗃️ Recepción</span>";
-                appsBadgeHTML = "<span style='color:#4f46e5; font-weight:600;'>receiving-app.html</span>";
-            } 
-            // 🌟 NEW LOGISTICAL TERMINAL B: Control de Inventario Físico de Cocina
-            else if (systemRole === "inventory") {
+                appsBadgeHTML = "<span style='color:#4f46e5; font-weight:600;'>receiving-app</span>";
+            } else if (systemRole === "inventory") {
                 roleLabelHTML = "<span style='background:#fae8ff; color:#a21caf; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>📦 Inventario</span>";
-                appsBadgeHTML = "<span style='color:#c026d3; font-weight:600;'>inventory-staff.html</span>";
-            } 
-            // Baseline Fallback Channel
-            else {
+                appsBadgeHTML = "<span style='color:#c026d3; font-weight:600;'>inventory-staff</span>";
+            } else {
                 roleLabelHTML = "<span style='background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🍳 Kitchen</span>";
-                appsBadgeHTML = "<span style='color:#64748b;'>Solo kitchen.html</span>";
+                appsBadgeHTML = "<span style='color:#64748b;'>kitchen.html</span>";
             }
             
             var userDisplayString = user.username ? `<b>${user.username}</b><br><span style='font-size:0.78rem; color:#64748b;'>${user.email}</span>` : `<b>${user.email}</b>`;
-            html += "<tr style='border-bottom:1px solid #e2e8f0;'>" +
-                        "<td style='padding:12px; text-align:left;'>" + userDisplayString + "</td>" +
-                        "<td style='padding:12px; text-align:center;'>" + roleLabelHTML + "</td>" +
-                        "<td style='padding:12px; text-align:center; font-family:monospace; font-size:0.8rem;'>" + appsBadgeHTML + "</td>" +
-                        "<td style='padding:12px; text-align:center;'><button onclick='deleteStaffProfileRow(\"" + user.id + "\")' style='background:none; border:none; color:#ef4444; font-weight:600; cursor:pointer; font-size:0.85rem;'>Eliminar</button></td>" +
-                    "</tr>";
+            var rowBlurStyle = !isUserCurrentlyActive ? "opacity: 0.65; background: #f8fafc;" : "";
+
+            // Dynamic cell template building
+            html += `<tr style="border-bottom:1px solid #e2e8f0; ${rowBlurStyle}">
+                        <td style="padding:12px; text-align:left;">${userDisplayString}</td>
+                        <td style="padding:12px; text-align:center;">${roleLabelHTML}</td>
+                        <td style="padding:12px; text-align:center; font-family:monospace; font-size:0.8rem;">${appsBadgeHTML}</td>
+                        
+                        <!-- 🔑 PASSWORD FIELD: In-line editable container value -->
+                        <td style="padding:12px; text-align:center;">
+                            <input type="text" id="edit-pwd-${user.id}" value="${user.password_hash || ''}" style="width:105px; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.85rem; font-family:monospace; text-align:center;">
+                        </td>
+                        
+                        <!-- 🚫 STATUS SWITCH: In-line account activation checkbox controller -->
+                        <td style="padding:12px; text-align:center;">
+                            <label style="cursor:pointer; font-size:0.82rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; color:${isUserCurrentlyActive ? '#16a34a' : '#ef4444'}">
+                                <input type="checkbox" id="edit-active-${user.id}" ${isUserCurrentlyActive ? 'checked' : ''} style="cursor:pointer;">
+                                ${isUserCurrentlyActive ? 'Activo' : 'Suspendido'}
+                            </label>
+                        </td>
+                        
+                        <!-- 💾 MULTI-BUTTON ACTION PANEL -->
+                        <td style="padding:12px; text-align:center; display:flex; gap:8px; justify-content:center; align-items:center;">
+                            <button onclick="updateExistingStaffProfileRecord('${user.id}')" style="background:#007afb; border:none; color:#fff; padding:5px 10px; font-weight:700; border-radius:6px; cursor:pointer; font-size:0.78rem;">Guardar</button>
+                            <button onclick="deleteStaffProfileRow('${user.id}')" style="background:none; border:none; color:#ef4444; font-weight:600; cursor:pointer; font-size:0.78rem;">Eliminar</button>
+                        </td>
+                    </tr>`;
         }
         rowsTarget.innerHTML = html;
+        
+        // Dynamic adjustment: If your column headers layout wrapper lacks matching rows columns count, 
+        // remember to verify your users table <th> list has 6 header columns mapped as well!
     } catch (err) {
         console.error(err);
-        rowsTarget.innerHTML = "<tr><td colspan='4' style='color:#ef4444; text-align:center;'>❌ Falló la sincronización de perfiles.</td></tr>";
+        rowsTarget.innerHTML = "<tr><td colspan='6' style='color:#ef4444; text-align:center;'>❌ Falló la sincronización de perfiles.</td></tr>";
     }
 }
 
@@ -3345,6 +3369,51 @@ async function handleStaffUserCreation(event) {
     } catch (err) { 
         console.error("Network error details:", err);
         feedback.innerHTML = "<span style='color:#ef4444;'>❌ Error de red o conexión.</span>"; 
+    }
+}
+
+// 📝 CORE MUTATION ENGINE: Synchronizes modifications to password updates and freeze switches directly to Supabase
+async function updateExistingStaffProfileRecord(userId) {
+    const pwdInput = document.getElementById(`edit-pwd-${userId}`);
+    const activeInput = document.getElementById(`edit-active-${userId}`);
+    
+    if (!pwdInput || !activeInput) return;
+    
+    var updatedPasswordText = pwdInput.value.trim();
+    var updatedActiveStateBoolean = activeInput.checked;
+    
+    if (!updatedPasswordText) {
+        alert("⚠️ Error: La contraseña no puede quedar vacía.");
+        return;
+    }
+    
+    var confirmChange = confirm("¿Deseas guardar los cambios aplicados sobre este perfil de usuario?");
+    if (!confirmChange) return;
+
+    try {
+        const patchUrl = API_URL + "profiles?id=eq." + userId;
+        
+        const response = await fetch(patchUrl, {
+            method: "PATCH",
+            headers: {
+                "apikey": API_KEY,
+                "Authorization": "Bearer " + API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                password_hash: updatedPasswordText,
+                is_active: updatedActiveStateBoolean
+            })
+        });
+
+        if (!response.ok) throw new Error("Supabase rechazó la actualización del perfil.");
+        
+        alert("✅ ¡Perfil de usuario modificado y sincronizado con éxito!");
+        fetchActiveStaffProfiles(); // Re-renders the rows layout smoothly
+        
+    } catch (err) {
+        console.error("Staff record update failure:", err);
+        alert(`❌ Error al actualizar el perfil: ${err.message}`);
     }
 }
 
