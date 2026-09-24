@@ -3235,7 +3235,7 @@ function executeLiveTableDataSearch(inputBoxFieldId, targetTableBodyContainerId)
         }
     }
 }
-// 📡 USER SECURITY DIRECTORY LOGIC ENGINE
+// 📡 USER SECURITY DIRECTORY LOGIC ENGINE - FULLY CALIBRATED WITH ALL 6 TERMINALS
 async function fetchActiveStaffProfiles() {
     var rowsTarget = document.getElementById("users-table-rows");
     if (!rowsTarget) return;
@@ -3254,18 +3254,29 @@ async function fetchActiveStaffProfiles() {
             var appsBadgeHTML = "";
             var roleLabelHTML = "";
             
-            // 🏷️ Expanded structural classification logic mapping
+            // 🏷️ COMPREHENSIVE STRUCTURAL LIFECYCLE ROUTER MATRIX (ALL 6 LOGISTICS ROLES)
             if (systemRole === "owner") {
                 roleLabelHTML = "<span style='background:#fef3c7; color:#d97706; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>💼 Owner</span>";
-                appsBadgeHTML = "<span style='color:#22c55e; font-weight:600;'>Todo Acceso (3 Apps)</span>";
+                appsBadgeHTML = "<span style='color:#22c55e; font-weight:600;'>Todo Acceso (Ecosistema Total)</span>";
             } else if (systemRole === "chef") {
                 roleLabelHTML = "<span style='background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>👨‍🍳 Chef</span>";
-                appsBadgeHTML = "<span style='color:#007afb; font-weight:600;'>index, kitchen</span>";
+                appsBadgeHTML = "<span style='color:#007afb; font-weight:600;'>index.html, kitchen.html</span>";
             } else if (systemRole === "purchase") {
-                // ✨ ADDED: Visual design rule mapping specifically for the purchase terminal users
                 roleLabelHTML = "<span style='background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🛒 Purchase</span>";
                 appsBadgeHTML = "<span style='color:#16a34a; font-weight:600;'>purchase-manager.html</span>";
-            } else {
+            } 
+            // 🌟 NEW LOGISTICAL TERMINAL A: Recepción y Control de Muelles de Seguridad
+            else if (systemRole === "receiving" || systemRole === "guard") {
+                roleLabelHTML = "<span style='background:#e0e7ff; color:#4338ca; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🗃️ Recepción</span>";
+                appsBadgeHTML = "<span style='color:#4f46e5; font-weight:600;'>receiving-app.html</span>";
+            } 
+            // 🌟 NEW LOGISTICAL TERMINAL B: Control de Inventario Físico de Cocina
+            else if (systemRole === "inventory") {
+                roleLabelHTML = "<span style='background:#fae8ff; color:#a21caf; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>📦 Inventario</span>";
+                appsBadgeHTML = "<span style='color:#c026d3; font-weight:600;'>inventory-staff.html</span>";
+            } 
+            // Baseline Fallback Channel
+            else {
                 roleLabelHTML = "<span style='background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:12px; font-weight:700; font-size:0.75rem;'>🍳 Kitchen</span>";
                 appsBadgeHTML = "<span style='color:#64748b;'>Solo kitchen.html</span>";
             }
