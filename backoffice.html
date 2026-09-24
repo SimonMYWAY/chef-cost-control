@@ -4289,7 +4289,7 @@ function updateTemporaryProcurementLineFormatsQuantityById(ingId, val) {
     }
 }
 
-// ⚡ GATE 2 ENGINE: Remote Lock, Dynamic Recalculation & Cloud Broadcaster [Part 1 of 2]
+// ⚡ GATE 2 ENGINE: Remote Lock, Dynamic Recalculation & Cloud Broadcaster [Part 1 of 2 - REPAIRED FIREWALL]
 async function broadcastActiveCalculationsToPurchaseApp() {
     var shipBtn = document.getElementById("dispatch-to-manager-portal-btn") || document.getElementById("btn-commit-all-orders");
     
@@ -4326,7 +4326,11 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         // 🧹 BACKOFFICE HIGH-SPEED PURGE ENGINE: Clear uncommitted legacy records
         // =======================================================================
         console.log("🧹 Sweeping legacy uncommitted records from cloud tables...");
-        const oldOrdersRes = await fetch(API_URL + "purchase_orders?status=neq.dispatched&select=id", {
+        
+        // ✨ THE FIREWALL FIX: We changed the query filter to 'not.in.(dispatched,received)'!
+        // This ensures both successfully dispatched AND received orders are completely untouchable 
+        // by the Backoffice purge engine when issuing a new shipment batch!
+        const oldOrdersRes = await fetch(API_URL + "purchase_orders?status=not.in.(dispatched,received)&select=id", {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
 
