@@ -458,7 +458,13 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!itemsRes.ok) throw new Error("Fallo al descargar los ítems de las órdenes.");
         const allOrderLines = await itemsRes.json();
 
+            // =======================================================================
+        // 🛡️ RE-ENGINEERED LINE ITEM MAPPER: ENFORCES ABSOLUTE IDENTITY LOCKS
+        // =======================================================================
         var cloudRows = [];
+        // ✨ IDENTITY TRACKER SET: Keeps an atomic record of processed IDs to block duplicates!
+        var trackedItemIdsSet = {};
+
         draftOrders.forEach(function(order) {
             var cleanOrderId = String(order.id || "").toLowerCase().trim();
             
@@ -468,30 +474,43 @@ async function pullActiveStagedCalculationFromCloud() {
             });
             
             matchedItems.forEach(function(item) {
-                // 🔍 KEY CORRECTION SYSTEM: Find the correct matching UUID using the masterNameToUuidMap dictionary
+                if (!item.id) return;
+                var cleanItemId = String(item.id).trim();
+
+                // 🛑 IDENTITY GATE EXCLUSION: If this unique item ID has already been mapped to the screen array,
+                // prioritize the 'received' or closed state and drop the duplicate draft layer immediately!
+                if (trackedItemIdsSet[cleanItemId]) {
+                    console.log(`🛡️ Duplicate Intercept: Skipped item duplicate line for ID: ${cleanItemId} (${item.ingredient_name})`);
+                    
+                    // Optional Upgrade: If the newly matched row has a higher-priority status like received, overwrite the old status tracker
+                    var existingRow = cloudRows.find(function(r) { return String(r.id).trim() === cleanItemId; });
+                    if (existingRow && order.status === "received") {
+                        existingRow.db_status = "received";
+                    }
+                    return; // Skip this iteration block entirely!
+                }
+
+                // Lock this ID into our persistent tracker set
+                trackedItemIdsSet[cleanItemId] = true;
+
                 var cleanTextName = String(item.ingredient_name).toLowerCase().trim();
                 var resolvedUuidFromMap = masterNameToUuidMap[cleanTextName] || "";
-                
-                // Query your format dictionary using the verified UUID key index
                 var matchedFormatData = supplierFormatsLookup[resolvedUuidFromMap] || {};
 
                 cloudRows.push({
                     id: item.id,
                     ingredient_id: resolvedUuidFromMap || cleanTextName, 
                     ingredient_name: item.ingredient_name,
-                    
-                    // ✨ SUCCESS: Captures the mapped commercial name directly from your database
                     commercial_name: matchedFormatData.commercial_name || item.ingredient_name,
-                    
                     faltante_base: parseFloat(item.faltante_base || 0), 
                     equivalencia: parseFloat(item.equivalencia || 1.0), 
                     recipe_uom: item.recipe_uom || "unidad",            
-                    
                     supplier_uom: item.supplier_uom || "Formato",
                     conversion_factor: parseFloat(item.equivalencia || 1.0), 
                     supplier_name: order.supplier_name || "Proveedor No Asignado", 
                     pedido_sugerido: item.quantity_ordered || 0,
                     approved_formats_quantity: item.quantity_ordered || 0,
+                    quantity_delivered: item.quantity_delivered !== undefined ? item.quantity_delivered : null,
                     is_approved: true,
                     shipment_id: "00",
                     created_at: order.created_at, 
