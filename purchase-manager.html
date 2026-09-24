@@ -275,7 +275,7 @@ async function handleGatewaySubmit(event) {
     }
 
 
-// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - IMMUNE PURGE FIREWALL]
+// ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - SECURE FIREWALL]
 async function pullActiveStagedCalculationFromCloud() {
     var workspace = document.getElementById("manager-grid-workspace");
     var loadButton = document.getElementById("btn-cargar-ventas") || document.querySelector("button[onclick*='pullActiveStagedCalculationFromCloud']");
@@ -373,9 +373,9 @@ async function pullActiveStagedCalculationFromCloud() {
         // 🧹 HIGH-SPEED DATABASE PURGE Sweep ENGINE (EXPLICIT WHITELIST CONSTRAINTS)
         // =======================================================================
         var legacyOrdersToPurge = allDraftOrders.filter(function(o) {
-            // 🛡️ THE EXPLICIT WHITELIST GUARD: 
+            // 🛡️ THE EXPLICIT WHITELIST GUARD:
             // The system is ONLY allowed to select an order for deletion if it is explicitly a 'draft' or 'pending' row.
-            // If the status is 'dispatched', 'received', or anything else, it is physically blocked from entering the purge list.
+            // If the status is 'dispatched' or 'received', it is physically blocked from entering the purge list!
             var currentStatus = String(o.status || "").toLowerCase().trim();
             var isTargetableForPurge = (currentStatus === 'draft' || currentStatus === 'pending' || currentStatus === 'saved_pending_whatsapp');
             
@@ -396,53 +396,25 @@ async function pullActiveStagedCalculationFromCloud() {
             // Only old uncompleted entries from previous shipments can be deleted
             return currentShipId > 0 && currentShipId < highestShipmentId;
         });
-        
+
         if (legacyOrdersToPurge.length > 0) {
             console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} legacy entries...`);
             var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
             
-            // Delete child lines belonging specifically to those old draft IDs
-            fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
-                method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            }).catch(e => console.warn("Background child cleanup delayed:", e));
-
-            // Delete parent records strictly by their unique UUID id key string
-            fetch(API_URL + "purchase_orders?id=in.(" + purgeIdsList + ")", {
-                method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            }).catch(e => console.warn("Background parent cleanup delayed:", e));
-        }
-        // =======================================================================
-        // 🧹 HIGH-SPEED GHOST DRAFT CLEANUP SWEEP ENGINE
-        // =======================================================================
-        // Identifies any duplicate active drafts that look like yesterday's duplicate tests
-        var duplicateGhostDraftsToPurge = allDraftOrders.filter(function(order) {
-            if (order.status !== 'draft' && order.status !== 'pending') return false;
-
-            // Search the master array to check if a corresponding 'received' card exists for this exact same supplier PO number
-            var matchingDeliveredCardExists = allDraftOrders.some(function(o) {
-                return o.status === 'received' && String(o.po_number).trim() === String(order.po_number).trim();
-            });
-
-            return matchingDeliveredCardExists; // If a received one exists, flag this phantom draft row for immediate deletion!
-        });
-
-        if (duplicateGhostDraftsToPurge.length > 0) {
-            console.log(`🧹 Ghost Cleanup Engaged: Purging ${duplicateGhostDraftsToPurge.length} duplicate testing entries...`);
-            var ghostIdsList = duplicateGhostDraftsToPurge.map(function(o) { return o.id; }).join(',');
-            
-            if (ghostIdsList) {
-                // Wipe child items linked to yesterday's stray drafts out of purchase_order_items
-                fetch(API_URL + "purchase_order_items?po_id=in.(" + ghostIdsList + ")", {
+            if (purgeIdsList) {
+                // Delete child lines belonging specifically to those old draft IDs
+                fetch(API_URL + "purchase_order_items?po_id=in.(" + purgeIdsList + ")", {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                }).catch(e => console.warn("Ghost child cleanup delayed:", e));
+                }).catch(e => console.warn("Background child cleanup delayed:", e));
 
-                // Wipe parent rows from purchase_orders completely
-                fetch(API_URL + "purchase_orders?id=in.(" + ghostIdsList + ")", {
+                // Delete parent records strictly by their unique UUID id key string
+                fetch(API_URL + "purchase_orders?id=in.(" + purgeIdsList + ")", {
                     method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-                }).catch(e => console.warn("Ghost parent cleanup delayed:", e));
+                }).catch(e => console.warn("Background parent cleanup delayed:", e));
             }
         }
-            // =======================================================================
+        // =======================================================================
+        // =======================================================================
         // 🛡️ RE-ENGINEERED DRAFT FILTER: Keeps current drafts AND retains past 
         // dispatched/received orders so they stay locked on screen!
         // =======================================================================
@@ -490,7 +462,7 @@ async function pullActiveStagedCalculationFromCloud() {
         draftOrders.forEach(function(order) {
             var cleanOrderId = String(order.id || "").toLowerCase().trim();
             
-            // 🛡️ EXTRACT METADATA PO SHIPMENT ID: Parse the shipment number belonging to this specific parent order row
+            // Extract the true shipment sequence number belonging strictly to this parent order row
             var orderShipmentId = 0;
             var poStr = order.po_number ? String(order.po_number).trim() : "";
             if (poStr && poStr.includes("-SHIP-")) {
@@ -525,7 +497,7 @@ async function pullActiveStagedCalculationFromCloud() {
                     approved_formats_quantity: item.quantity_ordered || 0,
                     quantity_delivered: item.quantity_delivered !== undefined ? item.quantity_delivered : null,
                     is_approved: true,
-                    shipment_id: orderShipmentId, // 🌟 FIXED SHIELD LOCK: Pins the true shipment ID sequence to the item row
+                    shipment_id: orderShipmentId, // Pins the true shipment layout tracker to the row object
                     created_at: order.created_at, 
                     po_number: order.po_number,
                     db_status: order.status
@@ -565,8 +537,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 approved_formats_quantity: approvedCount, 
                 quantity_delivered: row.quantity_delivered,
                 is_approved: row.is_approved !== undefined ? row.is_approved : true, 
-                
-                shipment_id: row.shipment_id, // 🌟 FIXED SHIELD LOCK: Inherits the true isolated parent shipment ID
+                shipment_id: row.shipment_id,
                 sales_reference_date: row.created_at || "Fecha No Definida",
                 poNumber: resolvedPoNumber,
                 dbStatus: resolvedDbStatus,
@@ -594,14 +565,10 @@ async function pullActiveStagedCalculationFromCloud() {
             window.activeShipmentSequenceId = highestShipmentId;
         }
 
-        // 🛡️ CRITICAL FILTRATION OVERRIDE:
-        // Before letting the page render, filter LOCAL_STAGED_ROWS to strictly display rows belonging 
-        // to the active shipment (highestShipmentId) OR any past row that is currently marked as received/dispatched!
+        // 🛡️ WORKSPACE ISOLATION INTERCEPT:
+        // Before letting the grid repaint, ensure LOCAL_STAGED_ROWS strictly filters out past cards 
+        // belonging to old shipments, keeping only the active shipment sequence on the screen workspace!
         LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(function(row) {
-            if (row.dbStatus === "received" || row.dbStatus === "dispatched") {
-                // Only let a closed card show if its shipment number matches the active workflow grid
-                return row.shipment_id === highestShipmentId;
-            }
             return row.shipment_id === highestShipmentId;
         });
 
