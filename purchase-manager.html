@@ -801,7 +801,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
             '</div>' +
             '<div class="rows-container">';
 
-                group.items.forEach(function(item) {
+                    group.items.forEach(function(item) {
             var trueMasterIdx = LOCAL_STAGED_ROWS.indexOf(item);
             
             // INSULATED RELATION TRANSLATION ENGINE
@@ -840,14 +840,17 @@ function renderInteractiveManagerSpreadsheetGrid() {
             }
 
             var displayRecipeUOM = item.recipe_uom || "unidad";
-            var isItemReceived = group.dbStatus === "received" || item.dbStatus === "received" || item.db_status === "received";
             
-            // ✨ THE TRUE DATA MAP FIX: Sourced strictly from quantity_delivered, fallback to approved ordered count if null
+            // ✨ THE IRONCLAD UNIFICATION LOCK: Sourced exclusively from the parent card status string.
+            // This guarantees the product row matches the exact visual state of the parent container card!
+            var isCardMarkedReceived = (group.dbStatus === "received");
+            
+            // Sourced strictly from quantity_delivered, fallback to approved ordered count if null
             var deliveredQtyValue = (item.quantity_delivered !== null && item.quantity_delivered !== undefined) 
                 ? parseFloat(item.quantity_delivered) 
                 : approvedCount;
 
-            var currentEquivalenceWeightValue = ((isItemReceived ? deliveredQtyValue : approvedCount) * equivalenceMultiplier).toFixed(2);
+            var currentEquivalenceWeightValue = ((isCardMarkedReceived ? deliveredQtyValue : approvedCount) * equivalenceMultiplier).toFixed(2);
 
             // 🏷️ DYNAMIC QUANTITY DISPLAY BOX ROUTER
             var quantityBoxHtml = `
@@ -859,8 +862,8 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 </div>
             `;
 
-            // If the card is received, swap out input element layout entirely
-            if (isItemReceived) {
+            // If the parent card is received, swap out input element layout entirely
+            if (isCardMarkedReceived) {
                 var shortageWarningTagHtml = "";
                 var receivedBoxStyleHtml = "border: 1px solid #10b981; background: #f0fdf4; color: #15803d;"; // Crisp Green theme
                 
@@ -885,7 +888,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                 <div class="item-row" id="manager-item-row-${trueMasterIdx}">
                     <div class="item-title" style="text-align: left; font-weight: 600;">
                         ${item.ingredient_name}
-                        ${(isItemReceived && deliveredQtyValue < approvedCount) ? ` <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(Falta en Muelle)</span>` : ""}
+                        ${(isCardMarkedReceived && deliveredQtyValue < approvedCount) ? ` <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(Falta en Muelle)</span>` : ""}
                     </div>
                     <div class="fields-grid">
                         <div class="data-box">
@@ -899,7 +902,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                         <div class="data-box" style="grid-column: span 2;">
                             <div class="box-label">Proveedor Asignado</div>
                             <div class="box-val" style="margin-top:3px;">
-                                <select class="select-dropdown" ${isDisabledAttr || isItemReceived ? 'disabled' : ''} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
+                                <select class="select-dropdown" ${isDisabledAttr || isCardMarkedReceived ? 'disabled' : ''} onchange="updateLiveRowSupplierAssignment(${trueMasterIdx}, this.value)">
                                     ${supplierDropdownOptions}
                                 </select>
                             </div>
@@ -911,7 +914,7 @@ function renderInteractiveManagerSpreadsheetGrid() {
                             <div class="box-val" style="color:var(--muted);">${permanentSuggestedPackages} ${item.supplier_uom || 'Unidad'}</div>
                         </div>
 
-                        <!-- 🌟 DYNAMICALLY ROUTED QUANTITY BOX (Now displaying accurate quantity_delivered metrics) -->
+                        <!-- 🌟 DYNAMICALLY ROUTED QUANTITY BOX (Now displaying accurate, unified quantity_delivered metrics) -->
                         ${quantityBoxHtml}
 
                         <div class="data-box" style="grid-column: span 2; background: #f8fafc;">
@@ -923,8 +926,8 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     </div>
                     <div class="row-footer" style="text-align: left; margin-top: 8px;">
                         <label class="approve-toggle" style="display: flex; align-items: center; gap: 6px;">
-                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} ${isDisabledAttr || isItemReceived ? 'disabled' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
-                            <span style="font-weight: 500;">${isItemReceived ? 'Línea Procesada en Recepción ✔️' : 'Línea Aprobada'}</span>
+                            <input type="checkbox" ${item.is_approved ? 'checked' : ''} ${isDisabledAttr || isCardMarkedReceived ? 'disabled' : ''} onchange="updateLiveRowApprovalToggleState(${trueMasterIdx}, this.checked)" />
+                            <span style="font-weight: 500;">${isCardMarkedReceived ? 'Línea Procesada en Recepción ✔️' : 'Línea Aprobada'}</span>
                         </label>
                     </div>
                 </div>
