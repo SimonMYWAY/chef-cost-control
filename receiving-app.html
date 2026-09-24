@@ -138,18 +138,24 @@ async function executeNewLocalGatewayAuthenticationChallenge() {
             return;
         }
         
-        // Allow guard/security access (fallback allows owners/admins too)
-        const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
-        if (userRole === "guard" || userRole === "owner" || userRole === "admin") {
-            feedbackEl.innerText = "";
-            sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
-            document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
-            document.getElementById("security-gateway-lock-screen").style.display = "none";
-            loadReceivingDashboard();
-        } else {
-            feedbackEl.style.color = "#ef4444";
-            feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
-        }
+        // =======================================================================
+// 🛡️ REPAIRED GATEWAY VALIDATION: Authorizes both system role variants
+// =======================================================================
+// Allow guard/security access (fallback allows owners/admins too)
+const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+
+// ✨ THE ATOMIC FIX: Added userRole === "receiving" to the authorization condition check!
+if (userRole === "receiving" || userRole === "guard" || userRole === "owner" || userRole === "admin") {
+    feedbackEl.innerText = "";
+    sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
+    document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
+    document.getElementById("security-gateway-lock-screen").style.display = "none";
+    loadReceivingDashboard();
+} else {
+    feedbackEl.style.color = "#ef4444";
+    feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
+}
+
     } catch (err) {
         console.error("Authentication query fault:", err);
         feedbackEl.style.color = "#ef4444";
@@ -387,7 +393,6 @@ async function processIncomingDelivery(orderId) {
         alert(`❌ Error crítico al procesar la entrega: ${err.message}`);
     }
 }
-
 
 </script>
 </body>
