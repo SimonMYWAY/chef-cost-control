@@ -396,7 +396,7 @@ async function pullActiveStagedCalculationFromCloud() {
             // Only old uncompleted entries from previous shipments can be deleted
             return currentShipId > 0 && currentShipId < highestShipmentId;
         });
-
+        
         if (legacyOrdersToPurge.length > 0) {
             console.log(`🧹 High-Speed Purge Engaged: Removing ${legacyOrdersToPurge.length} legacy entries...`);
             var purgeIdsList = legacyOrdersToPurge.map(function(o) { return o.id; }).join(',');
@@ -412,9 +412,37 @@ async function pullActiveStagedCalculationFromCloud() {
             }).catch(e => console.warn("Background parent cleanup delayed:", e));
         }
         // =======================================================================
+        // 🧹 HIGH-SPEED GHOST DRAFT CLEANUP SWEEP ENGINE
+        // =======================================================================
+        // Identifies any duplicate active drafts that look like yesterday's duplicate tests
+        var duplicateGhostDraftsToPurge = allDraftOrders.filter(function(order) {
+            if (order.status !== 'draft' && order.status !== 'pending') return false;
 
+            // Search the master array to check if a corresponding 'received' card exists for this exact same supplier PO number
+            var matchingDeliveredCardExists = allDraftOrders.some(function(o) {
+                return o.status === 'received' && String(o.po_number).trim() === String(order.po_number).trim();
+            });
 
-                // =======================================================================
+            return matchingDeliveredCardExists; // If a received one exists, flag this phantom draft row for immediate deletion!
+        });
+
+        if (duplicateGhostDraftsToPurge.length > 0) {
+            console.log(`🧹 Ghost Cleanup Engaged: Purging ${duplicateGhostDraftsToPurge.length} duplicate testing entries...`);
+            var ghostIdsList = duplicateGhostDraftsToPurge.map(function(o) { return o.id; }).join(',');
+            
+            if (ghostIdsList) {
+                // Wipe child items linked to yesterday's stray drafts out of purchase_order_items
+                fetch(API_URL + "purchase_order_items?po_id=in.(" + ghostIdsList + ")", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                }).catch(e => console.warn("Ghost child cleanup delayed:", e));
+
+                // Wipe parent rows from purchase_orders completely
+                fetch(API_URL + "purchase_orders?id=in.(" + ghostIdsList + ")", {
+                    method: "DELETE", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+                }).catch(e => console.warn("Ghost parent cleanup delayed:", e));
+            }
+        }
+        // =======================================================================
         // 🛡️ RE-ENGINEERED DRAFT FILTER: Keeps current drafts AND retains past 
         // dispatched/received orders so they stay locked on screen!
         // =======================================================================
@@ -1097,7 +1125,37 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
 
 // 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft [REPAIRED FIREWALL]
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
-    
+        // --- 🛡️ THE GHOST DRAFT EXCLUSION GATE ---
+    // Instantly checks the true, current state of this specific PO in the cloud before writing anything!
+    var supplierCard = document.getElementById(cardElementId);
+    var poNumber = "PO-SYSTEM";
+    if (supplierCard) {
+        var poBadgeNode = supplierCard.querySelector(".po-badge");
+        if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
+    }
+
+    try {
+        const cloudVerifyRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
+            method: "GET", headers: { "apikey": API_KEY }
+        });
+        if (cloudVerifyRes.ok) {
+            const currentCloudData = await cloudVerifyRes.json();
+            if (currentCloudData && currentCloudData.length > 0) {
+                var exactCloudStatus = String(currentCloudData[0].status || "").toLowerCase().trim();
+                
+                // 🚨 CRITICAL INTERCEPT: If the guard already received it, FREEZE this save button completely!
+                if (exactCloudStatus === "received" || exactCloudStatus === "dispatched") {
+                    alert(`🛑 OPERACIÓN CANCELADA:\n\nEsta orden (${poNumber}) ya fue procesada e ingresada físicamente en muelle por el equipo de seguridad.\n\nNo se permite sobreescribir ni crear borradores sobre mercancía ya recibida.`);
+                    if (typeof pullActiveStagedCalculationFromCloud === "function") {
+                        await pullActiveStagedCalculationFromCloud(); // Force-refresh screen layout
+                    }
+                    return; // Abort function completely!
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Safety status double-check bypassed:", err);
+    }
     // =======================================================================
     // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE WRITING
     // =======================================================================
