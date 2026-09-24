@@ -442,7 +442,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 }).catch(e => console.warn("Ghost parent cleanup delayed:", e));
             }
         }
-        // =======================================================================
+            // =======================================================================
         // 🛡️ RE-ENGINEERED DRAFT FILTER: Keeps current drafts AND retains past 
         // dispatched/received orders so they stay locked on screen!
         // =======================================================================
@@ -478,7 +478,7 @@ async function pullActiveStagedCalculationFromCloud() {
         window.highestActiveShipmentIdGlobalValue = highestShipmentId;
 
         // 4. DOWNLOAD ALL LINE ITEMS BOUND TO OPEN ACTIVE DRAFTS
-        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,faltante_base,equivalencia,recipe_uom";
+        const itemsFetchUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,equivalencia,recipe_uom";
         const itemsRes = await fetch(itemsFetchUrl, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
@@ -486,41 +486,26 @@ async function pullActiveStagedCalculationFromCloud() {
         if (!itemsRes.ok) throw new Error("Fallo al descargar los ítems de las órdenes.");
         const allOrderLines = await itemsRes.json();
 
-            // =======================================================================
-        // 🛡️ RE-ENGINEERED LINE ITEM MAPPER: ENFORCES ABSOLUTE IDENTITY LOCKS
-        // =======================================================================
         var cloudRows = [];
-        // ✨ IDENTITY TRACKER SET: Keeps an atomic record of processed IDs to block duplicates!
-        var trackedItemIdsSet = {};
-
         draftOrders.forEach(function(order) {
             var cleanOrderId = String(order.id || "").toLowerCase().trim();
             
+            // 🛡️ EXTRACT METADATA PO SHIPMENT ID: Parse the shipment number belonging to this specific parent order row
+            var orderShipmentId = 0;
+            var poStr = order.po_number ? String(order.po_number).trim() : "";
+            if (poStr && poStr.includes("-SHIP-")) {
+                var splitParts = poStr.split("-SHIP-");
+                if (splitParts.length > 1 && splitParts[1]) {
+                    orderShipmentId = parseInt(splitParts[1].split("-")[0], 10);
+                }
+            }
+
             var matchedItems = allOrderLines.filter(function(item) {
                 var cleanItemPoId = String(item.po_id || "").toLowerCase().trim();
                 return cleanItemPoId === cleanOrderId && cleanOrderId !== "";
             });
             
             matchedItems.forEach(function(item) {
-                if (!item.id) return;
-                var cleanItemId = String(item.id).trim();
-
-                // 🛑 IDENTITY GATE EXCLUSION: If this unique item ID has already been mapped to the screen array,
-                // prioritize the 'received' or closed state and drop the duplicate draft layer immediately!
-                if (trackedItemIdsSet[cleanItemId]) {
-                    console.log(`🛡️ Duplicate Intercept: Skipped item duplicate line for ID: ${cleanItemId} (${item.ingredient_name})`);
-                    
-                    // Optional Upgrade: If the newly matched row has a higher-priority status like received, overwrite the old status tracker
-                    var existingRow = cloudRows.find(function(r) { return String(r.id).trim() === cleanItemId; });
-                    if (existingRow && order.status === "received") {
-                        existingRow.db_status = "received";
-                    }
-                    return; // Skip this iteration block entirely!
-                }
-
-                // Lock this ID into our persistent tracker set
-                trackedItemIdsSet[cleanItemId] = true;
-
                 var cleanTextName = String(item.ingredient_name).toLowerCase().trim();
                 var resolvedUuidFromMap = masterNameToUuidMap[cleanTextName] || "";
                 var matchedFormatData = supplierFormatsLookup[resolvedUuidFromMap] || {};
@@ -540,7 +525,7 @@ async function pullActiveStagedCalculationFromCloud() {
                     approved_formats_quantity: item.quantity_ordered || 0,
                     quantity_delivered: item.quantity_delivered !== undefined ? item.quantity_delivered : null,
                     is_approved: true,
-                    shipment_id: "00",
+                    shipment_id: orderShipmentId, // 🌟 FIXED SHIELD LOCK: Pins the true shipment ID sequence to the item row
                     created_at: order.created_at, 
                     po_number: order.po_number,
                     db_status: order.status
@@ -569,10 +554,7 @@ async function pullActiveStagedCalculationFromCloud() {
                 id: row.id,
                 ingredient_id: cleanIngId,
                 ingredient_name: row.ingredient_name,
-                
-                // ✨ SYSTEM INTERFACE PIPELINE LINK: Passes data directly to the clipboard template loop
                 commercial_name: row.commercial_name || row.ingredient_name,
-                
                 faltante_base: calculatedRecipeFaltante, 
                 recipe_uom: String(realRecipeUnit).trim(),               
                 equivalencia: finalMultiplier,
@@ -581,11 +563,11 @@ async function pullActiveStagedCalculationFromCloud() {
                 supplier_uom: realPurchaseUnit,           
                 pedido_sugerido: rawPedidoSugerido,       
                 approved_formats_quantity: approvedCount, 
+                quantity_delivered: row.quantity_delivered,
                 is_approved: row.is_approved !== undefined ? row.is_approved : true, 
                 
-                shipment_id: highestShipmentId,
+                shipment_id: row.shipment_id, // 🌟 FIXED SHIELD LOCK: Inherits the true isolated parent shipment ID
                 sales_reference_date: row.created_at || "Fecha No Definida",
-                
                 poNumber: resolvedPoNumber,
                 dbStatus: resolvedDbStatus,
                 forced_po_number: resolvedPoNumber,
@@ -611,6 +593,17 @@ async function pullActiveStagedCalculationFromCloud() {
             headerBannerNode.innerHTML = `<div>📦 EMBARQUE LOGÍSTICO ACTIVO: #<strong>${highestShipmentId}</strong></div>`;
             window.activeShipmentSequenceId = highestShipmentId;
         }
+
+        // 🛡️ CRITICAL FILTRATION OVERRIDE:
+        // Before letting the page render, filter LOCAL_STAGED_ROWS to strictly display rows belonging 
+        // to the active shipment (highestShipmentId) OR any past row that is currently marked as received/dispatched!
+        LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(function(row) {
+            if (row.dbStatus === "received" || row.dbStatus === "dispatched") {
+                // Only let a closed card show if its shipment number matches the active workflow grid
+                return row.shipment_id === highestShipmentId;
+            }
+            return row.shipment_id === highestShipmentId;
+        });
 
         renderInteractiveManagerSpreadsheetGrid();
 
