@@ -5,6 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>📱 Conteo de Inventario Geográfico - Staff</title>
     <style>
+        /* 🔐 ADMINISTRATIVE SECURITY OVERLAY MASK */
+#security-gateway-lock-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #0f172a;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, sans-serif;
+    padding: 15px;
+    box-sizing: border-box;
+}
+.gate-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 400px;
+    padding: 30px;
+    border-radius: 14px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    text-align: center;
+}
+.gate-label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    text-align: left;
+}
+.gate-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    background: #f8fafc;
+    margin-bottom: 15px;
+}
+.gate-btn {
+    width: 100%;
+    background: #a21caf; /* Purple signature inventory accent theme */
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.gate-btn:hover { opacity: 0.9; }
+
         :root {
             --bg-base: #f8fafc;
             --bg-surface: #ffffff;
@@ -105,6 +163,28 @@
     </style>
 </head>
 <body>
+<!-- 🔐 AUTOMATED SECURITY LOCK SCREEN WRAPPER -->
+<div id="security-gateway-lock-screen">
+    <div class="gate-card">
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">📦</div>
+        <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 1.35rem; font-weight: 700;">Auditoría de Inventario</h2>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 25px; font-weight: 500;">Introduce tus credenciales para autorizar el Cierre de Existencias.</p>
+        
+        <div>
+            <label class="gate-label">Usuario / Email</label>
+            <input type="text" id="gateway-input-user" placeholder="ej: auditor.inventario" class="gate-input" />
+        </div>
+        <div>
+            <label class="gate-label">Contraseña</label>
+            <input type="password" id="gateway-input-pass" placeholder="••••••••" class="gate-input" style="margin-bottom: 22px;" />
+        </div>
+        
+        <button type="button" onclick="executeInventoryGatewayAuthenticationChallenge()" class="gate-btn">
+            🔓 Entrar a Inventario
+        </button>
+        <div id="gateway-login-error-feedback" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; color: #ef4444; min-height: 20px;"></div>
+    </div>
+</div>
 
     <div class="header-bar">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -129,6 +209,94 @@
     </div>
 
     <script>
+        // 🔒 USER SECURITY ACCESS LOCK ENGINE FOR INVENTORY APP
+document.addEventListener("DOMContentLoaded", function() {
+    // Transient security check: look inside single-tab sessionStorage memory pools
+    var activeSession = sessionStorage.getItem("inventory_app_authorized_session_profile");
+    var lockScreen = document.getElementById("security-gateway-lock-screen");
+    
+    if (activeSession) {
+        try {
+            var profile = JSON.parse(activeSession);
+            var userRole = String(profile.role || "kitchen").toLowerCase().trim();
+            
+            // Re-verify authorization criteria matches your target roles
+            if (userRole === "inventory" || userRole === "chef" || userRole === "owner") {
+                if (lockScreen) lockScreen.style.display = "none";
+                // 🔄 RUN APP INITIALIZATION ON RECOVERY:
+                // Calls your native startup function (e.g., checkActiveInventoryProcedure() or init())
+                if (typeof checkActiveInventoryProcedure === "function") {
+                    checkActiveInventoryProcedure();
+                } else if (typeof init === "function") {
+                    init();
+                }
+            } else {
+                if (lockScreen) lockScreen.style.display = "flex";
+            }
+        } catch(e) {
+            if (lockScreen) lockScreen.style.display = "flex";
+        }
+    } else {
+        if (lockScreen) lockScreen.style.display = "flex";
+    }
+});
+
+// 🔒 AUTH MATRIX VALVE: Authenticates inventory/chef/owner profiles and unlocks dashboard
+async function executeInventoryGatewayAuthenticationChallenge() {
+    const feedbackEl = document.getElementById("gateway-login-error-feedback");
+    if (!feedbackEl) return;
+    feedbackEl.style.color = "#007afb";
+    feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
+    
+    const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
+    const passInputVal = document.getElementById("gateway-input-pass").value.trim();
+    
+    try {
+        const queryUrl = API_URL + "profiles";
+        const res = await fetch(queryUrl, { 
+            headers: { "apikey": API_KEY } 
+        }).then(function(r) { return r.json(); });
+        
+        let matchedProfile = null;
+        for (let i = 0; i < res.length; i++) {
+            let row = res[i];
+            if (String(row.username || "").toLowerCase().trim() === userInputVal || 
+                String(row.email || "").toLowerCase().trim() === userInputVal) {
+                matchedProfile = row;
+                break;
+            }
+        }
+        
+        if (!matchedProfile || String(matchedProfile.password_hash) !== passInputVal) {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "❌ Credenciales incorrectas.";
+            return;
+        }
+        
+        // 🛡️ ROLE FIREWALL PROTECTION: Lock out non-inventory personnel
+        const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+        if (userRole === "inventory" || userRole === "chef" || userRole === "owner" || userRole === "admin") {
+            feedbackEl.innerText = "";
+            sessionStorage.setItem("inventory_app_authorized_session_profile", JSON.stringify(matchedProfile));
+            document.getElementById("security-gateway-lock-screen").style.display = "none";
+            
+            // 🔄 RUN APP INITIALIZATION ON SUCCESSFUL CHALLENGE DROP:
+            if (typeof checkActiveInventoryProcedure === "function") {
+                checkActiveInventoryProcedure();
+            } else if (typeof init === "function") {
+                init();
+            }
+        } else {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene rango para el panel de Auditoría.";
+        }
+    } catch (err) {
+        console.error("Inventory gateway challenge fault:", err);
+        feedbackEl.style.color = "#ef4444";
+        feedbackEl.innerText = "❌ Error de conexión remota.";
+    }
+}
+
         // 🌟 CONFIGURACIÓN DE CREDENCIALES (Coloque sus claves reales de Supabase aquí)
         const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/"; 
         const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
