@@ -1088,37 +1088,7 @@ function updateLiveRowSupplierAssignment(idx, newSupplierName) {
 
 // 💾 STAGE 1 TRANSACTION: Saves layout configuration header to database as a Draft [REPAIRED FIREWALL]
 async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
-        // --- 🛡️ THE GHOST DRAFT EXCLUSION GATE ---
-    // Instantly checks the true, current state of this specific PO in the cloud before writing anything!
-    var supplierCard = document.getElementById(cardElementId);
-    var poNumber = "PO-SYSTEM";
-    if (supplierCard) {
-        var poBadgeNode = supplierCard.querySelector(".po-badge");
-        if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
-    }
-
-    try {
-        const cloudVerifyRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
-            method: "GET", headers: { "apikey": API_KEY }
-        });
-        if (cloudVerifyRes.ok) {
-            const currentCloudData = await cloudVerifyRes.json();
-            if (currentCloudData && currentCloudData.length > 0) {
-                var exactCloudStatus = String(currentCloudData[0].status || "").toLowerCase().trim();
-                
-                // 🚨 CRITICAL INTERCEPT: If the guard already received it, FREEZE this save button completely!
-                if (exactCloudStatus === "received" || exactCloudStatus === "dispatched") {
-                    alert(`🛑 OPERACIÓN CANCELADA:\n\nEsta orden (${poNumber}) ya fue procesada e ingresada físicamente en muelle por el equipo de seguridad.\n\nNo se permite sobreescribir ni crear borradores sobre mercancía ya recibida.`);
-                    if (typeof pullActiveStagedCalculationFromCloud === "function") {
-                        await pullActiveStagedCalculationFromCloud(); // Force-refresh screen layout
-                    }
-                    return; // Abort function completely!
-                }
-            }
-        }
-    } catch (err) {
-        console.warn("Safety status double-check bypassed:", err);
-    }
+    
     // =======================================================================
     // 🛡️ IN-LINE LOGISTICS FIREWALL: VERIFY SHIPMENT INTEGRITY BEFORE WRITING
     // =======================================================================
@@ -1175,7 +1145,10 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         var generatedPoUuid = null;
         
         // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS
-        const checkPoRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
+        // ✨ THE FIX: We added &status=in.(draft,pending) to the lookup parameter query string!
+        // This explicitly forces the query to ignore any processed received rows sharing this same PO number!
+        const checkPoUrl = API_URL + "purchase_orders?po_number=eq." + poNumber + "&status=in.(draft,pending,saved_pending_whatsapp)";
+        const checkPoRes = await fetch(checkPoUrl, {
             method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
         });
         
@@ -1192,6 +1165,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         }
 
+        // If no matching draft/pending header was found, execute a clean POST to make a brand-new separate UUID row entry
         if (!generatedPoUuid) {
             var parentPayload = {
                 po_number: poNumber,
@@ -1213,10 +1187,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
             }
         }
 
-        // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicates ONLY inside the current active order shell
-        // ✨ THE FIREWALL FIX: We completely removed the blind text-based global fetch DELETE call.
-        // Instead of executing an unsafe global query that wipes out your past shipments, we clean old lines 
-        // linked specifically to this active order block via generatedPoUuid, keeping received history 100% safe!
+        // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicate items safely inside the active order shell
         if (generatedPoUuid) {
             await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
                 method: "DELETE",
@@ -1238,8 +1209,6 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                 recipe_uom: item.recipe_uom || "unidad"
             };
 
-            // Since we ran a clean delete on the active order shell above, we can directly issue a safe POST 
-            // for every line item, completely eliminating nested loop race conditions!
             await fetch(API_URL + "purchase_order_items", {
                 method: "POST",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
