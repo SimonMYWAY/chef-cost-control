@@ -612,15 +612,21 @@
         </div>
     </div>
 <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-<div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; max-width: 1200px; margin: 40px auto 0 auto; padding-top: 10px; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
-    
-    <!-- Outer structural block wrapper that cuts off any horizontal flex rows -->
-    <div style="display: block !important; clear: both !important; width: 100%; box-sizing: border-box;">
-        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%;">
-            
-            <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS -->
-            <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
 
+<!-- 🛡️ STRUCTURAL ISOLATION SHIELD: Forcefully plugs the unclosed container leak 
+     coming from the recipe catalog above, instantly removing these cards from the 
+     recipe view on first load and restoring your normal backoffice tabs! -->
+</div></div>
+<div style="clear: both !important; display: block !important; height: 15px; width: 100%;"></div>
+
+<div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; max-width: 1200px; margin: 20px auto 0 auto; padding-top: 10px; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
+    
+    <!-- Explicit vertical container that cuts off any external horizontal flex rows -->
+    <div style="display: block !important; clear: both !important; width: 100%; box-sizing: border-box;">
+        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%; clear: both !important;">
+            
+            <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS (Anchored perfectly to the left edge under the title) -->
+            <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
                 <h3 style="margin-top:0; color:#0f172a;">📝 Registrar Nuevo Usuario</h3>
                 <form id="user-admin-form" onsubmit="handleStaffUserCreation(event)">
                     <div style="margin-bottom: 12px;">
@@ -651,11 +657,8 @@
                 <div id="user-creation-feedback" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
             </div>
 
-            <!-- 🚧 INTER-CARD SEPARATOR: Ensures Card B drops cleanly below Card A -->
-            <div style="clear: both !important; display: block !important; height: 10px; width: 100%;"></div>
-
-            <!-- 🛡️ CARD B: CURRENT ACTIVE RECENT PROFILES DIRECTORY -->
-            <div class="card" style="display: block !important; width: 100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box; margin-top: 15px;">
+            <!-- 🛡️ RIGHT CARD: CURRENT ACTIVE RECENT PROFILES DIRECTORY -->
+            <div class="card" style="flex: 3; min-width: 450px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box; margin-top: 15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h3 style="margin:0; color:#0f172a;">🛡️ Directorio de Personal Activo</h3>
                     <button onclick="fetchActiveStaffProfiles()" style="background:none; border:none; color:#007afb; font-size:1.1rem; cursor:pointer;">🔄</button>
