@@ -109,34 +109,37 @@
 
     <div class="main-content">
         <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
-                <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
-        <div id="view-approvals" class="view-pane active">
-            
-            <!-- UPPER BOX: Pending reviewing queue panel -->
-            <div class="card" style="width: 100%; box-sizing: border-box; margin-bottom: 25px;">
-                <h3>Cola de Revisión de Fórmulas</h3>
-                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
-                <div id="queue-container"></div>
-            </div>
+        <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
+<!-- ✨ THE STRUCTURAL CURE: Moved the top-bar INSIDE the view-pane block container. 
+     This ensures it is completely hidden when switching tabs, protecting all future 
+     sidebar menu options from layout collisions! -->
+<div id="view-approvals" class="view-pane active">
+    
+    <!-- Section Title Banner is now safely anchored to its own tab container -->
+    <div class="top-bar" style="margin-bottom: 20px;"><h1 id="page-title" style="margin:0; text-align: left;">Aprobación de Recetas</h1></div>
+    
+    <!-- UPPER BOX: Pending reviewing queue panel -->
+    <div class="card" style="width: 100%; box-sizing: border-box; margin-bottom: 25px;">
+        <h3>Cola de Revisión de Fórmulas</h3>
+        <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
+        <div id="queue-container"></div>
+    </div>
 
-            <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
-            <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
-                <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
-                <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
-                <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
-                <div style="margin: 0 0 15px 0; width: 100%; box-sizing: border-box;">
-                    <input type="text" id="search-backoffice-recipes-field" oninput="executeLiveRecipeCardSearch()" placeholder="🔍 Buscar receta por nombre en catálogo..." style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; box-sizing: border-box; background: #ffffff; color: #1c1c1e !important;" />
-                </div>
+    <!-- LOWER BOX: Isolated Master Catalog Table Directory -->
+    <div class="card" style="width: 100%; box-sizing: border-box; display: block; clear: both; margin-top: 25px;">
+        <h3 style="margin:0; text-align: left;">📋 Directorio Maestro de Recetas</h3>
+        <p style="color: var(--text-muted); margin: 5px 0 20px 0; font-size: 0.9rem; text-align: left;">Catálogo general de fórmulas almacenadas en el sistema</p>
+        <!-- 🔍 REAL-TIME RECIPES LOOKUP SEARCH FIELD -->
+        <div style="margin: 0 0 15px 0; width: 100%; box-sizing: border-box;">
+            <input type="text" id="search-backoffice-recipes-field" oninput="executeLiveRecipeCardSearch()" placeholder="🔍 Buscar receta por nombre en catálogo..." style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; box-sizing: border-box; background: #ffffff; color: #1c1c1e !important;" />
+        </div>
 
-                <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
-                    <!-- Approved and draft recipe card records will draw cleanly here -->
-                </div>
-            </div>
+        <div id="master-catalog-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+            <!-- Approved and draft recipe card records will draw cleanly here -->
+        </div>
+    </div>
 
-        </div> <!-- Closes your clean view-approvals tab block parent safely -->
-
-
-        
+</div>
 
                 <!-- MODULE CANVA 2: SALES DEVIATION CALCULATOR -->
                 <!-- MODULE: COST DEVIATION & SALES ANALYSIS -->
