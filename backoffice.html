@@ -107,17 +107,14 @@
         </div>
     </div>
 
-    <div class="main-content">
+<div class="main-content">
     <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
     <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
     <div id="view-approvals" class="view-pane active">
 
-    
-    <!-- Section Title Banner is now safely anchored to its own tab container -->
-    <div class="top-bar" style="margin-bottom: 20px;"><h1 id="page-title" style="margin:0; text-align: left;">Aprobación de Recetas</h1></div>
-    
     <!-- UPPER BOX: Pending reviewing queue panel -->
     <div class="card" style="width: 100%; box-sizing: border-box; margin-bottom: 25px;">
+
         <h3>Cola de Revisión de Fórmulas</h3>
         <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Visualiza los ingredientes, mermas y porciones antes de autorizarlos al catálogo live.</p>
         <div id="queue-container"></div>
@@ -615,16 +612,14 @@
         </div>
     </div>
 <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-<!-- 🟢 THE LAYOUT CURE: This block override isolates the module, breaks free from any 
-     leaking rows above it, and drops Card A perfectly into place on the left margin! -->
-<div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; max-width: 1200px; margin: 20px auto 0 auto; padding-top: 15px !important; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
+<div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; max-width: 1200px; margin: 40px auto 0 auto; padding-top: 10px; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
     
-    <!-- Explicit vertical container that cuts off any external horizontal rows -->
+    <!-- Outer structural block wrapper that cuts off any horizontal flex rows -->
     <div style="display: block !important; clear: both !important; width: 100%; box-sizing: border-box;">
-        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%; clear: both !important;">
-
-        <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS -->
-        <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
+        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%;">
+            
+            <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS -->
+            <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
 
                 <h3 style="margin-top:0; color:#0f172a;">📝 Registrar Nuevo Usuario</h3>
                 <form id="user-admin-form" onsubmit="handleStaffUserCreation(event)">
