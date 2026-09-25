@@ -613,17 +613,17 @@
             </table>
         </div>
     </div>
-        <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-    <!-- 🟢 THE FIX: Enforces a fresh block layout container. This stops Card A from squeezing 
-         into the top row, protects your section title from being truncated, and drops the 
-         content perfectly beneath it against your sidebar card! -->
-    <div id="view-users" class="view-pane" style="width: 100%; display: block; clear: both; box-sizing: border-box; font-family: system-ui, sans-serif; text-align: left;">
+    <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
+    <!-- 🟢 THE LAYOUT CURE: Forces an absolute layout split, clearing any side flex variables from the header card above -->
+    <div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif; text-align: left;">
         
-        <!-- Master content block that isolates this view from the header row completely -->
-        <div style="width: 100%; display: block; clear: both; padding-top: 15px;">
+        <!-- 🚧 THE PHYSICAL WEDGES: Drops the content completely below the title card, blocking horizontal collisions -->
+        <div style="clear: both !important; display: block !important; height: 15px; width: 100%;"></div>
+
+        <div style="display: block !important; width: 100%; clear: both !important;">
             
-            <!-- 📝 CARD A: REGISTER NEW STAFF CREDENTIALS (Anchored perfectly to the left) -->
-            <div class="card" style="width: 100%; max-width: 480px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom: 25px; box-sizing: border-box; display: block;">
+            <!-- 📝 CARD A: REGISTER NEW STAFF CREDENTIALS (Anchored perfectly to the left edge under the title) -->
+            <div class="card" style="display: block !important; float: left !important; clear: both !important; width: 100%; max-width: 480px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom: 25px; box-sizing: border-box;">
                 <h3 style="margin-top:0; color:#0f172a;">📝 Registrar Nuevo Usuario</h3>
                 <form id="user-admin-form" onsubmit="handleStaffUserCreation(event)">
                     <div style="margin-bottom: 12px;">
@@ -654,8 +654,11 @@
                 <div id="user-creation-feedback" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
             </div>
 
+            <!-- 🚧 INTER-CARD SEPARATOR: Ensures Card B drops cleanly below Card A -->
+            <div style="clear: both !important; display: block !important; height: 10px; width: 100%;"></div>
+
             <!-- 🛡️ CARD B: CURRENT ACTIVE RECENT PROFILES DIRECTORY -->
-            <div class="card" style="width: 100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box; display: block; margin-top: 15px;">
+            <div class="card" style="display: block !important; width: 100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box; margin-top: 15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h3 style="margin:0; color:#0f172a;">🛡️ Directorio de Personal Activo</h3>
                     <button onclick="fetchActiveStaffProfiles()" style="background:none; border:none; color:#007afb; font-size:1.1rem; cursor:pointer;">🔄</button>
@@ -686,6 +689,7 @@
 
         </div>
     </div>
+
     
     <script>
         // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
