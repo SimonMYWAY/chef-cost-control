@@ -614,11 +614,16 @@
         </div>
     </div>
         <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-    <div id="view-users" class="view-pane" style="max-width: 1200px; margin: 0 auto; font-family: system-ui, sans-serif;">
-        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+    <!-- 🟢 THE FIX: Enforces a fresh block layout container. This stops Card A from squeezing 
+         into the top row, protects your section title from being truncated, and drops the 
+         content perfectly beneath it against your sidebar card! -->
+    <div id="view-users" class="view-pane" style="width: 100%; display: block; clear: both; box-sizing: border-box; font-family: system-ui, sans-serif; text-align: left;">
+        
+        <!-- Master content block that isolates this view from the header row completely -->
+        <div style="width: 100%; display: block; clear: both; padding-top: 15px;">
             
-            <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS -->
-            <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px;">
+            <!-- 📝 CARD A: REGISTER NEW STAFF CREDENTIALS (Anchored perfectly to the left) -->
+            <div class="card" style="width: 100%; max-width: 480px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom: 25px; box-sizing: border-box; display: block;">
                 <h3 style="margin-top:0; color:#0f172a;">📝 Registrar Nuevo Usuario</h3>
                 <form id="user-admin-form" onsubmit="handleStaffUserCreation(event)">
                     <div style="margin-bottom: 12px;">
@@ -636,55 +641,48 @@
                     <div style="margin-bottom: 20px;">
                         <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:4px; color:#334155;">Rol / Permisos de Aplicación</label>
                         <select id="user-admin-role" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; box-sizing:border-box;">
-                        <!-- Existing Core Framework Profiles -->
-                        <option value="kitchen">🍳 Personal de Cocina (Solo kitchen.html)</option>
-                        <option value="chef">👨‍🍳 Jefe de Cocina (kitchen.html + index.html)</option>
-                        <option value="owner">💼 Administrador Total (Todas las Aplicaciones)</option>
-    
-                        <!-- 🌟 NEW: SPECIALIZED LOGISTICAL PROFILE CHANNELS -->
-                        <option value="purchase">🛒 Compras (Acceso exclusivo a Purchase App)</option>
-                        <option value="receiving">🗃️ Recepción (Acceso exclusivo a Receiving & Inspection App)</option>
-                        <option value="inventory">📦 Inventario (Acceso exclusivo a Inventory App)</option>
+                            <option value="kitchen">🍳 Personal de Cocina (Solo kitchen.html)</option>
+                            <option value="chef">👨‍🍳 Jefe de Cocina (kitchen.html + index.html)</option>
+                            <option value="owner">💼 Administrador Total (Todas las Aplicaciones)</option>
+                            <option value="purchase">🛒 Compras (Acceso exclusivo a Purchase App)</option>
+                            <option value="receiving">🗃️ Recepción (Acceso exclusivo a Receiving & Inspection App)</option>
+                            <option value="inventory">📦 Inventario (Acceso exclusivo a Inventory App)</option>
                         </select>
-
                     </div>
                     <button type="submit" style="width:100%; background:#22c55e; color:white; border:none; padding:10px; border-radius:6px; font-weight:600; cursor:pointer;">Crear Cuenta de Personal</button>
                 </form>
                 <div id="user-creation-feedback" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
             </div>
 
-            <!-- 🛡️ RIGHT CARD: CURRENT ACTIVE RECENT PROFILES DIRECTORY (EXPANDED RESPONSIVE MATRIX) -->
-<div class="card" style="flex: 3; min-width: 450px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-        <h3 style="margin:0; color:#0f172a;">🛡️ Directorio de Personal Activo</h3>
-        <button onclick="fetchActiveStaffProfiles()" style="background:none; border:none; color:#007afb; font-size:1.1rem; cursor:pointer;">🔄</button>
-    </div>
-    
-    <div style="margin-bottom: 15px;">
-        <input type="text" id="search-users-field" oninput="executeLiveTableDataSearch('search-users-field', 'users-table-rows')" placeholder="🔍 Buscar por usuario, email o rol..." style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;" />
-    </div>
+            <!-- 🛡️ CARD B: CURRENT ACTIVE RECENT PROFILES DIRECTORY -->
+            <div class="card" style="width: 100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box; display: block; margin-top: 15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h3 style="margin:0; color:#0f172a;">🛡️ Directorio de Personal Activo</h3>
+                    <button onclick="fetchActiveStaffProfiles()" style="background:none; border:none; color:#007afb; font-size:1.1rem; cursor:pointer;">🔄</button>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="search-users-field" oninput="executeLiveTableDataSearch('search-users-field', 'users-table-rows')" placeholder="🔍 Buscar por usuario, email o rol..." style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;" />
+                </div>
 
-    <!-- ✨ THE LAYER REPAIR: Wraps the table in a responsive, horizontal scroll viewport shell -->
-    <div style="width:100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 5px;">
-        <!-- Added a min-width constraint to give the 6 columns enough breathing room to render beautifully -->
-        <table style="width:100%; border-collapse:collapse; font-size:0.9rem; min-width: 780px;">
-            <thead>
-                <tr style="border-bottom: 2px solid #e2e8f0; background: #f8fafc;">
-                    <th style="padding:10px; text-align:left; color:#475569; font-weight:700;">Personal / Email</th>
-                    <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Rol Asignado</th>
-                    <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Terminales Autorizados</th>
-                    <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Contraseña</th>
-                    <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Estado</th>
-                    <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Acciones</th>
-                </tr>
-            </thead>
-            <!-- The colspan inside your loading fallback row was also bumped to 6 to keep it centered perfectly -->
-            <tbody id="users-table-rows">
-                <tr><td colspan="6" style="text-align:center; color:#64748b; font-style:italic; padding:20px;">Cargando perfiles de personal...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+                <div style="width:100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 5px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.9rem; min-width: 780px; table-layout: auto;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e2e8f0; background: #f8fafc;">
+                                <th style="padding:10px; text-align:left; color:#475569; font-weight:700;">Personal / Email</th>
+                                <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Rol Asignado</th>
+                                <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Terminales Autorizados</th>
+                                <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Contraseña</th>
+                                <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Estado</th>
+                                <th style="padding:10px; text-align:center; color:#475569; font-weight:700;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-rows">
+                            <tr><td colspan="6" style="text-align:center; color:#64748b; font-style:italic; padding:20px;">Cargando perfiles de personal...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
         </div>
     </div>
