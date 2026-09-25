@@ -108,12 +108,10 @@
     </div>
 
     <div class="main-content">
-        <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
-        <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
-<!-- ✨ THE STRUCTURAL CURE: Moved the top-bar INSIDE the view-pane block container. 
-     This ensures it is completely hidden when switching tabs, protecting all future 
-     sidebar menu options from layout collisions! -->
-<div id="view-approvals" class="view-pane active">
+    <div class="top-bar"><h1 id="page-title">Aprobación de Recetas</h1></div>
+    <!-- MODULE CANVA 1: PENDING APPROVAL QUEUE -->
+    <div id="view-approvals" class="view-pane active">
+
     
     <!-- Section Title Banner is now safely anchored to its own tab container -->
     <div class="top-bar" style="margin-bottom: 20px;"><h1 id="page-title" style="margin:0; text-align: left;">Aprobación de Recetas</h1></div>
@@ -617,12 +615,14 @@
         </div>
     </div>
 <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-<!-- 🟢 THE LAYOUT CURE: We removed the extra closing div completely to stop it from bleeding into recipes. 
-     Instead, we use padding-top: 180px !important to physically push Card A down below your header, 
-     preventing any overlapping collisions while keeping it perfectly aligned on the left margin! -->
-<div id="view-users" class="view-pane" style="display: block !important; width: 100%; max-width: 1200px; margin: 0 auto; padding-top: 180px !important; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
-    <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%;">
-        
+<!-- 🟢 THE LAYOUT CURE: This block override isolates the module, breaks free from any 
+     leaking rows above it, and drops Card A perfectly into place on the left margin! -->
+<div id="view-users" class="view-pane" style="display: block !important; clear: both !important; width: 100%; max-width: 1200px; margin: 20px auto 0 auto; padding-top: 15px !important; font-family: system-ui, sans-serif; box-sizing: border-box; text-align: left;">
+    
+    <!-- Explicit vertical container that cuts off any external horizontal rows -->
+    <div style="display: block !important; clear: both !important; width: 100%; box-sizing: border-box;">
+        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; box-sizing: border-box; width: 100%; clear: both !important;">
+
         <!-- 📝 LEFT CARD: REGISTER NEW STAFF CREDENTIALS -->
         <div class="card" style="flex: 1; min-width: 320px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-sizing: border-box;">
 
