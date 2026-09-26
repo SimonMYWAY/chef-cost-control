@@ -463,13 +463,20 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
         draftOrders.forEach(function(order) {
             var cleanOrderId = String(order.id || "").toLowerCase().trim();
             
-            // Extract the true shipment sequence number belonging strictly to this parent order row
+                    // =======================================================================
+            // 🛡️ REPAIRED DATA LAYER SEGMENTATION MATCHING EXTRACTOR
+            // =======================================================================
             var orderShipmentId = 0;
             var poStr = order.po_number ? String(order.po_number).trim() : "";
             if (poStr && poStr.includes("-SHIP-")) {
                 var splitParts = poStr.split("-SHIP-");
                 if (splitParts.length > 1 && splitParts[1]) {
-                    orderShipmentId = parseInt(splitParts[1].split("-")[0], 10);
+                    // 🎯 THE PERFECT ARRAY TARGET LOCK: Mirrors your top parsing syntax exactly!
+                    var sequenceSegment = splitParts[1].split("-")[0];
+                    var shipSequenceNum = parseInt(sequenceSegment, 10);
+                    if (!isNaN(shipSequenceNum)) {
+                        orderShipmentId = shipSequenceNum;
+                    }
                 }
             }
 
