@@ -513,7 +513,9 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             });
         });
 
-        // 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION
+                // =======================================================================
+        // 🟢 5. MAP ARRAY GENERATION WITH TOTAL SEQUENCE ISOLATION [REPAIRED]
+        // =======================================================================
         LOCAL_STAGED_ROWS = cloudRows.map(function(row) {
             var cleanIngId = String(row.ingredient_id).trim();
             var lookupKey = cleanIngId.toLowerCase();
@@ -528,7 +530,25 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             var approvedCount = parseFloat(row.approved_formats_quantity || rawPedidoSugerido);
 
             var resolvedPoNumber = row.po_number || "PO-PENDING";
-            var resolvedDbStatus = row.db_status || "draft";
+            
+            // ✨ THE CASING SHIELD: Normalize status string text to clean lowercase 
+            // to prevent uppercase "RECEIVED" strings from dropping out of your filter templates!
+            var resolvedDbStatus = String(row.db_status || row.status || "draft").toLowerCase().trim();
+
+            // ✨ THE SHIPMENT REPAIR ENGINE: Dynamically extract the true shipment number 
+            // from the text PO string since the table lacks a raw shipment_id column!
+            var calculatedShipmentId = 0;
+            var poStr = String(resolvedPoNumber).trim();
+            if (poStr && poStr.includes("-SHIP-")) {
+                var splitParts = poStr.split("-SHIP-");
+                if (splitParts.length > 1 && splitParts[1]) {
+                    var sequenceSegment = splitParts[1].split("-")[0];
+                    var shipSequenceNum = parseInt(sequenceSegment, 10);
+                    if (!isNaN(shipSequenceNum)) {
+                        calculatedShipmentId = shipSequenceNum;
+                    }
+                }
+            }
 
             return {
                 id: row.id,
@@ -545,7 +565,10 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
                 approved_formats_quantity: approvedCount, 
                 quantity_delivered: row.quantity_delivered,
                 is_approved: row.is_approved !== undefined ? row.is_approved : true, 
-                shipment_id: row.shipment_id,
+                
+                // ✨ Inject the correctly parsed calculation value here!
+                shipment_id: calculatedShipmentId,
+                
                 sales_reference_date: row.created_at || "Fecha No Definida",
                 poNumber: resolvedPoNumber,
                 dbStatus: resolvedDbStatus,
@@ -553,6 +576,7 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
                 db_saved_status: resolvedDbStatus
             };
         });
+
 
         if (loadButton) {
             loadButton.disabled = true;
