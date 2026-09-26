@@ -908,15 +908,13 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <button class="mini-btn" ${btnDraftStyle} onclick="${isCardFrozen ? '' : `saveSupplierOrderAsDraft('${escapedSupplierName}', 'supplier-card-${blockKey}')`}">💾 Guardar Borrador</button>
                     <button class="mini-btn" ${btnExecStyle} onclick="${isCardFrozen ? '' : `executeUnifiedSupplierProcess('${escapedSupplierName}', 'supplier-card-${blockKey}')`}">🚀 Ejecutar y Copiar Orden</button>
                 </div>
-                <div class="final-dispatch-gate" style="display: ${dispatchGateDisplay}; align-items: center; background: #e8f8f5; padding: 8px; border-radius: 4px; border: 1px dashed #2ecc71; margin-top: 4px;">
+<div class="final-dispatch-gate" style="display: ${dispatchGateDisplay}; align-items: center; background: #e8f8f5; padding: 8px; border-radius: 4px; border: 1px dashed #2ecc71; margin-top: 4px;">
     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #27ae60; font-weight: bold; width: 100%;">
-        <!-- ✨ THE CRITICAL INDEX FIX: Added [0] to correctly extract the po_id 
-             from the first item in the array list! -->
-        <input type="checkbox" onchange="if(this.checked) { markSupplierOrderAsDispatched('${group.items[0].po_id}', '${escapedSupplierName}', 'supplier-card-${blockKey}') }" />
+        <!-- 🟢 RESTORED TO ORIGINAL: No fragile ID tracking variables here! -->
+        <input type="checkbox" onchange="if(this.checked) { markSupplierOrderAsDispatched('${escapedSupplierName}', 'supplier-card-${blockKey}') }" />
         <span>¿Confirmar envío realizado en chat? Marcar Finalizado</span>
     </label>
 </div>
-
             </div>
             <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
         `;
@@ -1442,17 +1440,31 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     }
 }
 
-// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [ID-LOCKED]
-// ✨ THE FIX: We added exactOrderId as the first parameter to target the true database UUID row key!
-async function markSupplierOrderAsDispatched(exactOrderId, supplierName, cardElementId) {
+// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [AUTO ID EXTRACTOR]
+async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
-    
+
     // Filter lines belonging to this supplier to run inventory operations
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
+    // 🛡️ THE CACHE LOOKUP SHIELD:
+    // Instead of risking template string failures, look inside the filtered lines from local memory 
+    // to dynamically extract the true parent database UUID key token automatically!
+    var exactOrderId = null;
+    if (filteredLines.length > 0) {
+        // Fallback cascades to catch whichever property maps the order row key inside your staging cache
+        exactOrderId = filteredLines[0].po_id || filteredLines[0].id || filteredLines[0].poNumber || filteredLines[0].forced_po_number;
+    }
+
+    if (!exactOrderId || exactOrderId === "undefined") {
+        console.error("🔍 Local rows cache scan payload:", filteredLines[0]);
+        alert("❌ Error: No se pudo localizar el Identificador Único de la Orden (UUID) en la memoria de la terminal.");
+        return;
+    }
+
     try {
         // 1️⃣ RELATIONAL TRANSITION: Update order status targeting strictly by its unique UUID primary key!
-        // This physically blocks it from accidentally updating other historical supplier cards sharing matching text PO sub-tokens!
+        console.log(`📝 Dispatched transaction firing securely for PO ID: ${exactOrderId}`);
         const patchRes = await fetch(API_URL + "purchase_orders?id=eq." + exactOrderId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -1464,7 +1476,6 @@ async function markSupplierOrderAsDispatched(exactOrderId, supplierName, cardEle
         // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
-            
             var finalIngredientUuid = item.ingredient_id;
             var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
             if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap[cleanNameLower]) {
@@ -1490,17 +1501,13 @@ async function markSupplierOrderAsDispatched(exactOrderId, supplierName, cardEle
                     var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                     if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
-                    const patchStockRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
+                    await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     });
-                    
-                    if (patchStockRes.ok) {
-                        console.log(`✅ Stock updated successfully for ${item.ingredient_name}: ${currentLiveDbStock} -> ${definitiveNewInventoryLevel.toFixed(2)}`);
-                    }
                 }
             }
         }
