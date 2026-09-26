@@ -909,11 +909,13 @@ function renderInteractiveManagerSpreadsheetGrid() {
                     <button class="mini-btn" ${btnExecStyle} onclick="${isCardFrozen ? '' : `executeUnifiedSupplierProcess('${escapedSupplierName}', 'supplier-card-${blockKey}')`}">🚀 Ejecutar y Copiar Orden</button>
                 </div>
                 <div class="final-dispatch-gate" style="display: ${dispatchGateDisplay}; align-items: center; background: #e8f8f5; padding: 8px; border-radius: 4px; border: 1px dashed #2ecc71; margin-top: 4px;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #27ae60; font-weight: bold; width: 100%;">
-                        <input type="checkbox" onchange="if(this.checked) { markSupplierOrderAsDispatched('${escapedSupplierName}', 'supplier-card-${blockKey}') }" />
-                        <span>¿Confirmar envío realizado en chat? Marcar Finalizado</span>
-                    </label>
-                </div>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #27ae60; font-weight: bold; width: 100%;">
+        <!-- ✨ THE FIX: We extracted item[0].po_id from the grouped list to feed the true database UUID key string 
+             as the very first parameter row token argument directly into the function! -->
+        <input type="checkbox" onchange="if(this.checked) { markSupplierOrderAsDispatched('${group.items[0].po_id || group.id}', '${escapedSupplierName}', 'supplier-card-${blockKey}') }" />
+        <span>¿Confirmar envío realizado en chat? Marcar Finalizado</span>
+    </label>
+</div>
             </div>
             <div class="slip-box-area" id="receipt-slip-node-${blockKey}"></div>
         `;
@@ -1439,36 +1441,30 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     }
 }
 
-// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs
-async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
+// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [ID-LOCKED]
+// ✨ THE FIX: We added exactOrderId as the first parameter to target the true database UUID row key!
+async function markSupplierOrderAsDispatched(exactOrderId, supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
-    var poNumber = "PO-SYSTEM";
-    if (supplierCard) {
-        var poBadgeNode = supplierCard.querySelector(".po-badge");
-        if (poBadgeNode) poNumber = poBadgeNode.innerText.trim();
-    }
-
+    
     // Filter lines belonging to this supplier to run inventory operations
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     try {
-        // 1️⃣ RELATIONAL TRANSITION: Update order status to dispatched in Supabase
-        const patchRes = await fetch(API_URL + "purchase_orders?po_number=eq." + poNumber, {
+        // 1️⃣ RELATIONAL TRANSITION: Update order status targeting strictly by its unique UUID primary key!
+        // This physically blocks it from accidentally updating other historical supplier cards sharing matching text PO sub-tokens!
+        const patchRes = await fetch(API_URL + "purchase_orders?id=eq." + exactOrderId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ status: 'dispatched' })
         });
 
-        if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho.");
+        if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho por ID.");
 
         // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
             
-            // 🌟 CRITICAL REPAIR: Safely isolate the true database UUID from the name mapping dictionary
             var finalIngredientUuid = item.ingredient_id;
-            
-            // If the saved variable is missing or contains the text name instead of a UUID hash, look it up!
             var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
             if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap[cleanNameLower]) {
                 finalIngredientUuid = masterNameToUuidMap[cleanNameLower];
@@ -1476,14 +1472,12 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
 
             console.log(`📊 Processing stock change for: ${item.ingredient_name} using UUID: ${finalIngredientUuid}`);
 
-            // Direct dynamic endpoint fetch targeting ONLY the true verified UUID primary key
             const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
             
             if (ingFetchRes.ok) {
                 const ingDataArray = await ingFetchRes.json();
-                // Extract row from response array legally
                 var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
                 
                 if (dbIngredient) {
@@ -1495,7 +1489,6 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                     if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
-                    // Patch increased stock level back onto master row targeting the true UUID key
                     const patchStockRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -1506,19 +1499,15 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     
                     if (patchStockRes.ok) {
                         console.log(`✅ Stock updated successfully for ${item.ingredient_name}: ${currentLiveDbStock} -> ${definitiveNewInventoryLevel.toFixed(2)}`);
-                    } else {
-                        console.error(`❌ Failed to patch stock for ${item.ingredient_name}`);
                     }
                 }
-            } else {
-                console.error(`❌ Failed to fetch ingredient data row for UUID: ${finalIngredientUuid}`);
             }
         }
 
         // 3️⃣ Apply visual updates locally to sink the card
         if (supplierCard) {
             supplierCard.style.opacity = "0.35";
-            supplierCard.style.filter = "grayscale(100%) blur(0.5px)";
+            supplierCard.style.filter = "blur(0.2px)";
             supplierCard.style.pointerEvents = "none";
 
             var placeholder = supplierCard.querySelector(".status-indicator-placeholder");
@@ -1529,7 +1518,6 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     </div>`;
             }
 
-            // Sink card layout to the bottom of the active spreadsheet container rows
             if (supplierCard.parentNode) {
                 supplierCard.parentNode.appendChild(supplierCard);
             }
