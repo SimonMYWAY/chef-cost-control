@@ -573,10 +573,21 @@ const [ingResponse, formatsResponse, ordersResponse] = await Promise.all([
             window.activeShipmentSequenceId = highestShipmentId;
         }
 
-        // 🛡️ WORKSPACE ISOLATION INTERCEPT:
-        // Before letting the grid repaint, ensure LOCAL_STAGED_ROWS strictly filters out past cards 
-        // belonging to old shipments, keeping only the active shipment sequence on the screen workspace!
+        // =======================================================================
+        // 🛡️ RE-ENGINEERED WORKSPACE ISOLATION INTERCEPT: ARCHIVE SAFE
+        // =======================================================================
+        // ✨ THE ABSOLUTE CURE: We modified the filter to explicitly preserve rows 
+        // that are already 'received' or 'dispatched', allowing them into the historical 
+        // archive while keeping active working grids clean!
         LOCAL_STAGED_ROWS = LOCAL_STAGED_ROWS.filter(function(row) {
+            var currentStatus = String(row.dbStatus || row.db_status || row.db_saved_status || "").toLowerCase().trim();
+            
+            // Rule A: If the order has already been committed, ALWAYS preserve it for the historical panels!
+            if (currentStatus === "received" || currentStatus === "dispatched") {
+                return true; 
+            }
+            
+            // Rule B: For active uncommitted rows, only keep them if they match the newest shipment sequence
             return row.shipment_id === highestShipmentId;
         });
 
