@@ -1143,33 +1143,61 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     }
 
     try {
+            // =======================================================================
+        // 🛡️ RE-ENGINEERED HEADER TRANSACTION ENGINE: ABSOLUTE SHIELD LOCK
+        // =======================================================================
         var generatedPoUuid = null;
         
-        // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS
-        // ✨ THE FIX: We added &status=in.(draft,pending) to the lookup parameter query string!
-        // This explicitly forces the query to ignore any processed received rows sharing this same PO number!
-        const checkPoUrl = API_URL + "purchase_orders?po_number=eq." + poNumber + "&status=in.(draft,pending,saved_pending_whatsapp)";
-        const checkPoRes = await fetch(checkPoUrl, {
-            method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-        });
-        
-        if (checkPoRes.ok) {
-            const existingPoData = await checkPoRes.json();
-            if (existingPoData && existingPoData.length > 0) {
-                generatedPoUuid = existingPoData[0].id;
-                
-                await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
-                    method: "PATCH",
-                    headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                    body: JSON.stringify({ status: 'pending' })
-                });
+        // 1️⃣ CHECK IF HEADER DOCUMENT ALREADY EXISTS WITH STRICT IDENTIFIER SEGMENTATION
+        // We trim and sanitize the full string token to prevent suffix string collisions!
+        var sanitizedFullPoNumber = String(poNumber || "").trim();
+
+        if (sanitizedFullPoNumber && sanitizedFullPoNumber !== "PO-SYSTEM" && sanitizedFullPoNumber !== "PO-PENDING") {
+            const checkPoUrl = API_URL + "purchase_orders?po_number=eq." + encodeURIComponent(sanitizedFullPoNumber);
+            const checkPoRes = await fetch(checkPoUrl, {
+                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
+            });
+            
+            if (checkPoRes.ok) {
+                const existingPoRowsData = await checkPoRes.json();
+                if (existingPoRowsData && existingPoRowsData.length > 0) {
+                    
+                    // Locate the row that matches both our number AND is open for editing
+                    var activeDraftTargetRow = existingPoRowsData.find(function(row) {
+                        var rStatus = String(row.status || "").toLowerCase().trim();
+                        return rStatus === "draft" || rStatus === "pending" || rStatus === "saved_pending_whatsapp";
+                    });
+
+                    // 🚨 STRUCTURAL GATE KEEPER: If the matching PO row has already been received or dispatched, 
+                    // FREEZE execution immediately to prevent child line erasures on historical cards!
+                    var closedHistoricalRow = existingPoRowsData.find(function(row) {
+                        var rStatus = String(row.status || "").toLowerCase().trim();
+                        return rStatus === "received" || rStatus === "dispatched";
+                    });
+
+                    if (closedHistoricalRow && !activeDraftTargetRow) {
+                        console.warn(`🛡️ Security Intercept: Blocked an accidental save/delete request targeting processed historical order: ${sanitizedFullPoNumber}`);
+                        return; // Abort function completely!
+                    }
+
+                    if (activeDraftTargetRow) {
+                        generatedPoUuid = activeDraftTargetRow.id;
+                        
+                        // Update status to pending securely targeting strictly by its unique UUID row key
+                        await fetch(API_URL + "purchase_orders?id=eq." + generatedPoUuid, {
+                            method: "PATCH",
+                            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: 'pending' })
+                        });
+                    }
+                }
             }
         }
 
-        // If no matching draft/pending header was found, execute a clean POST to make a brand-new separate UUID row entry
+        // If no matching active header wrapper exists on the server, issue a clean POST to make a brand-new distinct row entry
         if (!generatedPoUuid) {
             var parentPayload = {
-                po_number: poNumber,
+                po_number: sanitizedFullPoNumber,
                 supplier_name: supplierName,
                 status: 'pending', 
                 total_items: filteredLines.length
@@ -1181,7 +1209,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
                 body: JSON.stringify(parentPayload)
             });
 
-            if (!resParent.ok) throw new Error("No se pudo guardar la cabecera del borrador.");
+            if (!resParent.ok) throw new Error("No se pudo guardar la cabecera del borrador de compra.");
             const parentRowResultData = await resParent.json();
             if (parentRowResultData && parentRowResultData.length > 0) {
                 generatedPoUuid = parentRowResultData[0].id;
@@ -1189,6 +1217,7 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
         }
 
         // 2️⃣ SYSTEM PURGE SWEEP LAYER: Erase ghost duplicate items safely inside the active order shell
+        // This is now 100% identity-locked and can never touch an old shipment's line items!
         if (generatedPoUuid) {
             await fetch(API_URL + "purchase_order_items?po_id=eq." + generatedPoUuid, {
                 method: "DELETE",
