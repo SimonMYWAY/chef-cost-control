@@ -1440,43 +1440,47 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     }
 }
 
-// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [AUTO ID EXTRACTOR]
+// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [SECURE TRANSITION MATRIX]
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
 
     // Filter lines belonging to this supplier to run inventory operations
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
-    // 🛡️ THE CACHE LOOKUP SHIELD:
-    // Instead of risking template string failures, look inside the filtered lines from local memory 
-    // to dynamically extract the true parent database UUID key token automatically!
-    var exactOrderId = null;
-    if (filteredLines.length > 0) {
-        // Fallback cascades to catch whichever property maps the order row key inside your staging cache
-        exactOrderId = filteredLines[0].po_id || filteredLines[0].id || filteredLines[0].poNumber || filteredLines[0].forced_po_number;
+    if (filteredLines.length === 0) {
+        alert("⚠️ No hay líneas aprobadas disponibles para procesar el despacho de este proveedor.");
+        return;
     }
 
-    if (!exactOrderId || exactOrderId === "undefined") {
-        console.error("🔍 Local rows cache scan payload:", filteredLines[0]);
-        alert("❌ Error: No se pudo localizar el Identificador Único de la Orden (UUID) en la memoria de la terminal.");
+    // ✨ THE ACCURATE METADATA IDENTIFIER LOOKUP:
+    // Extract the explicit parent text string PO tracking parameter from your local staging rows array cache
+    var targetPoNumberToken = filteredLines[0].poNumber || filteredLines[0].forced_po_number;
+
+    if (!targetPoNumberToken || targetPoNumberToken === "PO-PENDING") {
+        console.error("🔍 Local staging rows tracking payload error:", filteredLines);
+        alert("❌ Error: No se pudo localizar el Código de Orden (PO Number) de despacho en la memoria local de la terminal.");
         return;
     }
 
     try {
-        // 1️⃣ RELATIONAL TRANSITION: Update order status targeting strictly by its unique UUID primary key!
-        console.log(`📝 Dispatched transaction firing securely for PO ID: ${exactOrderId}`);
-        const patchRes = await fetch(API_URL + "purchase_orders?id=eq." + exactOrderId, {
+        // 1️⃣ RELATIONAL TRANSITION: Update parent document header status string in Supabase using the exact text key matching rule!
+        console.log(`📝 Dispatch transaction firing securely for Cloud PO: ${targetPoNumberToken}`);
+        const patchRes = await fetch(API_URL + "purchase_orders?po_number=eq." + targetPoNumberToken, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ status: 'dispatched' })
         });
 
-        if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho por ID.");
+        if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho por número de orden.");
 
         // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER
         for (var i = 0; i < filteredLines.length; i++) {
             var item = filteredLines[i];
+            
+            // Extract the isolated ingredients dictionary UUID hash token natively saved inside your array objects
             var finalIngredientUuid = item.ingredient_id;
+            
+            // If the saved key falls back to a string name description text, resolve it from your master dictionary map layout
             var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
             if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap[cleanNameLower]) {
                 finalIngredientUuid = masterNameToUuidMap[cleanNameLower];
@@ -1484,6 +1488,7 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
 
             console.log(`📊 Processing stock change for: ${item.ingredient_name} using UUID: ${finalIngredientUuid}`);
 
+            // Fetch running catalog stock balance targeting strictly by the true database UUID primary key
             const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                 method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
             });
@@ -1501,18 +1506,27 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
                     var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
                     if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
 
-                    await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
+                    // Patch increased stock level back onto master catalog row targeting the true UUID key
+                    const patchStockRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
                         body: JSON.stringify({
                             std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
                         })
                     });
+                    
+                    if (patchStockRes.ok) {
+                        console.log(`✅ Stock updated successfully for ${item.ingredient_name}: ${currentLiveDbStock} -> ${definitiveNewInventoryLevel.toFixed(2)}`);
+                    } else {
+                        console.error(`❌ Failed to patch stock level for item: ${item.ingredient_name}`);
+                    }
                 }
+            } else {
+                console.error(`❌ Failed to fetch ingredient row for matching database key: ${finalIngredientUuid}`);
             }
         }
 
-        // 3️⃣ Apply visual updates locally to sink the card
+        // 3️⃣ Apply visual updates locally to sink the card container row elements on your monitor screen
         if (supplierCard) {
             supplierCard.style.opacity = "0.35";
             supplierCard.style.filter = "blur(0.2px)";
@@ -1535,6 +1549,7 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
             if (r.supplier_name === supplierName) {
                 r.db_saved_status = 'dispatched';
                 r.db_status = 'dispatched';
+                r.dbStatus = 'dispatched';
             }
         });
         
