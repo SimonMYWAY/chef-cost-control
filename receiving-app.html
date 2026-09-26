@@ -288,7 +288,7 @@ function renderDashboardGrids() {
             card.style.display = (supplier.includes(query) || po.includes(query)) ? "" : "none";
         });
     }
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5 - SECURE AUDIT LOGGED]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -301,6 +301,22 @@ async function processIncomingDelivery(orderId) {
 
     const confirmation = confirm("¿Confirmar que las cantidades en pantalla corresponden a la entrega física recibida?");
     if (!confirmation) return;
+
+    // ✨ THE LOG ACCOUNTABILITY EXTRACTOR: Pull the active guard profile out of tab memory sessionStorage
+    var activeGuardUsername = "Guardia Desconocido";
+    try {
+        var cachedProfileString = sessionStorage.getItem("receiving_app_authorized_session_profile");
+        if (cachedProfileString) {
+            var parsedProfile = JSON.parse(cachedProfileString);
+            if (parsedProfile && parsedProfile.username) {
+                activeGuardUsername = String(parsedProfile.username).trim();
+            } else if (parsedProfile && parsedProfile.email) {
+                activeGuardUsername = String(parsedProfile.email).trim();
+            }
+        }
+    } catch (sessionErr) {
+        console.warn("Failed to extract active guard session logs:", sessionErr);
+    }
 
     try {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
@@ -345,7 +361,6 @@ async function processIncomingDelivery(orderId) {
                     const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
                     
                     // 🧮 ROCK-SOLID THEORETICAL INVENTORY CORRECTION:
-                    // Adding a negative discrepancy naturally decreases your running stock balance! (e.g., 50 + (-2) = 48)
                     const updatedNewStockTarget = currentStdInventory + recipeUnitsDifference;
 
                     console.log(`⚖️ Discrepancy caught! Insumo: ${ingTextName} (UUID: ${ingUuid}), Old std_inventory: ${currentStdInventory}, New std_inventory: ${updatedNewStockTarget}`);
@@ -364,14 +379,16 @@ async function processIncomingDelivery(orderId) {
         }
 
         // 🛡️ STEP 2: Overwrite the Master Parent Purchase Order Document Header state parameters
-        console.log("📝 Finalizing order state transformation to: received...");
+        console.log(`📝 Finalizing order state transformation to: received by ${activeGuardUsername}...`);
         const orderPatchResponse = await fetch(API_URL + "purchase_orders?id=eq." + orderId, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({
                 status: "received",
                 invoice_number: invoiceNum,
-                received_at: new Date().toISOString()
+                received_at: new Date().toISOString(),
+                // ✨ THE LOG INTEGRATION: Writes the exact guard profile string down to your new database column row!
+                received_by_user: activeGuardUsername
             })
         });
 
