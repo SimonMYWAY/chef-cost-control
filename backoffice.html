@@ -5077,7 +5077,7 @@ async function executeCloudPurchaseHistoryQueryPipeline() {
             if (o.id) ordersMetadataIndexMap[String(o.id).trim()] = o;
         });
 
-        // Assemble unified data array
+               // Assemble unified data array
         var flatAssembledMatrix = [];
         allItemsList.forEach(function(item) {
             var parentPoIdKey = String(item.po_id || "").trim();
@@ -5085,6 +5085,8 @@ async function executeCloudPurchaseHistoryQueryPipeline() {
             
             if (!parentMeta) return; // Skip orphan entries
 
+            // ✨ THE ATOMIC CURE: Added index [0] to extract the clean date string segment ("YYYY-MM-DD")
+            // This allows the mathematical boundary equations below to execute accurately!
             var orderDateString = parentMeta.created_at ? parentMeta.created_at.split("T")[0] : "";
             
             // --- INTERVAL DATE BOUNDARY PROTECTION ---
