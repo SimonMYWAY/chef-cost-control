@@ -90,7 +90,7 @@
             <div class="nav-item" onclick="switchView('view-ingredients')">📦 Lista de Ingredientes</div>
             <div class="nav-item" onclick="switchView('view-providers')">🏭 Lista de Proveedores</div>
         </div>
-        <div class="nav-group">
+                <div class="nav-group">
             <div class="nav-label">Logística y Enlaces</div>
             <div class="nav-item active" onclick="switchView('view-mappings')">🔗 Asociación y Conversión</div>
             <div class="nav-item" onclick="switchView('view-inventory-manual')">📦 Control y Ajustes de Stock</div>
@@ -99,6 +99,9 @@
             <div class="nav-item" id="nav-item-inventory-master" onclick="switchView('view-inventory-master-session')">📊 Cierres de Inventario Mensual</div>
 
             <div class="nav-item" onclick="switchView('view-orders-daily')">📋 Pedidos de Compra del Día</div>
+
+            <!-- 📊 NEW: SUBSECTION TOTAL ANALYTICAL MATRIX LINK -->
+            <div class="nav-item" onclick="switchView('view-historical-purchases-matrix')">📊 Historial de Compras</div>
         </div>
 
          <div class="nav-group">
@@ -684,7 +687,77 @@
         </div>
     </div>
 
+    <!-- 📊 MODULE CANVA 6: TOTAL ANALYTICAL PURCHASE HISTORY REGISTRY MATRIX -->
+<div id="view-historical-purchases-matrix" class="view-pane" style="display: none; width: 100%; max-width: 1400px; margin: 0 auto; font-family: system-ui, -apple-system, sans-serif; text-align: left; box-sizing: border-box;">
     
+    <!-- 1️⃣ MASTER ADMINISTRATIVE BANNER HEADER -->
+    <div style="background: #0f172a; color: #ffffff; padding: 18px 24px; border-radius: 12px; margin-bottom: 22px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <h2 style="margin: 0; font-size: 1.35rem; font-weight: 700;">📊 Historial Analítico de Compras e Insumos</h2>
+        <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.85rem;">Audite discrepancias de muelle, verifique números de remisión y rastree el registro de personal responsable en la cadena de suministro.</p>
+    </div>
+
+    <!-- 🔍 2️⃣ MATRIX SEARCH FILTER CONTROL CONSOLE CARD -->
+    <div class="card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
+        <h4 style="margin: 0 0 12px 0; color: #334155; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.5px;">🎛️ Consola de Filtros de Búsqueda</h4>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; align-items: flex-end;">
+            <!-- Date Interval Selectors -->
+            <div>
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Fecha Inicial (Orden)</label>
+                <input type="date" id="history-filter-start-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
+            </div>
+            <div>
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Fecha Final (Orden)</label>
+                <input type="date" id="history-filter-end-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
+            </div>
+            
+            <!-- Global Text Reference Matcher -->
+            <div>
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Buscador General</label>
+                <input type="text" id="history-filter-text" placeholder="Insumo, Proveedor, PO, Factura..." style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
+            </div>
+
+            <!-- Action Command Control Row Panel -->
+            <div style="display: flex; gap: 10px; grid-column: span 1;">
+                <button onclick="executeCloudPurchaseHistoryQueryPipeline()" style="flex: 1; background: #0f172a; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                    🔍 Consultar
+                </button>
+                <button onclick="exportHistoryMatrixToExcelSpreadsheet()" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                    📥 Excel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📋 3️⃣ THE MASTER INGREDIENT ELEMENT REGISTRY TABLE SHEET CARD -->
+    <div class="card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box; width: 100%;">
+        <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: auto; min-width: 1100px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e2e8f0; background: #f8fafc; color: #475569;">
+                        <th style="padding: 12px 8px; text-align: left; font-weight: 700;">Insumo / Ingrediente</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">No. Orden (PO)</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Factura / Remisión</th>
+                        <th style="padding: 12px 8px; text-align: left; font-weight: 700;">Proveedor</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Estado</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Pedido (UOM)</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Recibido (UOM)</th>
+                        <th style="padding: 12px 8px; text-align: left; font-weight: 700;">Emitido Por</th>
+                        <th style="padding: 12px 8px; text-align: left; font-weight: 700;">Recibido Por</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Fecha Orden</th>
+                        <th style="padding: 12px 8px; text-align: center; font-weight: 700;">Fecha Recepción</th>
+                    </tr>
+                </thead>
+                <tbody id="historical-purchases-matrix-rows-target">
+                    <tr><td colspan="11" style="text-align: center; color: #64748b; font-style: italic; padding: 25px;">Seleccione un rango de fechas y haga clic en Consultar.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+
     <script>
         // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
         const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
@@ -4966,6 +5039,173 @@ async function executeAdminVarianceInputOverrideAdjustment(countRowId, newInputV
 // 📜 EXCEL DISPATCH LIFELINE: Placeholders for financial file exportation routines
 function exportInventoryVarianceReportToExcel() {
     alert("📊 Reporte Analítico Exportado: Su archivo .CSV de mermas se descargará en un segundo pasaje de código.");
+}
+// 📡 DYNAMIC ARRAY STATE FOR IN-MEMORY EXPORT EXTRALAYER CACHE
+var MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS = [];
+
+// 📡 PIPELINE CONTROLLER: Queries and populates child records matched to system log metadata
+async function executeCloudPurchaseHistoryQueryPipeline() {
+    var targetBody = document.getElementById("historical-purchases-matrix-rows-target");
+    if (!targetBody) return;
+
+    var startInput = document.getElementById("history-filter-start-date").value;
+    var endInput = document.getElementById("history-filter-end-date").value;
+    var searchTxt = String(document.getElementById("history-filter-text").value || "").toLowerCase().trim();
+
+    targetBody.innerHTML = "<tr><td colspan='11' style='text-align:center; padding:25px; color:#007afb; font-weight:600;'>🔄 Descargando bitácoras e hilando registros relacionales...</td></tr>";
+    MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS = [];
+
+    try {
+        // Concurrently download parent tracking headers and child lines arrays
+        const [ordersRes, itemsRes] = await Promise.all([
+            fetch(API_URL + "purchase_orders?select=id,po_number,invoice_number,supplier_name,status,created_at,received_at,received_by_user,sent_by_user&order=created_at.desc", {
+                headers: { "apikey": API_KEY }
+            }),
+            fetch(API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered", {
+                headers: { "apikey": API_KEY }
+            })
+        ]);
+
+        if (!ordersRes.ok || !itemsRes.ok) throw new Error("La pasarela remota de datos rechazó la consulta.");
+
+        const allOrdersList = await ordersRes.json();
+        const allItemsList = await itemsRes.json();
+
+        // Map parent tracking data systematically indexed by ID string tokens
+        var ordersMetadataIndexMap = {};
+        allOrdersList.forEach(function(o) {
+            if (o.id) ordersMetadataIndexMap[String(o.id).trim()] = o;
+        });
+
+        // Assemble unified data array
+        var flatAssembledMatrix = [];
+        allItemsList.forEach(function(item) {
+            var parentPoIdKey = String(item.po_id || "").trim();
+            var parentMeta = ordersMetadataIndexMap[parentPoIdKey];
+            
+            if (!parentMeta) return; // Skip orphan entries
+
+            var orderDateString = parentMeta.created_at ? parentMeta.created_at.split("T")[0] : "";
+            
+            // --- INTERVAL DATE BOUNDARY PROTECTION ---
+            if (startInput && orderDateString < startInput) return;
+            if (endInput && orderDateString > endInput) return;
+
+            var ingName = item.ingredient_name || "Desconocido";
+            var supplier = parentMeta.supplier_name || "N/A";
+            var poNum = parentMeta.po_number || "N/A";
+            var invoice = parentMeta.invoice_number || "N/A";
+            var orderStatus = parentMeta.status || "draft";
+
+            // --- SEARCH CONSOLE TEXT BADGE FILTER ---
+            if (searchTxt) {
+                var searchHaystack = `${ingName} ${supplier} ${poNum} ${invoice} ${orderStatus}`.toLowerCase();
+                if (!searchHaystack.includes(searchTxt)) return;
+            }
+
+            flatAssembledMatrix.push({
+                ingredient_name: ingName,
+                po_number: poNum,
+                invoice_number: invoice,
+                supplier_name: supplier,
+                status: orderStatus,
+                quantity_ordered: parseFloat(item.quantity_ordered || 0),
+                quantity_delivered: item.quantity_delivered !== null && item.quantity_delivered !== undefined ? parseFloat(item.quantity_delivered) : null,
+                supplier_uom: item.supplier_uom || "Formato",
+                sent_by_user: parentMeta.sent_by_user || "N/A",
+                received_by_user: parentMeta.received_by_user || "N/A",
+                created_at: parentMeta.created_at ? new Date(parentMeta.created_at).toLocaleString() : "N/A",
+                received_at: parentMeta.received_at ? new Date(parentMeta.received_at).toLocaleString() : "N/A"
+            });
+        });
+
+        MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS = flatAssembledMatrix;
+
+        if (flatAssembledMatrix.length === 0) {
+            targetBody.innerHTML = "<tr><td colspan='11' style='text-align:center; padding:25px; color:#64748b; font-style:italic;'>No se encontraron registros que coincidan con los filtros aplicados.</td></tr>";
+            return;
+        }
+
+        // Render Table Rows layout
+        var html = "";
+        flatAssembledMatrix.forEach(function(row) {
+            // Status color routing framework
+            var statusStyle = "background:#f1f5f9; color:#475569;";
+            if (row.status === "received") statusStyle = "background:#e0fdf4; color:#15803d; font-weight:700;";
+            if (row.status === "dispatched") statusStyle = "background:#ef4444; color:#ffffff; font-weight:700;";
+
+            var deliveredDisplay = row.quantity_delivered !== null ? `${row.quantity_delivered} ${row.supplier_uom}` : "<span style='color:#94a3b8; font-style:italic;'>Pendiente</span>";
+            
+            // Discrepancy warning flash rule: applies text accents if short-shipped
+            var discrepancyRowAlertStyle = "";
+            if (row.status === "received" && row.quantity_delivered !== null && row.quantity_delivered < row.quantity_ordered) {
+                discrepancyRowAlertStyle = "background: #fff5f5; color: #b91c1c; font-weight: 600;";
+            }
+
+            html += `<tr style="border-bottom: 1px solid #e2e8f0; ${discrepancyRowAlertStyle}">
+                        <td style="padding:10px 8px; text-align:left; font-weight:600;">${row.ingredient_name}</td>
+                        <td style="padding:10px 8px; text-align:center; font-family:monospace; font-size:0.8rem;">${row.po_number}</td>
+                        <td style="padding:10px 8px; text-align:center; font-family:monospace; font-size:0.8rem;">${row.invoice_number}</td>
+                        <td style="padding:10px 8px; text-align:left;">${row.supplier_name}</td>
+                        <td style="padding:10px 8px; text-align:center;"><span style="padding:2px 6px; border-radius:6px; font-size:0.75rem; ${statusStyle}">${row.status}</span></td>
+                        <td style="padding:10px 8px; text-align:center;">${row.quantity_ordered} ${row.supplier_uom}</td>
+                        <td style="padding:10px 8px; text-align:center;">${deliveredDisplay}</td>
+                        <td style="padding:10px 8px; text-align:left; font-size:0.78rem; color:#475569;">${row.sent_by_user}</td>
+                        <td style="padding:10px 8px; text-align:left; font-size:0.78rem; color:#475569;">${row.received_by_user}</td>
+                        <td style="padding:10px 8px; text-align:center; font-size:0.78rem; color:#64748b;">${row.created_at}</td>
+                        <td style="padding:10px 8px; text-align:center; font-size:0.78rem; color:#64748b;">${row.received_at}</td>
+                     </tr>`;
+        });
+
+        targetBody.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        targetBody.innerHTML = "<tr><td colspan='11' style='text-align:center; color:#ef4444; padding:25px;'>❌ Error al compilar registros históricos: " + err.message + "</td></tr>";
+    }
+}
+
+// 📥 EXCEL ENGINE: Compiles client-side matrix arrays to downloadable CSV spreadsheet sheets
+function exportHistoryMatrixToExcelSpreadsheet() {
+    if (!MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS || MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS.length === 0) {
+        alert("⚠️ No hay datos cargados en la tabla para exportar. Realice una consulta primero.");
+        return;
+    }
+
+    var csvHeaders = ["Ingrediente/Insumo", "Numero PO", "Factura/Remision", "Proveedor", "Estado", "Cantidad Ordenada", "Unidad Compra", "Cantidad Recibida", "Emitido Por", "Recibido Por", "Fecha Orden", "Fecha Recepcion"];
+    
+    var csvContent = "\uFEFF"; // Add BOM token to enforce Excel UTF-8 character recognition (prevents text encoding issues)
+    csvContent += csvHeaders.join(";") + "\n"; // Semi-colon separator works best for localized international sheets excel configurations
+
+    MEMORY_CACHE_HISTORICAL_FILTERED_DATA_ROWS.forEach(function(row) {
+        var recQty = row.quantity_delivered !== null ? row.quantity_delivered : "Pendiente";
+        
+        var lineFields = [
+            `"${row.ingredient_name.replace(/"/g, '""')}"`,
+            `"${row.po_number}"`,
+            `"${row.invoice_number}"`,
+            `"${row.supplier_name.replace(/"/g, '""')}"`,
+            `"${row.status}"`,
+            row.quantity_ordered,
+            `"${row.supplier_uom}"`,
+            recQty,
+            `"${row.sent_by_user}"`,
+            `"${row.received_by_user}"`,
+            `"${row.created_at}"`,
+            `"${row.received_at}"`
+        ];
+        csvContent += lineFields.join(";") + "\n";
+    });
+
+    var blobObj = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    var linkElement = document.createElement("a");
+    var currentTimestampText = new Date().toISOString().split('T')[0];
+    
+    linkElement.href = URL.createObjectURL(blobObj);
+    linkElement.setAttribute("download", `Reporte_Historial_Compras_${currentTimestampText}.csv`);
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    document.body.removeChild(linkElement);
 }
 
 </script>
