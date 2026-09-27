@@ -1919,7 +1919,7 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     }
 }
 
-// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [Part 2 of 2 - REPAIRED SANITIZATION]
+// ⚡ HISTORICAL ARCHIVE ENGINE: Dynamic Render & Blurry Card Matrix Painter [IDENTITY-ISOLATED GLOBAL UNIQUE KEY SYSTEM]
 function applyLiveHistoricalSearchMatrixFilters() {
     var contentRack = document.getElementById("historical-archive-workspace-rack");
     if (!contentRack) return;
@@ -1942,9 +1942,12 @@ function applyLiveHistoricalSearchMatrixFilters() {
 
     var cardGroups = {};
     filteredRows.forEach(function(row) {
-        var key = row.po_number;
+        // ✨ THE ATOMIC FIX: Group by the unique database po_id UUID token instead of po_number string text!
+        // This completely prevents Shipment 85 from getting swallowed by Shipment 86 if they share default naming fallback variables!
+        var key = String(row.po_id || row.po_number).trim();
         if (!cardGroups[key]) {
             cardGroups[key] = {
+                po_id: row.po_id,
                 po_number: row.po_number,
                 supplier_name: row.supplier_name,
                 created_at: row.created_at,
@@ -1965,13 +1968,10 @@ function applyLiveHistoricalSearchMatrixFilters() {
 
         var isReceivedAndDelivered = group.po_status === "received";
 
-                var cardDiv = document.createElement("div");
+        var cardDiv = document.createElement("div");
         cardDiv.className = "supplier-card historical-blurry-card-state";
         
-        // 🎨 THE VISUAL UNIFICATION LOCK: Stripped grayscale(100%) and bumped opacity to 0.75.
-        // This mirrors your main grid exactly, letting all your red alert warning tags pop clearly!
         cardDiv.setAttribute("style", "background: var(--bg-surface, #ffffff); border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); opacity: 0.75; filter: blur(0.2px); pointer-events: auto; transition: filter 0.2s;");
-
 
         var itemsHtml = "";
         group.items.forEach(function(item) {
@@ -1982,8 +1982,6 @@ function applyLiveHistoricalSearchMatrixFilters() {
             let finalDisplayedQty = orderedQty;
             let displayStyleHtml = "font-weight: 700; color: #1e293b; flex: 1; text-align: right;";
 
-            // ✨ THE STRING CONCATENATION FIX: Split the item string using standard concatenation addition operators 
-            // instead of nested backticks inside backticks to guarantee clean text printing outputs!
             let shortageTextLabel = "";
 
             if (isReceivedAndDelivered) {
@@ -1993,7 +1991,6 @@ function applyLiveHistoricalSearchMatrixFilters() {
                 if (deliveredQty < orderedQty) {
                     displayStyleHtml = "font-weight: 700; color: #ef4444; flex: 1; text-align: right; background-color: #fef2f2; border: 1px solid #fca5a5; padding: 2px 4px; border-radius: 4px; display: inline-block; min-width: 60px;";
                     
-                    // Construct string text cleanly using standard plus addition operators
                     var diffCalculated = (orderedQty - deliveredQty).toFixed(1);
                     shortageTextLabel = ' <span style="font-size:0.75rem; color:#ef4444; font-weight:700;">(⚠️ Falta: -' + diffCalculated + ')</span>';
                 }
