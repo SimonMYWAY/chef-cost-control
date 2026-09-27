@@ -593,10 +593,8 @@
 
         </div>
 
-    </div>
-
-        <!-- POPUP DETALLES MODAL -->
-    <div id="recipe-modal" class="modal">
+            <!-- POPUP DETALLES MODAL -->
+        <div id="recipe-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close" onclick="closeModal()">&times;</span>
             <h2 id="modal-recipe-name">Receta</h2>
@@ -615,9 +613,7 @@
         </div>
     </div>
 <!-- 👥 MODULE CANVA 5: USER SECURITY MANAGEMENT PROFILE -->
-<!-- 🟢 THE LAYOUT SHIELD: Forcefully breaks free from any restricted right-hand column splits,
-     stops any overlapping collisions with the fixed section title card, and forces left alignment! -->
-<div id="view-users" class="view-pane" style="display: none; display: block !important; clear: both !important; width: 100% !important; max-width: 100% !important; padding-top: 80px !important; box-sizing: border-box; text-align: left;">
+<div id="view-users" class="view-pane" style="max-width: 1200px; margin: 0 auto; font-family: system-ui, sans-serif; display: none;">
     
     <div style="display: flex; flex-wrap: wrap; gap: 20px; width: 100% !important; align-items: flex-start; padding: 0 20px 0 0; box-sizing: border-box; clear: both !important;">
             
@@ -691,10 +687,8 @@
     </div>
 
 <!-- 📊 MODULE CANVA 6: TOTAL ANALYTICAL PURCHASE HISTORY REGISTRY MATRIX -->
-<!-- 🟢 THE LAYOUT SHIELD: Forcefully breaks free from any restricted right-hand column splits,
-     stops any overlapping collisions with the fixed section title card, and forces left alignment! -->
-<div id="view-historical-purchases-matrix" class="view-pane" style="display: none; display: block !important; clear: both !important; width: 100% !important; max-width: 100% !important; padding-top: 80px !important; box-sizing: border-box; text-align: left;">
-    
+<div id="view-historical-purchases-matrix" class="view-pane" style="max-width: 1200px; margin: 0 auto; font-family: system-ui, sans-serif; display: none;">
+   
     <div style="display: block !important; width: 100% !important; clear: both !important; padding: 0 20px 0 0; box-sizing: border-box;">
         
         <!-- 🎛️ 1️⃣ CONSOLA DE FILTROS DE BÚSQUEDA (Full width, anchored cleanly to the left edge) -->
@@ -755,9 +749,9 @@
             </table>
         </div>
     </div>
-
+   </div>
+  </div>
 </div>
-
 
     <script>
         // 🎯 CENTRAL SOURCE OF TRUTH BASE URL (Ensures zero text truncation errors)
@@ -5211,7 +5205,6 @@ function exportHistoryMatrixToExcelSpreadsheet() {
     document.body.removeChild(linkElement);
 }
 
-</script>
-        
+</script>        
 </body>
 </html>
