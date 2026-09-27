@@ -688,51 +688,45 @@
     </div>
 
     <!-- 📊 MODULE CANVA 6: TOTAL ANALYTICAL PURCHASE HISTORY REGISTRY MATRIX -->
-<div id="view-historical-purchases-matrix" class="view-pane" style="display: none; width: 100%; max-width: 1400px; margin: 0 auto; font-family: system-ui, -apple-system, sans-serif; text-align: left; box-sizing: border-box;">
-    
-    <!-- 1️⃣ MASTER ADMINISTRATIVE BANNER HEADER -->
-    <div style="background: #0f172a; color: #ffffff; padding: 18px 24px; border-radius: 12px; margin-bottom: 22px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-        <h2 style="margin: 0; font-size: 1.35rem; font-weight: 700;">📊 Historial Analítico de Compras e Insumos</h2>
-        <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.85rem;">Audite discrepancias de muelle, verifique números de remisión y rastree el registro de personal responsable en la cadena de suministro.</p>
-    </div>
-
-    <!-- 🔍 2️⃣ MATRIX SEARCH FILTER CONTROL CONSOLE CARD -->
-    <div class="card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
-        <h4 style="margin: 0 0 12px 0; color: #334155; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.5px;">🎛️ Consola de Filtros de Búsqueda</h4>
+    <div id="view-historical-purchases-matrix" class="view-pane" style="display: none; width: 100%; box-sizing: border-box; text-align: left; padding: 0; font-family: system-ui, -apple-system, sans-serif;">
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; align-items: flex-end;">
-            <!-- Date Interval Selectors -->
-            <div>
-                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Fecha Inicial (Orden)</label>
-                <input type="date" id="history-filter-start-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
-            </div>
-            <div>
-                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Fecha Final (Orden)</label>
-                <input type="date" id="history-filter-end-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
-            </div>
+        <!-- 🎛️ 1️⃣ CONSOLA DE FILTROS DE BÚSQUEDA (Full width, anchored cleanly to the left) -->
+        <div class="card" style="width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box; clear: both; display: block;">
+            <h4 style="margin: 0 0 15px 0; color: #334155; font-size: 0.88rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;">🎛️ Consola de Filtros de Búsqueda</h4>
             
-            <!-- Global Text Reference Matcher -->
-            <div>
-                <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px;">Buscador General</label>
-                <input type="text" id="history-filter-text" placeholder="Insumo, Proveedor, PO, Factura..." style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;" />
-            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; width: 100%;">
+                <!-- Date Interval Selectors -->
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px; text-align: left;">Fecha Inicial (Orden)</label>
+                    <input type="date" id="history-filter-start-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem; box-sizing: border-box;" />
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px; text-align: left;">Fecha Final (Orden)</label>
+                    <input type="date" id="history-filter-end-date" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem; box-sizing: border-box;" />
+                </div>
+                
+                <!-- Global Text Reference Matcher -->
+                <div style="flex: 2; min-width: 250px;">
+                    <label style="display:block; font-size:0.75rem; font-weight:600; color:#475569; margin-bottom:4px; text-align: left;">Buscador General</label>
+                    <input type="text" id="history-filter-text" placeholder="Insumo, Proveedor, PO, Factura..." style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem; box-sizing: border-box;" />
+                </div>
 
-            <!-- Action Command Control Row Panel -->
-            <div style="display: flex; gap: 10px; grid-column: span 1;">
-                <button onclick="executeCloudPurchaseHistoryQueryPipeline()" style="flex: 1; background: #0f172a; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                    🔍 Consultar
-                </button>
-                <button onclick="exportHistoryMatrixToExcelSpreadsheet()" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                    📥 Excel
-                </button>
+                <!-- Action Command Control Row Panel -->
+                <div style="display: flex; gap: 10px; min-width: 220px; box-sizing: border-box;">
+                    <button onclick="executeCloudPurchaseHistoryQueryPipeline()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        🔍 Consultar
+                    </button>
+                    <button onclick="exportHistoryMatrixToExcelSpreadsheet()" style="background: #16a34a; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        📥 Excel
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- 📋 3️⃣ THE MASTER INGREDIENT ELEMENT REGISTRY TABLE SHEET CARD -->
-    <div class="card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box; width: 100%;">
-        <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: auto; min-width: 1100px;">
+        <!-- 📋 2️⃣ THE MASTER INGREDIENT ELEMENT REGISTRY TABLE SHEET CARD (Stretches fully across workspace) -->
+        <div class="card" style="width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box; clear: both; display: block;">
+            <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: auto;">
                 <thead>
                     <tr style="border-bottom: 2px solid #e2e8f0; background: #f8fafc; color: #475569;">
                         <th style="padding: 12px 8px; text-align: left; font-weight: 700;">Insumo / Ingrediente</th>
