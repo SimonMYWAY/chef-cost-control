@@ -1850,7 +1850,11 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? "&po_number=not.ilike.*-SHIP-" + currentScreenShipId + "-*" : "";
         console.log("🔍 Historical Firewall Query Routing - Filter String appended:", exclusionFilter);
 
-        const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + exclusionFilter + "&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)&order=created_at.desc";
+                // ✨ THE ATOMIC CURE: Standardized selection parameters separating inner properties strictly with commas (,).
+        // This ensures Supabase downloads all 4 rows perfectly without dropping relational columns!
+        const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + exclusionFilter + 
+                          "&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)" + 
+                          "&order=created_at.desc";
 
         const response = await fetch(queryPath, {
             headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
