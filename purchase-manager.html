@@ -1387,6 +1387,22 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         // =======================================================================
         console.time("⏱️ STEP_2_DATABASE_NETWORK_TRANSACTION");
         
+        // ✨ THE AUDIT LOG EXTRACTOR: Pull the active administrator profile out of session tab memory
+        var activeManagerUsername = "Administrador Desconocido";
+        try {
+            var cachedProfileString = sessionStorage.getItem("purchase_app_authorized_session_profile");
+            if (cachedProfileString) {
+                var parsedProfile = JSON.parse(cachedProfileString);
+                if (parsedProfile && parsedProfile.username) {
+                    activeManagerUsername = String(parsedProfile.username).trim();
+                } else if (parsedProfile && parsedProfile.email) {
+                    activeManagerUsername = String(parsedProfile.email).trim();
+                }
+            }
+        } catch (sessionErr) {
+            console.warn("Failed to extract active manager session logs:", sessionErr);
+        }
+
         // 1. Gather approved lines into a local JSON structure in memory
         var jsonFilteredItems = [];
         for (var i = 0; i < filteredLines.length; i++) {
@@ -1408,7 +1424,7 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
         });
 
         // 3. Fire ONE SINGLE network round-trip call to your server-side database procedure
-        console.log(`✈️ Launching single-packet atomic transaction block for ${supplierName}...`);
+        console.log(`✈️ Launching single-packet atomic transaction block for ${supplierName} under user: ${activeManagerUsername}...`);
         const rpcResponse = await fetch(API_URL + "rpc/execute_atomic_supplier_order", {
             method: "POST",
             headers: {
@@ -1420,7 +1436,9 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                 p_po_number: poNumber,
                 p_supplier_name: supplierName,
                 p_filtered_items: jsonFilteredItems,
-                p_rejected_items: jsonRejectedItems
+                p_rejected_items: jsonRejectedItems,
+                // ✨ THE LOG INTEGRATION: Passes the username directly down to your PostgreSQL engine!
+                p_sent_by_user: activeManagerUsername
             })
         });
 
