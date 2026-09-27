@@ -1780,6 +1780,7 @@ setInterval(async function enforceRemoteSequenceFirewall() {
 // ⚡ HISTORICAL ARCHIVE ENGINE: On-Demand Retrieval, Relational JSON Extraction [Part 1 of 2 - FULLY REPAIRED]
 var GLOBAL_RECALLED_HISTORIC_ROWS_CACHE = []; 
 
+// 🚀 DYNAMIC ON-DEMAND ENGINE: Queries completed records directly from Supabase [CLEAN STATUS-LOCKED]
 async function toggleHistoricalArchiveOnDemandEngine() {
     var panelRack = document.getElementById("historical-archive-search-panel-rack");
     var contentRack = document.getElementById("historical-archive-workspace-rack");
@@ -1795,49 +1796,6 @@ async function toggleHistoricalArchiveOnDemandEngine() {
         return;
     }
 
-    // =======================================================================
-    // 🛡️ THE STICKY MEMORY ANCHOR LAYER: Secure active sequence parameters
-    // =======================================================================
-    var currentScreenShipId = "00";
-
-    // 1. Try to read your true active integer directly out of our fresh sticky session memory backup block
-    var stickyBackupId = sessionStorage.getItem("sticky_active_shipment_id");
-    
-    if (stickyBackupId && stickyBackupId !== "00" && stickyBackupId !== "") {
-        currentScreenShipId = String(stickyBackupId).trim();
-    } 
-    // 2. Fallback: If session storage is fresh, check your active global window variables constant
-    else if (window.activeShipmentSequenceId) {
-        currentScreenShipId = String(window.activeShipmentSequenceId).trim();
-        sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
-    } 
-    // 3. Secondary Fallback: Trace active data cache objects matrices
-    else if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS) && LOCAL_STAGED_ROWS.length > 0) {
-        var baseObjectRow = LOCAL_STAGED_ROWS[0];
-        if (baseObjectRow.shipment_id) {
-            currentScreenShipId = String(baseObjectRow.shipment_id).trim();
-            sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
-        }
-    }
-
-    // 4. Final Fallback: Scan text profiles if everything else has dropped layout values
-    if (currentScreenShipId === "00") {
-        var headerNode = document.getElementById("terminal-cargo-meta-header");
-        if (headerNode) {
-            var strongElement = headerNode.querySelector("strong");
-            if (strongElement) {
-                var extractedDigits = strongElement.innerText.replace(/[^0-9]/g, "").trim();
-                if (extractedDigits) {
-                    currentScreenShipId = extractedDigits;
-                    sessionStorage.setItem("sticky_active_shipment_id", currentScreenShipId); // Lock it in!
-                }
-            }
-        }
-    }
-
-    console.log("🔒 HISTORICAL SECURE ANCHOR - Fixed Firewall ID parameter:", currentScreenShipId);
-    // =======================================================================
-
     actionBtn.innerHTML = "⏳ Descargando Historial...";
     actionBtn.style.backgroundColor = "#64748b";
     contentRack.innerHTML = '<div style="text-align:center; padding:30px; font-style:italic; color:#64748b;">🔄 Consultando registros históricos cerrados...</div>';
@@ -1846,15 +1804,14 @@ async function toggleHistoricalArchiveOnDemandEngine() {
     contentRack.style.display = "flex";
 
     try {
-        // 🔒 FIREWALL LOOKUP: Only exclude the active shipment ID if it is legitimately open on the spreadsheet grid
-        var exclusionFilter = (currentScreenShipId && currentScreenShipId !== "00") ? "&po_number=not.ilike.*-SHIP-" + currentScreenShipId + "-*" : "";
-        console.log("🔍 Historical Firewall Query Routing - Filter String appended:", exclusionFilter);
-
-                // ✨ THE ATOMIC CURE: Standardized selection parameters separating inner properties strictly with commas (,).
-        // This ensures Supabase downloads all 4 rows perfectly without dropping relational columns!
-        const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + exclusionFilter + 
+        // ✨ THE ABSOLUTE CURE: Removed the fragile text pattern exclusion string filter completely!
+        // Because we filter strictly by status=in.(dispatched,received), your active working screen 
+        // drafts are inherently protected, and all historical lines (86, 85, 84, etc.) download perfectly!
+        const queryPath = API_URL + "purchase_orders?status=in.(dispatched,received)" + 
                           "&select=*,purchase_order_items(id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,faltante_base,recipe_uom)" + 
                           "&order=created_at.desc";
+
+        console.log("📡 Executing secure historical fetch pipeline:", queryPath);
 
         const response = await fetch(queryPath, {
             headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
