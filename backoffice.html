@@ -1415,11 +1415,14 @@ function closeImpactModal() {
             });
         }
 
-// ✨ RE-ENGINEERED TOGGLE ENGINE: Operates with 100% pure boolean states completely free from legacy strings!
+// ⚡ RE-ENGINEERED TOGGLE ENGINE: Operates with 100% pure boolean states completely free from legacy strings!
 function toggleIngredientCloudStatus(id, currentlyEnabled) {
-    // If it is currently true, flip it to false. If false, flip to true.
-    var targetIsActiveValue = !currentlyEnabled;
+    // Force strict conversion to true boolean data types
+    var isEnabledBool = (currentlyEnabled === true || currentlyEnabled === "true");
+    var targetIsActiveValue = !isEnabledBool;
     
+    console.log(`📡 Patching ingredient ID: ${id} | Changing active status to: ${targetIsActiveValue}`);
+
     fetch(API_URL + "ingredients?id=eq." + id, {
         method: "PATCH",
         headers: { 
@@ -1428,13 +1431,14 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
             "Content-Type": "application/json", 
             "Prefer": "return=minimal" 
         },
-        // 🎯 Clean, strict JSON structure sending ONLY the valid column to the server
+        // 🎯 STRICT TYPE CASTING: Sends a pure boolean value (true/false) without quote wrappers
         body: JSON.stringify({ 
             is_active: targetIsActiveValue
         })
     })
     .then(function(res) {
         if (res.ok) {
+            console.log("✅ Ingredient visibility status updated successfully on the server.");
             setTimeout(renderMasterIngredientsTable, 150);
             
             // Auto-refresh your stock spreadsheet control grid if it is loaded on screen
@@ -1442,12 +1446,14 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                 setTimeout(fetchInventoryMatrixData, 200);
             }
         } else { 
+            res.text().then(text => console.error("Database Response Error Code:", text));
             alert("❌ Error al cambiar vigencia del ingrediente."); 
         }
     }).catch(function(err) { 
         console.error("Ingredient status toggle failure:", err); 
     });
 }
+
                 function safelyEraseIngredientRecord(id) {
             var cleanIdToken = String(id).trim();
             
