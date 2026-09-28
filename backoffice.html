@@ -1416,22 +1416,36 @@ function closeImpactModal() {
             });
         }
 
-        function toggleIngredientCloudStatus(id, currentRawStatus) {
-            // "pending" represents Active, "approved" represents Inactive/Archived
-            var targetStatus = currentRawStatus === "pending" ? "approved" : "pending";
+function toggleIngredientCloudStatus(id, currentRawStatus) {
+    // Legacy mapping: "pending" represents Active, "approved" represents Inactive/Archived
+    var targetStatus = currentRawStatus === "pending" ? "approved" : "pending";
+    
+    // Explicitly calculate the matching boolean flag state for the new audit grids
+    var targetIsActive = (targetStatus === "pending");
+    
+    fetch(API_URL + "ingredients?id=eq." + id, {
+        method: "PATCH",
+        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+        body: JSON.stringify({ 
+            status: targetStatus,
+            is_active: targetIsActive
+        })
+    })
+    .then(function(res) {
+        if (res.ok) {
+            setTimeout(renderMasterIngredientsTable, 150);
             
-            fetch(API_URL + "ingredients?id=eq." + id, {
-                method: "PATCH",
-                headers: { "apikey": API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
-                body: JSON.stringify({ status: targetStatus })
-            })
-            .then(function(res) {
-                if (res.ok) {
-                    setTimeout(renderMasterIngredientsTable, 150);
-                } else { alert("❌ Error al cambiar vigencia del ingrediente."); }
-            }).catch(function(err) { console.error("Ingredient status toggle failure:", err); });
+            // If the stock manual control grid function is currently loaded on screen, refresh it too
+            if (typeof fetchInventoryMatrixData === "function") {
+                setTimeout(fetchInventoryMatrixData, 200);
+            }
+        } else { 
+            alert("❌ Error al cambiar vigencia del ingrediente."); 
         }
-
+    }).catch(function(err) { 
+        console.error("Ingredient status toggle failure:", err); 
+    });
+}
                 function safelyEraseIngredientRecord(id) {
             var cleanIdToken = String(id).trim();
             
@@ -3580,10 +3594,16 @@ async function fetchInventoryMatrixData() {
     rowsTarget.innerHTML = "<tr><td colspan='7' style='text-align:center; padding:20px; color:#007afb;'>⏳ Sincronizando celdas de almacenamiento con Supabase cloud...</td></tr>";
 
     try {
-        var res = await fetch(API_URL + "ingredients?order=name_es.asc", { headers: { "apikey": API_KEY } });
+                var res = await fetch(API_URL + "ingredients?order=name_es.asc", { headers: { "apikey": API_KEY } });
         var ingredients = await res.json();
 
-        MASTER_INVENTORY_ITEMS = Array.isArray(ingredients) ? ingredients : [];
+        // ✨ THE FILTER FIREWALL: Restrict list rows to strictly target active rows!
+        // This stops inactive ingredients from populating your inventory adjustments spreadsheet grid!
+        var cleanIngredientsArray = Array.isArray(ingredients) ? ingredients : [];
+        MASTER_INVENTORY_ITEMS = cleanIngredientsArray.filter(function(ing) {
+            return ing.is_active === true || ing.is_active === "true";
+        });
+
         renderInventorySpreadsheetGrid(MASTER_INVENTORY_ITEMS);
         
         if (spinIcon) {
