@@ -241,7 +241,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-// 🔒 AUTH MATRIX VALVE: Authenticates inventory/chef/owner profiles and unlocks dashboard
+// 🔒 AUTH MATRIX VALVE: Authenticates inventory/chef/owner profiles and unlocks dashboard [SUSPENSION SECURED]
 async function executeInventoryGatewayAuthenticationChallenge() {
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
     if (!feedbackEl) return;
@@ -272,6 +272,17 @@ async function executeInventoryGatewayAuthenticationChallenge() {
             feedbackEl.innerText = "❌ Credenciales incorrectas.";
             return;
         }
+
+        // 🛡️ ANTI-LOOPHOLE SECURITY VALVE: Explicitly verify account suspension status
+        // If the active flag is false or explicitly marked string false, terminate the session instantly!
+        if (matchedProfile.is_active === false || matchedProfile.is_active === "false") {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la gerencia.";
+            
+            // Explicitly wipe the input field values to prevent caching
+            document.getElementById("gateway-input-pass").value = "";
+            return;
+        }
         
         // 🛡️ ROLE FIREWALL PROTECTION: Lock out non-inventory personnel
         const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
@@ -296,7 +307,6 @@ async function executeInventoryGatewayAuthenticationChallenge() {
         feedbackEl.innerText = "❌ Error de conexión remota.";
     }
 }
-
         // 🌟 CONFIGURACIÓN DE CREDENCIALES (Coloque sus claves reales de Supabase aquí)
         const API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/"; 
         const API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
