@@ -1384,9 +1384,10 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                    "  " + finalItemNameForSupplier + "\n\n";
         });
 
-        msg += "--------------------------\n" +
+        msg += "-----------------------------\n" +
                "Por favor confirmar recepción.\n" +
-               "=========================\n" +
+               "Siempre reportar nr de pedido en factura.\n" +
+               "=======================\n" +
                "```"; 
 
         await navigator.clipboard.writeText(msg);
@@ -1674,7 +1675,7 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     var timeStamp = new Date().toLocaleString("es-ES", { timeZone: "America/Santiago" });
     var txt = 
         "==============================\n" +
-        "    ORDEN DE COMPRA: " + poNumber + "\n" +
+        "ORDEN DE COMPRA: " + poNumber + "\n" +
         "==============================\n" +
         "PROV. : " + supplierName.toUpperCase() + "\n" +
         "FECHA : " + timeStamp.split(",")[0] + "\n" + // Shortened to save width
@@ -1696,6 +1697,7 @@ function updateVisualReceiptReceiptSlipMarkdown(supplierName, poNumber) {
     txt += 
         "------------------------------\n" +
         "Por favor confirmar recepción.\n" +
+        "Siempre reportar nr de pedido en factura.\n" +
         "==============================";
 
     slipContainer.innerText = txt;
