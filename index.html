@@ -1093,7 +1093,7 @@ async function saveAndSubmitForApprovalPipeline() {
     }
 }
 
-    // 🧠 UNIFIED LOCAL ENGINE: INDEX.HTML AUTH SHIELD
+    // 🧠 UNIFIED LOCAL ENGINE: INDEX.HTML AUTH SHIELD [SUSPENSION SECURED]
     async function executeNewLocalGatewayAuthenticationChallenge(event) {
         event.preventDefault();
         const feedbackEl = document.getElementById("gateway-login-error-feedback");
@@ -1126,6 +1126,16 @@ async function saveAndSubmitForApprovalPipeline() {
             }
             if (String(matchedProfile.password_hash) !== passInputVal) {
                 feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
+                return;
+            }
+
+            // 🛡️ ANTI-LOOPHOLE SECURITY VALVE: Explicitly verify account suspension status
+            // If the active flag is false or explicitly marked string false, terminate the session instantly!
+            if (matchedProfile.is_active === false || matchedProfile.is_active === "false") {
+                feedbackEl.innerText = "🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la gerencia.";
+                
+                // Explicitly wipe the input field values to prevent caching
+                document.getElementById("gateway-input-pass").value = "";
                 return;
             }
             
