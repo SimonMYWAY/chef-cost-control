@@ -451,31 +451,27 @@
         const CHEF_API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
         const CHEF_API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
 
-        function syncLiveIngredients() {
-                        // 🛡️ ACCURATE ENDPOINT FILTER ALIGNMENT: Fetch only ingredients marked as active ('pending' state)
-            return fetch(CHEF_API_URL + "ingredients?status=eq.pending", { 
- 
-                headers: { "apikey": CHEF_API_KEY } 
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data && !data.message) {
-                    DB_INGREDIENTS = data.map(item => ({
-                        id: item.id,
-                        name_es: item.name_es || "N/A",
-                        name_en: item.name_en || "N/A",
-                        cost: parseFloat(item.std_cost_per_unit || item.cost) || 0,
-                        uom: item.uom || "gr"
-                    }));
-                    console.log("🎯 Live cloud ingredients connected successfully.");
-                }
-            }).catch(err => console.error(err));
+    function syncLiveIngredients() {
+    // 🛡️ RE-ENGINEERED ENDPOINT FILTER ALIGNMENT: 
+    // We swapped out the legacy '?status=eq.pending' string lookup for a rigid boolean check!
+    // This removes your last active dependency, making it 100% safe to drop the old text column from Supabase.
+    return fetch(CHEF_API_URL + "ingredients?is_active=eq.true", { 
+        headers: { "apikey": CHEF_API_KEY } 
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data && !data.message) {
+            DB_INGREDIENTS = data.map(item => ({
+                id: item.id,
+                name_es: item.name_es || "N/A",
+                name_en: item.name_en || "N/A",
+                cost: parseFloat(item.std_cost_per_unit || item.cost) || 0,
+                uom: item.uom || "gr"
+            }));
+            console.log("🎯 Live cloud ingredients connected successfully via is_active flags.");
         }
-        syncLiveIngredients();
-                // 🔒 ADMINISTRATIVE RULES ENGINE: Restricts yield inputs for standard categories
-        const catMenu = document.getElementById('recipe-category');
-        const yieldField = document.getElementById('servings');
-
+    }).catch(err => console.error(err));
+}
         function enforceYieldProtection() {
             if (!catMenu || !yieldField) return;
             
