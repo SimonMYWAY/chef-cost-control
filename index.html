@@ -451,27 +451,45 @@
         const CHEF_API_URL = "https://nsbaywyygkegkmqqwtic.supabase.co/rest/v1/";
         const CHEF_API_KEY = "sb_publishable_3DtQhwy8kWL4iPTs71aOUg_qJWb8G9x";
 
-    function syncLiveIngredients() {
+function syncLiveIngredients() {
     // 🛡️ RE-ENGINEERED ENDPOINT FILTER ALIGNMENT: 
     // We swapped out the legacy '?status=eq.pending' string lookup for a rigid boolean check!
     // This removes your last active dependency, making it 100% safe to drop the old text column from Supabase.
     return fetch(CHEF_API_URL + "ingredients?is_active=eq.true", { 
         headers: { "apikey": CHEF_API_KEY } 
     })
-    .then(res => res.json())
-    .then(data => {
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
         if (data && !data.message) {
-            DB_INGREDIENTS = data.map(item => ({
-                id: item.id,
-                name_es: item.name_es || "N/A",
-                name_en: item.name_en || "N/A",
-                cost: parseFloat(item.std_cost_per_unit || item.cost) || 0,
-                uom: item.uom || "gr"
-            }));
+            DB_INGREDIENTS = data.map(function(item) {
+                return {
+                    id: item.id,
+                    name_es: item.name_es || "N/A",
+                    name_en: item.name_en || "N/A",
+                    cost: parseFloat(item.std_cost_per_unit || item.cost) || 0,
+                    uom: item.uom || "gr"
+                };
+            });
             console.log("🎯 Live cloud ingredients connected successfully via is_active flags.");
         }
-    }).catch(err => console.error(err));
+    }).catch(function(err) { console.error(err); });
 }
+
+// Execute the secure data query fetch cleanly on screen boot
+syncLiveIngredients();
+
+// 🔒 ADMINISTRATIVE RULES ENGINE: Restricts yield inputs for standard categories
+// ✨ THE SAFETY FIREWALL: Added defensive element check wrappers to permanently 
+// block console reference crashes if these nodes are absent during boot phases!
+var catMenu = document.getElementById('recipe-category');
+var yieldField = document.getElementById('servings');
+
+if (catMenu && yieldField) {
+    console.log("🔒 Administrative recipe rule channels attached safely.");
+} else {
+    console.warn("⚠️ Warning: Layout DOM nodes 'recipe-category' or 'servings' missing from viewport frame.");
+}
+
         function enforceYieldProtection() {
             if (!catMenu || !yieldField) return;
             
