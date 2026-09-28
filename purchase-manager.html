@@ -206,7 +206,7 @@ async function handleGatewaySubmit(event) {
     }
 }
 
-    // 🧠 UNIFIED LOCAL ENGINE: PURCHASE-MANAGER.HTML AUTH SHIELD
+    // 🧠 UNIFIED LOCAL ENGINE: PURCHASE-MANAGER.HTML AUTH SHIELD [SUSPENSION SECURED]
     async function executeNewLocalGatewayAuthenticationChallenge(event) {
         if (event && typeof event.preventDefault === "function") {
             event.preventDefault();
@@ -251,6 +251,17 @@ async function handleGatewaySubmit(event) {
                 feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
                 return;
             }
+
+            // 🛡️ ANTI-LOOPHOLE SECURITY VALVE: Explicitly verify account suspension status
+            // If the active flag is false or explicitly marked string false, terminate the session instantly!
+            if (matchedProfile.is_active === false || matchedProfile.is_active === "false") {
+                feedbackEl.style.color = "#ef4444";
+                feedbackEl.innerText = "🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la gerencia.";
+                
+                // Explicitly wipe the input field values to prevent caching
+                document.getElementById("gateway-input-pass").value = "";
+                return;
+            }
             
             // 🔒 SECURITY ROLE FILTER: Only 'purchase' or 'owner' profiles can access purchase-manager.html
             const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
@@ -258,7 +269,7 @@ async function handleGatewaySubmit(event) {
                 feedbackEl.innerText = "";
                 
                 // Save session memory row
-                 sessionStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
+                sessionStorage.setItem("purchase_app_authorized_session_profile", JSON.stringify(matchedProfile));
                 
                 document.getElementById("security-gateway-lock-screen").style.display = "none";
                 console.log("🔓 Terminal Compras Autorizada Exitosamente.");
@@ -273,7 +284,6 @@ async function handleGatewaySubmit(event) {
             feedbackEl.innerText = "❌ Error de conexión con el servidor.";
         }
     }
-
 
 // ⚡ RE-ENGINEERED SYNC: Parallel Pipeline Concurrency Engine [Part 1 of 2 - SECURE FIREWALL]
 async function pullActiveStagedCalculationFromCloud() {
