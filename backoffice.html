@@ -1210,13 +1210,11 @@ function viewRecipeDetails(recipeId, name, category, servings, uom) {
     });
 }
 
-// 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "status" parameters (pending/approved) [ASYNCHRONOUS PROMISE UPGRADE]
+// 📊 INGREDIENTS MONITOR: Renders raw items matching your strict "is_active" boolean parameters [FULLY SCRUBBED]
 async function renderMasterIngredientsTable() {
     var container = document.getElementById("ingredients-table-rows");
     if (!container) return;
     
-    // 🌟 FORCE REAL-TIME FRESH SNAPSHOT:
-    // Break browser network caching so the very latest approved units and costs load instantly
     try {
         const results = await Promise.all([
             fetch(API_URL + "ingredients", { 
@@ -1248,8 +1246,8 @@ async function renderMasterIngredientsTable() {
             
             var costVal = parseFloat(item.std_cost_per_unit || item.cost) || 0;
             
-            var currentRawStatus = String(item.status || "pending").toLowerCase().trim();
-            var isEnabled = currentRawStatus === "pending";
+            // ✨ THE ATOMIC FIX: Base the UI state entirely on the boolean is_active flag instead of legacy status strings!
+            var isEnabled = item.is_active === true || item.is_active === "true";
             
             var statusBtnText = isEnabled ? "Desactivar" : "Activar";
             var statusBtnClass = isEnabled ? "btn-red" : "btn-green";
@@ -1280,7 +1278,8 @@ async function renderMasterIngredientsTable() {
                 "<td style='text-align:right; width:195px;'> " +
                     "<div style='display:flex; gap:4px; justify-content:flex-end; align-items:center; height:100%;'> " +
                         "<button class='btn btn-blue' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"executeIngredientCloudUpdate('" + item.id + "')\">💾</button> " +
-                        "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleIngredientCloudStatus('" + item.id + "', '" + currentRawStatus + "')\">" + statusBtnText + "</button> " +
+                        // ✨ Passing the boolean isEnabled status into the toggle function!
+                        "<button class='btn " + statusBtnClass + "' style='padding:4px 6px; font-size:0.8rem; border-radius:4px;' onclick=\"toggleIngredientCloudStatus('" + item.id + "', " + isEnabled + ")\">" + statusBtnText + "</button> " +
                         "<button class='btn' style='padding:4px 6px; font-size:0.8rem; border-radius:4px; background-color:#ef4444; color:white;' onclick=\"safelyEraseIngredientRecord('" + item.id + "')\">🗑️</button> " +
                     "</div> " +
                 "</td>";
@@ -1416,26 +1415,29 @@ function closeImpactModal() {
             });
         }
 
-function toggleIngredientCloudStatus(id, currentRawStatus) {
-    // Legacy mapping: "pending" represents Active, "approved" represents Inactive/Archived
-    var targetStatus = currentRawStatus === "pending" ? "approved" : "pending";
-    
-    // Explicitly calculate the matching boolean flag state for the new audit grids
-    var targetIsActive = (targetStatus === "pending");
+// ✨ RE-ENGINEERED TOGGLE ENGINE: Operates with 100% pure boolean states completely free from legacy strings!
+function toggleIngredientCloudStatus(id, currentlyEnabled) {
+    // If it is currently true, flip it to false. If false, flip to true.
+    var targetIsActiveValue = !currentlyEnabled;
     
     fetch(API_URL + "ingredients?id=eq." + id, {
         method: "PATCH",
-        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" },
+        headers: { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json", 
+            "Prefer": "return=minimal" 
+        },
+        // 🎯 Clean, strict JSON structure sending ONLY the valid column to the server
         body: JSON.stringify({ 
-            status: targetStatus,
-            is_active: targetIsActive
+            is_active: targetIsActiveValue
         })
     })
     .then(function(res) {
         if (res.ok) {
             setTimeout(renderMasterIngredientsTable, 150);
             
-            // If the stock manual control grid function is currently loaded on screen, refresh it too
+            // Auto-refresh your stock spreadsheet control grid if it is loaded on screen
             if (typeof fetchInventoryMatrixData === "function") {
                 setTimeout(fetchInventoryMatrixData, 200);
             }
