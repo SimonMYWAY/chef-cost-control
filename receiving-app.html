@@ -103,7 +103,7 @@
         }
     });
 
-    // 🔒 AUTH MATRIX VALVE: Authenticates guards/admin profiles and opens dashboard
+// 🔒 AUTH MATRIX VALVE: Authenticates guards/admin profiles and opens dashboard [SUSPENSION SECURED]
 async function executeNewLocalGatewayAuthenticationChallenge() {
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
     if (!feedbackEl) return;
@@ -137,24 +137,35 @@ async function executeNewLocalGatewayAuthenticationChallenge() {
             feedbackEl.innerText = "❌ Credenciales incorrectas.";
             return;
         }
+
+        // 🛡️ ANTI-LOOPHOLE SECURITY VALVE: Explicitly verify account suspension status
+        // If the active flag is false or explicitly marked string false, terminate the session instantly!
+        if (matchedProfile.is_active === false || matchedProfile.is_active === "false") {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la gerencia.";
+            
+            // Explicitly wipe the input field values to prevent caching
+            document.getElementById("gateway-input-pass").value = "";
+            return;
+        }
         
         // =======================================================================
-// 🛡️ REPAIRED GATEWAY VALIDATION: Authorizes both system role variants
-// =======================================================================
-// Allow guard/security access (fallback allows owners/admins too)
-const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
+        // 🛡️ REPAIRED GATEWAY VALIDATION: Authorizes both system role variants
+        // =======================================================================
+        // Allow guard/security access (fallback allows owners/admins too)
+        const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
 
-// ✨ THE ATOMIC FIX: Added userRole === "receiving" to the authorization condition check!
-if (userRole === "receiving" || userRole === "guard" || userRole === "owner" || userRole === "admin") {
-    feedbackEl.innerText = "";
-    sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
-    document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
-    document.getElementById("security-gateway-lock-screen").style.display = "none";
-    loadReceivingDashboard();
-} else {
-    feedbackEl.style.color = "#ef4444";
-    feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
-}
+        // ✨ THE ATOMIC FIX: Added userRole === "receiving" to the authorization condition check!
+        if (userRole === "receiving" || userRole === "guard" || userRole === "owner" || userRole === "admin") {
+            feedbackEl.innerText = "";
+            sessionStorage.setItem("receiving_app_authorized_session_profile", JSON.stringify(matchedProfile));
+            document.getElementById("user-badge").innerText = `👤 Operador: ${matchedProfile.username}`;
+            document.getElementById("security-gateway-lock-screen").style.display = "none";
+            loadReceivingDashboard();
+        } else {
+            feedbackEl.style.color = "#ef4444";
+            feedbackEl.innerText = "🛑 Acceso Denegado: Rango insuficiente.";
+        }
 
     } catch (err) {
         console.error("Authentication query fault:", err);
