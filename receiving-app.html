@@ -497,13 +497,13 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                 }
             });
             
-            if (checkRes.ok) {
+                        if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
                 
                 // Verify we received a valid data collection array back from Supabase
                 if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
                     
-                    // 🎯 THE IDENTITY LOCK: Forcefully extract the precise user object at index 0
+                    // 🎯 THE CRITICAL INDEX FIX: Added [0] to parse the actual user row object container!
                     var liveUserRow = cloudProfileData[0]; 
                     
                     // 💥 REAL-TIME MID-SESSION EVICTION VALVE
@@ -534,6 +534,7 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                     }
                 }
             }
+
         }
     } catch (heartbeatErr) {
         console.warn("Background session security heartbeat failed or delayed:", heartbeatErr);
