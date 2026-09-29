@@ -497,18 +497,18 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                 }
             });
             
-                        if (checkRes.ok) {
+                            if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
                 
                 // Verify we received a valid data collection array back from Supabase
                 if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
                     
-                    // 🎯 THE CRITICAL INDEX FIX: Added [0] to parse the actual user row object container!
+                    // 🎯 THE EXACT CRITICAL FIX: Extract index 0 to target the user object!
                     var liveUserRow = cloudProfileData[0]; 
                     
                     // 💥 REAL-TIME MID-SESSION EVICTION VALVE
                     if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
-                        console.warn("🛡️ Security Intercept: Active session account has been suspended by management. Initiating hard ejection.");
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
                         
                         // 1. Wipe out all transient browser tab memory keys
                         sessionStorage.removeItem("receiving_app_authorized_session_profile");
