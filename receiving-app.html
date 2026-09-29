@@ -467,9 +467,8 @@ async function processIncomingDelivery(orderId) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP LIVE LOCKDOWN]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - PLUGGED]
 // =======================================================================
-// This worker independently tracks account suspension status mid-session.
 async function executeLiveReceivingSuspensionAuditSweep() {
     var storedProfileSession = sessionStorage.getItem("receiving_app_authorized_session_profile");
     if (!storedProfileSession) return;
@@ -479,25 +478,20 @@ async function executeLiveReceivingSuspensionAuditSweep() {
         var activeUsername = String(activeSessionData.username || "").toLowerCase().trim();
 
         if (activeUsername) {
-            // Explicitly force a cache-buster token to stop browser memory stalling
-            var cacheBusterToken = new Date().getTime();
-            
-            // Re-verify variables exist natively, fallback to global string layouts
             var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
             var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
 
-            if (!targetApiUrl || !targetApiKey) {
-                console.error("🔍 Security Core Fault: API Configuration keys are missing inside the background worker scope.");
-                return;
-            }
+            if (!targetApiUrl || !targetApiKey) return;
 
-            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}&ts=${cacheBusterToken}`;
+            // ✨ THE POSTGREST CURE: Removed the invalid "&ts=" parameter to prevent 400 Bad Request errors!
+            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
             const checkRes = await fetch(secureQueryUrl, {
                 method: "GET",
                 headers: { 
                     "apikey": targetApiKey,
                     "Authorization": "Bearer " + targetApiKey,
+                    // ✨ HEADER CACHE BUSTER: Safely forces live server queries across both iOS and PC!
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache"
                 }
@@ -506,25 +500,27 @@ async function executeLiveReceivingSuspensionAuditSweep() {
             if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
                 
-                // 🎯 THE ARRAY TARGET LOCK: Extracting index 0 forcefully
+                // Verify we received a valid data collection array back from Supabase
                 if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                    
+                    // 🎯 THE IDENTITY LOCK: Forcefully extract the precise user object at index 0
                     var liveUserRow = cloudProfileData[0]; 
                     
-                    // 💥 REAL-TIME EVICTION FIREWALL: Toggled to inactive mid-session!
+                    // 💥 REAL-TIME MID-SESSION EVICTION VALVE
                     if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
                         console.warn("🛡️ Security Intercept: Active session account has been suspended by management. Initiating hard ejection.");
                         
-                        // 1. Force clear memory keys completely
+                        // 1. Wipe out all transient browser tab memory keys
                         sessionStorage.removeItem("receiving_app_authorized_session_profile");
                         sessionStorage.clear();
                         
-                        // 2. Shut down visual workspace grids
+                        // 2. Clear visible dashboard container layouts
                         var appWorkspace = document.getElementById("receiving-dashboard-workspace") || document.body;
                         if (appWorkspace && appWorkspace !== document.body) {
                             appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
                         }
                         
-                        // 3. Drop lock screen shut
+                        // 3. Force lock screen shut
                         var lockScreen = document.getElementById("security-gateway-lock-screen");
                         if (lockScreen) {
                             lockScreen.style.display = "flex";
@@ -532,7 +528,7 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                         
                         alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
                         
-                        // 4. Force a hard tab refresh to clear out RAM values completely
+                        // 4. Force a hard tab refresh to clear out raw memory remnants completely
                         location.reload();
                         return;
                     }
@@ -544,13 +540,12 @@ async function executeLiveReceivingSuspensionAuditSweep() {
     }
 }
 
-// ⏱️ Worker Track A: Foreground interval worker polling every 15 seconds for hyper-fast response
+// ⏱️ Run foreground loop polling perfectly every 15 seconds
 setInterval(executeLiveReceivingSuspensionAuditSweep, 15000);
 
-// 📱 Worker Track B: Wake-Up/Tab Visibility Interceptor (Triggers immediately when screen un-locks)
+// 📱 Wake-Up / Tab Visibility Interceptor (Instantly fires when device unlocks)
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "visible") {
-        console.log("📡 Tab shifted into active foreground. Executing immediate security check.");
         executeLiveReceivingSuspensionAuditSweep();
     }
 });
