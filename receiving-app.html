@@ -469,7 +469,7 @@ async function processIncomingDelivery(orderId) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - CASE MATCHED]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - PLUGGED]
 // =======================================================================
 async function executeLiveReceivingSuspensionAuditSweep() {
     var storedProfileSession = sessionStorage.getItem("receiving_app_authorized_session_profile");
@@ -478,8 +478,7 @@ async function executeLiveReceivingSuspensionAuditSweep() {
     try {
         var activeSessionData = JSON.parse(storedProfileSession);
         
-        // ✨ THE FIXED LINE: Removed .toLowerCase() to preserve the exact database casing 
-        // that allowed the user to pass the initial login screen!
+        // Match the username string exactly as it was stored during login
         var activeUsername = String(activeSessionData.username || "").trim();
 
         if (activeUsername) {
@@ -488,7 +487,7 @@ async function executeLiveReceivingSuspensionAuditSweep() {
 
             if (!targetApiUrl || !targetApiKey) return;
 
-            // Strict case-sensitive match using the exact username casing stored in the session token
+            // Strict case-sensitive match against the specific user profile row
             var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
             const checkRes = await fetch(secureQueryUrl, {
@@ -504,27 +503,27 @@ async function executeLiveReceivingSuspensionAuditSweep() {
             if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
                 
-                // Verify we received a valid data collection array back from Supabase
+                // Validate that we received a populated array response back from Supabase
                 if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
                     
-                    // Target the first user object container inside the array pool precisely
-                    var liveUserRow = cloudProfileData; 
+                    // 🎯 THE CRITICAL REPAIR: Forcefully extract index 0 to target the user object row!
+                    var liveUserRow = cloudProfileData[0]; 
                     
-                    // 💥 REAL-TIME MID-SESSION EVICTION VALVE
+                    // 💥 REAL-TIME MID-SESSION EVICTION GATING
                     if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
                         console.warn("🛡️ Security Intercept: Active session account has been suspended by management. Initiating hard ejection.");
                         
-                        // 1. Wipe out all transient browser tab memory keys
+                        // 1. Clear out all active session tracking variables from tab memory
                         sessionStorage.removeItem("receiving_app_authorized_session_profile");
                         sessionStorage.clear();
                         
-                        // 2. Clear visible dashboard container layouts
+                        // 2. Erase the on-screen dashboard view content container
                         var appWorkspace = document.getElementById("receiving-dashboard-workspace") || document.body;
                         if (appWorkspace && appWorkspace !== document.body) {
                             appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
                         }
                         
-                        // 3. Force lock screen shut
+                        // 3. Drop the login lock screen panel back into view over everything
                         var lockScreen = document.getElementById("security-gateway-lock-screen");
                         if (lockScreen) {
                             lockScreen.style.display = "flex";
