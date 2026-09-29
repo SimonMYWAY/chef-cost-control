@@ -2026,6 +2026,63 @@ function applyLiveHistoricalSearchMatrixFilters() {
         contentRack.appendChild(cardDiv);
     });
 }
+// =======================================================================
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [REAL-TIME SESSION EXPULSION]
+// =======================================================================
+// This background worker executes a silent validation check every 30 seconds
+// to forcefully evict any active user the exact second they are disabled in the Backoffice!
+setInterval(async function() {
+    var storedProfileSession = sessionStorage.getItem("purchase_app_authorized_session_profile");
+    
+    // If they aren't even logged in, skip the check
+    if (!storedProfileSession) return;
+
+    try {
+        var activeSessionData = JSON.parse(storedProfileSession);
+        var activeUsername = String(activeSessionData.username || "").toLowerCase().trim();
+
+        if (activeUsername) {
+            const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
+                headers: { "apikey": API_KEY }
+            });
+            
+            if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (cloudProfileData && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0];
+                    
+                    // 💥 REAL-TIME INTERCEPT FIREWALL: Account was suspended mid-session!
+                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended by management. Initiating hard ejection sequence.");
+                        
+                        // 1. Wipe out all data from browser tab memory instantly
+                        sessionStorage.removeItem("purchase_app_authorized_session_profile");
+                        sessionStorage.clear();
+                        
+                        // 2. Shut down the operational grid canvas elements completely
+                        var workspace = document.getElementById("manager-grid-workspace");
+                        if (workspace) {
+                            workspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px;">🛑 SESIÓN TERMINADA POR LA GERENCIA.</div>';
+                        }
+                        
+                        // 3. Drop the login lock screen container banner down over everything
+                        var lockScreen = document.getElementById("security-gateway-lock-screen");
+                        if (lockScreen) {
+                            lockScreen.style.display = "flex";
+                        }
+                        
+                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada.");
+                        
+                        // 4. Force a hard tab refresh to completely wipe any layout elements out of RAM
+                        location.reload();
+                    }
+                }
+            }
+        }
+    } catch (heartbeatErr) {
+        console.warn("Background session security heartbeat failed or delayed:", heartbeatErr);
+    }
+}, 30000); // ⏱️ Executing perfectly every 30,000 milliseconds (30 Seconds)
 
     </script>
 </body>
