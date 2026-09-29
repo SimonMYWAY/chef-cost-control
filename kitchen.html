@@ -219,10 +219,77 @@
         }
     }
 
-// 🧠 UNIFIED LOCAL ENGINE: FORCED ROUTING LAYER TO BYPASS CACHED STRINGS
+// =======================================================================
+// 🔐 HARDENED SECURITY GATEWAY & LIFECYCLE MANAGEMENT [KITCHEN MODULE]
+// =======================================================================
+
+// 🌟 SECURITY ACTION GATING: Overrides automatic load to force user login roadblock first
+document.addEventListener("DOMContentLoaded", async function() {
+    // 🛡️ REFRESH FIREWALL INTERCEPTOR: If a page reload/refresh is detected, 
+    // immediately purge all session tokens from RAM to secure shared workstation devices!
+    const navigationEntries = performance.getEntriesByType("navigation");
+    if (navigationEntries.length > 0 && navigationEntries[0].type === "reload") {
+        console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory for workstation rotation.");
+        sessionStorage.removeItem("kitchen_app_authorized_session_profile");
+        sessionStorage.clear();
+    }
+
+    // Check single-tab sessionStorage memory pools
+    var activeSession = sessionStorage.getItem("kitchen_app_authorized_session_profile");
+    var lockScreen = document.getElementById("security-gateway-lock-screen");
+    
+    if (activeSession) {
+        try {
+            var profile = JSON.parse(activeSession);
+            var activeUsername = String(profile.username || "").toLowerCase().trim();
+            var userRole = String(profile.role || "kitchen").toLowerCase().trim();
+            
+            // 🛡️ ACCOUNT SUSPENSION SHIELD: Silent check to make sure this account hasn't been disabled!
+            if (activeUsername) {
+                const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
+                    headers: { "apikey": API_KEY }
+                });
+                if (checkRes.ok) {
+                    const cloudProfileData = await checkRes.json();
+                    if (cloudProfileData && cloudProfileData.length > 0) {
+                        var liveUserRow = cloudProfileData[0];
+                        
+                        // If they were disabled while away, clear tokens and slam the gate shut
+                        if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                            sessionStorage.removeItem("kitchen_app_authorized_session_profile");
+                            sessionStorage.clear();
+                            if (lockScreen) lockScreen.style.display = "flex";
+                            alert("🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la administración.");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Verify authorization roles cleanly
+            if (userRole === "kitchen" || userRole === "chef" || userRole === "owner") {
+                if (lockScreen) lockScreen.style.display = "none";
+                initKitchenPortal();
+            } else {
+                if (lockScreen) lockScreen.style.display = "flex";
+            }
+        } catch(e) {
+            sessionStorage.removeItem("kitchen_app_authorized_session_profile");
+            if (lockScreen) lockScreen.style.display = "flex";
+        }
+    } else {
+        if (lockScreen) lockScreen.style.display = "flex";
+    }
+});
+
+// 🧠 UNIFIED LOCAL ENGINE: FORCED ROUTING LAYER WITH ACCOUNT SUSPENSION INTERCEPT
 async function executeNewLocalGatewayAuthenticationChallenge(event) {
-    event.preventDefault();
+    if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+    }
     const feedbackEl = document.getElementById("gateway-login-error-feedback");
+    if (!feedbackEl) return;
+    
     feedbackEl.innerText = "⏳ Verificando credenciales corporativas...";
     
     const userInputVal = document.getElementById("gateway-input-user").value.trim().toLowerCase();
@@ -230,9 +297,7 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
     
     try {
         const headers = { "apikey": API_KEY };
-        // Clean, vanilla request without complex conditional string chains
         const queryUrl = `${API_URL}profiles`;
-        
         const res = await fetch(queryUrl, { headers }).then(r => r.json());
         
         if (!Array.isArray(res) || res.length === 0) {
@@ -261,11 +326,21 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
             feedbackEl.innerText = "❌ Contraseña incorrecta. Intenta de nuevo.";
             return;
         }
+
+        // 🛡️ ANTI-LOOPHOLE SECURITY VALVE: Verify suspension status explicitly on initial login
+        if (matchedProfile.is_active === false || matchedProfile.is_active === "false") {
+            feedbackEl.innerText = "🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la gerencia.";
+            document.getElementById("gateway-input-pass").value = "";
+            return;
+        }
         
         const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
-        
         if (userRole === "kitchen" || userRole === "chef" || userRole === "owner") {
             feedbackEl.innerText = "";
+            
+            // Save verified tab session
+            sessionStorage.setItem("kitchen_app_authorized_session_profile", JSON.stringify(matchedProfile));
+            
             document.getElementById("security-gateway-lock-screen").style.display = "none";
             initKitchenPortal();
         } else {
@@ -278,9 +353,65 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
     }
 }
 
-// 🌟 SECURITY ACTION GATING: Overrides automatic load to force user login roadblock first
-document.addEventListener("DOMContentLoaded", function() {
-    console.log("🔒 Security Gateway Active. Data fetch loops frozen until handshake clears.");
+// =======================================================================
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [MOBILE INSULATED FOR iPHONE]
+// =======================================================================
+async function executeLiveKitchenSuspensionAuditSweep() {
+    var storedProfileSession = sessionStorage.getItem("kitchen_app_authorized_session_profile");
+    if (!storedProfileSession) return;
+
+    try {
+        var activeSessionData = JSON.parse(storedProfileSession);
+        var activeUsername = String(activeSessionData.username || "").toLowerCase().trim();
+
+        if (activeUsername) {
+            var cacheBusterToken = new Date().getTime();
+            var secureQueryUrl = `${API_URL}profiles?username=eq.${activeUsername}&ts=${cacheBusterToken}`;
+
+            const checkRes = await fetch(secureQueryUrl, {
+                method: "GET",
+                headers: { 
+                    "apikey": API_KEY,
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
+            });
+            
+            if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (cloudProfileData && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0];
+                    
+                    // 💥 REAL-TIME EVICTION FIREWALL
+                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                        console.warn("🛡️ Security Intercept: Kitchen active session has been suspended by management.");
+                        
+                        sessionStorage.removeItem("kitchen_app_authorized_session_profile");
+                        sessionStorage.clear();
+                        
+                        // Drop the lock screen down over everything
+                        var lockScreen = document.getElementById("security-gateway-lock-screen");
+                        if (lockScreen) lockScreen.style.display = "flex";
+                        
+                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada.");
+                        location.reload();
+                    }
+                }
+            }
+        }
+    } catch (heartbeatErr) {
+        console.warn("Background mobile security sweep delayed:", heartbeatErr);
+    }
+}
+
+// Stanby Foreground Interval clock running every 30 seconds
+setInterval(executeLiveKitchenSuspensionAuditSweep, 30000);
+
+// WAKE-UP INTERCEPTOR (Bypasses background power-saving throttling on mobile Safari/Chrome)
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible") {
+        executeLiveKitchenSuspensionAuditSweep();
+    }
 });
 
 </script>

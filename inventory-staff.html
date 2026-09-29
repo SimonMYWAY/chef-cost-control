@@ -209,8 +209,17 @@
     </div>
 
     <script>
-        // 🔒 USER SECURITY ACCESS LOCK ENGINE FOR INVENTORY APP
-document.addEventListener("DOMContentLoaded", function() {
+// 🔒 USER SECURITY ACCESS LOCK ENGINE FOR INVENTORY APP [REFRESH & SUSPENSION SECURED]
+document.addEventListener("DOMContentLoaded", async function() {
+    // 🛡️ REFRESH FIREWALL INTERCEPTOR: If a page reload/refresh is detected, 
+    // immediately purge all session tokens from RAM to secure shared workstation devices!
+    const navigationEntries = performance.getEntriesByType("navigation");
+    if (navigationEntries.length > 0 && navigationEntries[0].type === "reload") {
+        console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory for workstation rotation.");
+        sessionStorage.removeItem("inventory_app_authorized_session_profile");
+        sessionStorage.clear();
+    }
+
     // Transient security check: look inside single-tab sessionStorage memory pools
     var activeSession = sessionStorage.getItem("inventory_app_authorized_session_profile");
     var lockScreen = document.getElementById("security-gateway-lock-screen");
@@ -218,13 +227,41 @@ document.addEventListener("DOMContentLoaded", function() {
     if (activeSession) {
         try {
             var profile = JSON.parse(activeSession);
+            var activeUsername = String(profile.username || "").toLowerCase().trim();
             var userRole = String(profile.role || "kitchen").toLowerCase().trim();
             
+            // 🛡️ ACCOUNT SUSPENSION SHIELD: Silent check to make sure this account hasn't been disabled!
+            if (activeUsername) {
+                try {
+                    const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
+                        headers: { "apikey": API_KEY }
+                    });
+                    if (checkRes.ok) {
+                        const cloudProfileData = await checkRes.json();
+                        if (cloudProfileData && cloudProfileData.length > 0) {
+                            var liveUserRow = cloudProfileData[0];
+                            
+                            // If they were disabled in backoffice, wipe memory, alert them, and kick them out!
+                            if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                                console.warn("🛡️ Security Intercept: Logged-in profile has been deactivated.");
+                                sessionStorage.removeItem("inventory_app_authorized_session_profile");
+                                sessionStorage.clear();
+                                if (lockScreen) lockScreen.style.display = "flex";
+                                alert("🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la administración.");
+                                return;
+                            }
+                        }
+                    }
+                } catch (netErr) {
+                    console.warn("Security profile pre-check bypassed due to network delay:", netErr);
+                }
+            }
+
             // Re-verify authorization criteria matches your target roles
             if (userRole === "inventory" || userRole === "chef" || userRole === "owner") {
                 if (lockScreen) lockScreen.style.display = "none";
+                
                 // 🔄 RUN APP INITIALIZATION ON RECOVERY:
-                // Calls your native startup function (e.g., checkActiveInventoryProcedure() or init())
                 if (typeof checkActiveInventoryProcedure === "function") {
                     checkActiveInventoryProcedure();
                 } else if (typeof init === "function") {
@@ -234,6 +271,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (lockScreen) lockScreen.style.display = "flex";
             }
         } catch(e) {
+            sessionStorage.removeItem("inventory_app_authorized_session_profile");
             if (lockScreen) lockScreen.style.display = "flex";
         }
     } else {

@@ -84,7 +84,16 @@
     
     let MASTER_ORDERS_CACHE = [];
 
-    document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", async function() {
+        // 🛡️ REFRESH FIREWALL INTERCEPTOR: If a page reload/refresh is detected, 
+        // immediately purge all session tokens from RAM to secure shared workstation devices!
+        const navigationEntries = performance.getEntriesByType("navigation");
+        if (navigationEntries.length > 0 && navigationEntries[0].type === "reload") {
+            console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory for workstation rotation.");
+            sessionStorage.removeItem("receiving_app_authorized_session_profile");
+            sessionStorage.clear();
+        }
+
         // Transient security check: look only inside single-tab sessionStorage memory pools
         var activeSession = sessionStorage.getItem("receiving_app_authorized_session_profile");
         var lockScreen = document.getElementById("security-gateway-lock-screen");
@@ -92,10 +101,41 @@
         if (activeSession) {
             try {
                 var profile = JSON.parse(activeSession);
+                var activeUsername = String(profile.username || "").toLowerCase().trim();
+
+                // 🛡️ ACCOUNT SUSPENSION SHIELD: Silent check to make sure this account hasn't been disabled!
+                if (activeUsername) {
+                    try {
+                        const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
+                            headers: { "apikey": API_KEY }
+                        });
+                        if (checkRes.ok) {
+                            const cloudProfileData = await checkRes.json();
+                            if (cloudProfileData && cloudProfileData.length > 0) {
+                                var liveUserRow = cloudProfileData[0];
+                                
+                                // If they were disabled in backoffice, wipe memory, alert them, and kick them out!
+                                if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                                    console.warn("🛡️ Security Intercept: Logged-in profile has been deactivated.");
+                                    sessionStorage.removeItem("receiving_app_authorized_session_profile");
+                                    sessionStorage.clear();
+                                    if (lockScreen) lockScreen.style.display = "flex";
+                                    alert("🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la administración.");
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (netErr) {
+                        console.warn("Security profile pre-check bypassed due to network delay:", netErr);
+                    }
+                }
+
+                // If they pass all checks, assign the user badge and open the panel
                 document.getElementById("user-badge").innerText = `👤 Operador: ${profile.username || 'Control'}`;
                 if (lockScreen) lockScreen.style.display = "none";
                 loadReceivingDashboard();
             } catch(e) {
+                sessionStorage.removeItem("receiving_app_authorized_session_profile");
                 if (lockScreen) lockScreen.style.display = "flex";
             }
         } else {
