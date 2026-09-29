@@ -135,37 +135,57 @@
 // 🔐 GATEWAY SECURITY AUTHENTICATION VALVE MATRIX: PURCHASE PANEL
 // =======================================================================
 
-// 1. Initial execution block: Runs immediately on screen boot to check the current tab session
-document.addEventListener("DOMContentLoaded", function() {
-    // 🧹 PERMANENT HARDWARE PURGE OVERRIDE: 
-    // Force-deletes any old permanent tokens left behind from previous tests.
+// 🔐 TRANSIENT SESSION SECURITY VALVE MATRIX: PURCHASE PANEL [REFRESH PROTECTION]
+document.addEventListener("DOMContentLoaded", async function() {
+    // 🛡️ REFRESH FIREWALL INTERCEPTOR: If a page reload/refresh is detected, 
+    // immediately purge all session tokens from RAM to secure shared workstation devices!
+    const navigationEntries = performance.getEntriesByType("navigation");
+    if (navigationEntries.length > 0 && navigationEntries[0].type === "reload") {
+        console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory for workstation rotation.");
+        sessionStorage.removeItem("purchase_app_authorized_session_profile");
+        sessionStorage.clear();
+    }
+
     localStorage.removeItem("purchase_app_authorized_session_profile");
 
-    // 🛡️ TRANSIENT SESSION CHECK: Read strictly from temporary single-tab memory space
     var storedProfileSession = sessionStorage.getItem("purchase_app_authorized_session_profile");
     var lockScreen = document.getElementById("security-gateway-lock-screen");
     
     if (storedProfileSession) {
         try {
             var activeSessionData = JSON.parse(storedProfileSession);
+            var activeUsername = String(activeSessionData.username || "").toLowerCase().trim();
             var authorizedRole = String(activeSessionData.role || "").toLowerCase().trim();
 
-            // Safeguard entry check: Validate that the session role holds the correct privileges
+            // Silent account suspension check
+            const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
+                headers: { "apikey": API_KEY }
+            });
+            
+            if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (cloudProfileData && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0];
+                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                        sessionStorage.removeItem("purchase_app_authorized_session_profile");
+                        if (lockScreen) lockScreen.style.display = "flex";
+                        alert("🛑 Su sesión ha caducado: Esta cuenta de personal ha sido SUSPENDIDA.");
+                        return;
+                    }
+                }
+            }
+
             if (authorizedRole === "owner" || authorizedRole === "purchase") {
-                console.log(`🔐 Access pre-authorized: Logged in as ${activeSessionData.username} (${authorizedRole})`);
+                console.log(`🔐 Access pre-authorized: Logged in as ${activeSessionData.username}`);
                 if (lockScreen) lockScreen.style.display = "none";
                 return;
             }
         } catch (e) {
-            console.warn("Expired or corrupt session profile detected, forcing re-authentication.");
             sessionStorage.removeItem("purchase_app_authorized_session_profile");
         }
     }
     
-    // 🔒 ENFORCEMENT GUARD: Force the login screen to open if no active tab session is found
-    if (lockScreen) {
-        lockScreen.style.display = "flex";
-    }
+    if (lockScreen) lockScreen.style.display = "flex";
 });
 
 // 🎮 GATEWAY SUBMISSION ROUTER CONTROLLER
