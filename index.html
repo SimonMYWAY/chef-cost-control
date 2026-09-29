@@ -1275,66 +1275,79 @@ async function executeGlobalApplicationForceRefresh(event) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP LIVE LOCKDOWN]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP - UNIVERSAL REPAIR]
 // =======================================================================
-// Forcefully evicts an operator mid-session if they are disabled in the Backoffice,
-// protecting master recipe cost formulas and ingredient proportions from un-authorized access!
 async function executeLiveChefSuspensionAuditSweep() {
-    // Dynamically look for whichever session token string index.html uses to verify the Chef/Owner role
-    var storedProfileSession = sessionStorage.getItem("chef_app_authorized_session_profile") || 
-                               sessionStorage.getItem("authorized_session_profile") ||
-                               sessionStorage.getItem("purchase_app_authorized_session_profile"); // Fallback check
-                               
-    if (!storedProfileSession) return;
+    // ✨ THE UNIVERSAL DETECTOR: Automatically loop through all keys in memory
+    // to find your active chef login token, no matter what it is named!
+    let activeUsername = "";
+    let detectedKeyName = "";
+    
+    for (let i = 0; i < sessionStorage.length; i++) {
+        let key = sessionStorage.key(i);
+        if (key && key.includes("profile")) {
+            try {
+                let data = JSON.parse(sessionStorage.getItem(key));
+                if (data && data.username) {
+                    activeUsername = String(data.username).trim();
+                    detectedKeyName = key;
+                    break;
+                }
+            } catch(e) {}
+        }
+    }
+
+    // If no active session profile is found, exit early
+    if (!activeUsername) return;
 
     try {
-        var activeSessionData = JSON.parse(storedProfileSession);
-        var activeUsername = String(activeSessionData.username || "").trim();
+        var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
+        var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
+        if (!targetApiUrl || !targetApiKey) return;
 
-        if (activeUsername) {
-            var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
-            var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
-            if (!targetApiUrl || !targetApiKey) return;
+        // Strict case-sensitive match against the specific user profile row
+        var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
-            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
-
-            const checkRes = await fetch(secureQueryUrl, {
-                method: "GET",
-                headers: { 
-                    "apikey": targetApiKey,
-                    "Authorization": "Bearer " + targetApiKey,
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache"
-                }
-            });
+        const checkRes = await fetch(secureQueryUrl, {
+            method: "GET",
+            headers: { 
+                "apikey": targetApiKey,
+                "Authorization": "Bearer " + targetApiKey,
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache"
+            }
+        });
+        
+        if (checkRes.ok) {
+            const cloudProfileData = await checkRes.json();
             
-            if (checkRes.ok) {
-                const cloudProfileData = await checkRes.json();
-                if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
-                    var liveUserRow = cloudProfileData[0]; // 🎯 INDEX MATCH VERIFIED
+            if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                var liveUserRow = cloudProfileData.at(0); // 🎯 TARGET INDEX 0 MATCHED
+                
+                // 💥 REAL-TIME MID-SESSION EVICTION VALVE
+                if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                    console.warn("🛡️ Security Intercept: Chef active session has been suspended by management.");
                     
-                    // 💥 MID-SESSION DISABLING INTERCEPT
-                    if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
-                        console.warn("🛡️ Security Intercept: Chef active session has been suspended by management.");
-                        
-                        // Clear out all potential session storage profiles completely
-                        sessionStorage.clear();
-                        
-                        // Wipe the visible recipe workspace container grid immediately
-                        var appWorkspace = document.getElementById("master-recipe-workspace-container") || document.body;
-                        if (appWorkspace && appWorkspace !== document.body) {
-                            appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
-                        }
-                        
-                        var lockScreen = document.getElementById("security-gateway-lock-screen");
-                        if (lockScreen) lockScreen.style.display = "flex";
-                        
-                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
-                        
-                        // Hard clear memory remnants completely out of RAM
-                        location.reload();
-                        return;
+                    // 1. Wipe out ALL data from browser tab memory instantly
+                    sessionStorage.clear();
+                    
+                    // 2. Shut down visual workspace grids
+                    var appWorkspace = document.getElementById("master-recipe-workspace-container") || document.body;
+                    if (appWorkspace && appWorkspace !== document.body) {
+                        appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
                     }
+                    
+                    // 3. Drop the login lock screen panel back into view over everything
+                    var lockScreen = document.getElementById("security-gateway-lock-screen");
+                    if (lockScreen) {
+                        lockScreen.style.display = "flex";
+                    }
+                    
+                    alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
+                    
+                    // 4. Force a hard tab refresh to clear out raw memory remnants completely
+                    location.reload();
+                    return;
                 }
             }
         }
@@ -1348,7 +1361,9 @@ setInterval(executeLiveChefSuspensionAuditSweep, 15000);
 
 // 📱 iOS Standby/Tab Visibility wake-up re-verifier
 document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "visible") executeLiveChefSuspensionAuditSweep();
+    if (document.visibilityState === "visible") {
+        executeLiveChefSuspensionAuditSweep();
+    }
 });
 
 </script>
