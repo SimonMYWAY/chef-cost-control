@@ -84,14 +84,18 @@
     
     let MASTER_ORDERS_CACHE = [];
 
-        document.addEventListener("DOMContentLoaded", async function() {
+    // 🔒 USER SECURITY ACCESS LOCK ENGINE & WORKSTATION PROTECTION
+    document.addEventListener("DOMContentLoaded", async function() {
         // 🛡️ REFRESH FIREWALL INTERCEPTOR: If a page reload/refresh is detected, 
         // immediately purge all session tokens from RAM to secure shared workstation devices!
         const navigationEntries = performance.getEntriesByType("navigation");
-        if (navigationEntries.length > 0 && navigationEntries[0].type === "reload") {
-            console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory for workstation rotation.");
+        if (navigationEntries.length > 0 && navigationEntries.at(0)?.type === "reload") {
+            console.warn("🛡️ Security Intercept: Page reload detected. Purging active session memory.");
             sessionStorage.removeItem("receiving_app_authorized_session_profile");
             sessionStorage.clear();
+            var lockScreen = document.getElementById("security-gateway-lock-screen");
+            if (lockScreen) lockScreen.style.display = "flex";
+            return;
         }
 
         // Transient security check: look only inside single-tab sessionStorage memory pools
@@ -103,42 +107,40 @@
                 var profile = JSON.parse(activeSession);
                 var activeUsername = String(profile.username || "").toLowerCase().trim();
 
-                // 🛡️ ACCOUNT SUSPENSION SHIELD: Silent check to make sure this account hasn't been disabled!
+                // 🛡️ INITIAL ACCREDITATION HANDSHAKE: Fast boot validation check
                 if (activeUsername) {
                     try {
-                        const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
-                            headers: { "apikey": API_KEY }
+                        const checkRes = await fetch(`${API_URL}profiles?username=eq.${encodeURIComponent(activeUsername)}`, {
+                            headers: { "apikey": API_KEY, "Cache-Control": "no-cache" }
                         });
-                                    if (checkRes.ok) {
-                const cloudProfileData = await checkRes.json();
-                if (cloudProfileData && cloudProfileData.length > 0) {
-                    
-                    // 🎯 THE FIXED LINE: Target index 0 to parse the actual user row object container!
-                    var liveUserRow = cloudProfileData[0];
-                    
-                    // Now this comparison evaluates with 100% precision!
-                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
-                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
-                        
-                        // Clear memory and force eviction immediately
-                        sessionStorage.clear();
-                        
-                        alert("🛑 ACCESO DENEGADO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada.");
-                        location.reload();
-                        return;
-                    }
-                }
-            }
-
+                        if (checkRes.ok) {
+                            const cloudProfileData = await checkRes.json();
+                            if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                                var liveUserRow = cloudProfileData.at(0);
+                                
+                                // Hard closure if account is suspended on page boot
+                                if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                                    sessionStorage.removeItem("receiving_app_authorized_session_profile");
+                                    sessionStorage.clear();
+                                    if (lockScreen) lockScreen.style.display = "flex";
+                                    alert("🛑 Acceso Denegado: Esta cuenta de personal se encuentra actualmente SUSPENDIDA.");
+                                    location.reload();
+                                    return;
+                                }
+                            }
+                        }
                     } catch (netErr) {
                         console.warn("Security profile pre-check bypassed due to network delay:", netErr);
                     }
                 }
 
-                // If they pass all checks, assign the user badge and open the panel
+                // If account is cleanly active, map user badge metrics and load workspace
                 document.getElementById("user-badge").innerText = `👤 Operador: ${profile.username || 'Control'}`;
                 if (lockScreen) lockScreen.style.display = "none";
-                loadReceivingDashboard();
+                
+                if (typeof loadReceivingDashboard === "function") {
+                    loadReceivingDashboard();
+                }
             } catch(e) {
                 sessionStorage.removeItem("receiving_app_authorized_session_profile");
                 if (lockScreen) lockScreen.style.display = "flex";
