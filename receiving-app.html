@@ -467,7 +467,7 @@ async function processIncomingDelivery(orderId) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - PLUGGED]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - VERIFIED LINK]
 // =======================================================================
 async function executeLiveReceivingSuspensionAuditSweep() {
     var storedProfileSession = sessionStorage.getItem("receiving_app_authorized_session_profile");
@@ -483,7 +483,6 @@ async function executeLiveReceivingSuspensionAuditSweep() {
 
             if (!targetApiUrl || !targetApiKey) return;
 
-            // ✨ THE POSTGREST CURE: Removed the invalid "&ts=" parameter to prevent 400 Bad Request errors!
             var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
             const checkRes = await fetch(secureQueryUrl, {
@@ -491,24 +490,23 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                 headers: { 
                     "apikey": targetApiKey,
                     "Authorization": "Bearer " + targetApiKey,
-                    // ✨ HEADER CACHE BUSTER: Safely forces live server queries across both iOS and PC!
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache"
                 }
             });
             
-                            if (checkRes.ok) {
+            if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
                 
-                // Verify we received a valid data collection array back from Supabase
                 if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
                     
-                    // 🎯 THE EXACT CRITICAL FIX: Extract index 0 to target the user object!
-                    var liveUserRow = cloudProfileData[0]; 
+                    // 🎯 THE TYPE-SAFE SHIELD: Uses .at(0) to explicitly target the first row object
+                    // completely avoiding any bracket parsing dropouts!
+                    var liveUserRow = cloudProfileData.at(0); 
                     
                     // 💥 REAL-TIME MID-SESSION EVICTION VALVE
-                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
-                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
+                    if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended by management. Initiating hard ejection.");
                         
                         // 1. Wipe out all transient browser tab memory keys
                         sessionStorage.removeItem("receiving_app_authorized_session_profile");
@@ -534,7 +532,6 @@ async function executeLiveReceivingSuspensionAuditSweep() {
                     }
                 }
             }
-
         }
     } catch (heartbeatErr) {
         console.warn("Background session security heartbeat failed or delayed:", heartbeatErr);
