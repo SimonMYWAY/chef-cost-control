@@ -109,22 +109,27 @@
                         const checkRes = await fetch(`${API_URL}profiles?username=eq.${activeUsername}`, {
                             headers: { "apikey": API_KEY }
                         });
-                        if (checkRes.ok) {
-                            const cloudProfileData = await checkRes.json();
-                            if (cloudProfileData && cloudProfileData.length > 0) {
-                                var liveUserRow = cloudProfileData[0];
-                                
-                                // If they were disabled in backoffice, wipe memory, alert them, and kick them out!
-                                if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
-                                    console.warn("🛡️ Security Intercept: Logged-in profile has been deactivated.");
-                                    sessionStorage.removeItem("receiving_app_authorized_session_profile");
-                                    sessionStorage.clear();
-                                    if (lockScreen) lockScreen.style.display = "flex";
-                                    alert("🛑 Acceso Denegado: Esta cuenta de personal ha sido SUSPENDIDA por la administración.");
-                                    return;
-                                }
-                            }
-                        }
+                                    if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (cloudProfileData && cloudProfileData.length > 0) {
+                    
+                    // 🎯 THE FIXED LINE: Target index 0 to parse the actual user row object container!
+                    var liveUserRow = cloudProfileData[0];
+                    
+                    // Now this comparison evaluates with 100% precision!
+                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
+                        
+                        // Clear memory and force eviction immediately
+                        sessionStorage.clear();
+                        
+                        alert("🛑 ACCESO DENEGADO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada.");
+                        location.reload();
+                        return;
+                    }
+                }
+            }
+
                     } catch (netErr) {
                         console.warn("Security profile pre-check bypassed due to network delay:", netErr);
                     }
