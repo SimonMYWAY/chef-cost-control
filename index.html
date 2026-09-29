@@ -1153,18 +1153,26 @@ async function saveAndSubmitForApprovalPipeline() {
                 return;
             }
             
-            // 🔒 SECURITY ROLE FILTER: Only 'chef' or 'owner' profiles can access index.html
+                       // 🔒 SECURITY ROLE FILTER: Only 'chef' or 'owner' profiles can access index.html
             const userRole = String(matchedProfile.role || "kitchen").toLowerCase().trim();
             if (userRole === "chef" || userRole === "owner") {
                 feedbackEl.innerText = "";
+                
+                // Save the data session token securely to single-tab RAM
+                sessionStorage.setItem("chef_app_authorized_session_profile", JSON.stringify(matchedProfile));
+                
+                // ✨ THE ACTIVE CONNECTER: Assign the profile username directly to the active window thread runtime!
+                window.activeUsername = String(matchedProfile.username || "").trim();
+                
                 document.getElementById("security-gateway-lock-screen").style.display = "none";
                 
-                // 🌟 WAKE UP APP NATIVE CHANNELS ON SUCCESSFUL LOGIN LOCK DROPS
-                updateUIStrings();   // Instantly translates your layouts and populates your 11 categories
-                initRevoDownload();  // Connects to your cloud tables to populate the 104 recipes list
+                // WAKE UP APP NATIVE CHANNELS
+                updateUIStrings();   
+                initRevoDownload();  
             } else {
                 feedbackEl.innerText = "🛑 Acceso Denegado: Tu perfil no tiene rango para el panel maestro.";
             }
+
         } catch (err) {
             console.error(err);
             feedbackEl.innerText = "❌ Error de conexión con el servidor.";
@@ -1275,29 +1283,24 @@ async function executeGlobalApplicationForceRefresh(event) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP - UNIVERSAL REPAIR]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP MASTER FORCED ENGINE]
 // =======================================================================
 async function executeLiveChefSuspensionAuditSweep() {
-    // ✨ THE UNIVERSAL DETECTOR: Automatically loop through all keys in memory
-    // to find your active chef login token, no matter what it is named!
-    let activeUsername = "";
-    let detectedKeyName = "";
+    // ✨ Target the global window tracking parameter first, fallback to cached storage strings
+    var activeUsername = window.activeUsername;
     
-    for (let i = 0; i < sessionStorage.length; i++) {
-        let key = sessionStorage.key(i);
-        if (key && key.includes("profile")) {
+    if (!activeUsername) {
+        var storedProfileSession = sessionStorage.getItem("chef_app_authorized_session_profile");
+        if (storedProfileSession) {
             try {
-                let data = JSON.parse(sessionStorage.getItem(key));
-                if (data && data.username) {
-                    activeUsername = String(data.username).trim();
-                    detectedKeyName = key;
-                    break;
-                }
+                var activeSessionData = JSON.parse(storedProfileSession);
+                activeUsername = String(activeSessionData.username || "").trim();
+                window.activeUsername = activeUsername; // Bind it for subsequent loops
             } catch(e) {}
         }
     }
 
-    // If no active session profile is found, exit early
+    // If no profile parameter is authenticated yet, wait for user login handshake
     if (!activeUsername) return;
 
     try {
@@ -1305,7 +1308,6 @@ async function executeLiveChefSuspensionAuditSweep() {
         var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
         if (!targetApiUrl || !targetApiKey) return;
 
-        // Strict case-sensitive match against the specific user profile row
         var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
         const checkRes = await fetch(secureQueryUrl, {
@@ -1320,18 +1322,19 @@ async function executeLiveChefSuspensionAuditSweep() {
         
         if (checkRes.ok) {
             const cloudProfileData = await checkRes.json();
-            
             if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
-                var liveUserRow = cloudProfileData.at(0); // 🎯 TARGET INDEX 0 MATCHED
+                var liveUserRow = cloudProfileData; // 🎯 TARGET INDEX 0 PRECISELY
                 
-                // 💥 REAL-TIME MID-SESSION EVICTION VALVE
+                // 💥 REAL-TIME MID-SESSION EVICTION GATING
                 if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
                     console.warn("🛡️ Security Intercept: Chef active session has been suspended by management.");
                     
                     // 1. Wipe out ALL data from browser tab memory instantly
+                    sessionStorage.removeItem("chef_app_authorized_session_profile");
                     sessionStorage.clear();
+                    window.activeUsername = null;
                     
-                    // 2. Shut down visual workspace grids
+                    // 2. Shut down visual recipe grids completely
                     var appWorkspace = document.getElementById("master-recipe-workspace-container") || document.body;
                     if (appWorkspace && appWorkspace !== document.body) {
                         appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
