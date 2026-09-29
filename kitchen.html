@@ -354,7 +354,7 @@ async function executeNewLocalGatewayAuthenticationChallenge(event) {
 }
 
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [MOBILE INSULATED FOR iPHONE]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [KITCHEN APP LIVE LOCKDOWN]
 // =======================================================================
 async function executeLiveKitchenSuspensionAuditSweep() {
     var storedProfileSession = sessionStorage.getItem("kitchen_app_authorized_session_profile");
@@ -362,16 +362,20 @@ async function executeLiveKitchenSuspensionAuditSweep() {
 
     try {
         var activeSessionData = JSON.parse(storedProfileSession);
-        var activeUsername = String(activeSessionData.username || "").toLowerCase().trim();
+        var activeUsername = String(activeSessionData.username || "").trim();
 
         if (activeUsername) {
-            var cacheBusterToken = new Date().getTime();
-            var secureQueryUrl = `${API_URL}profiles?username=eq.${activeUsername}&ts=${cacheBusterToken}`;
+            var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
+            var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
+            if (!targetApiUrl || !targetApiKey) return;
+
+            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
 
             const checkRes = await fetch(secureQueryUrl, {
                 method: "GET",
                 headers: { 
-                    "apikey": API_KEY,
+                    "apikey": targetApiKey,
+                    "Authorization": "Bearer " + targetApiKey,
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache"
                 }
@@ -379,39 +383,32 @@ async function executeLiveKitchenSuspensionAuditSweep() {
             
             if (checkRes.ok) {
                 const cloudProfileData = await checkRes.json();
-                if (cloudProfileData && cloudProfileData.length > 0) {
-                    var liveUserRow = cloudProfileData[0];
+                if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0]; // 🎯 INDEX MATCH LOCK
                     
-                    // 💥 REAL-TIME EVICTION FIREWALL
-                    if (liveUserRow.is_active === false || liveUserRow.is_active === "false") {
-                        console.warn("🛡️ Security Intercept: Kitchen active session has been suspended by management.");
+                    if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
                         
                         sessionStorage.removeItem("kitchen_app_authorized_session_profile");
                         sessionStorage.clear();
                         
-                        // Drop the lock screen down over everything
                         var lockScreen = document.getElementById("security-gateway-lock-screen");
                         if (lockScreen) lockScreen.style.display = "flex";
                         
-                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada.");
+                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
                         location.reload();
+                        return;
                     }
                 }
             }
         }
     } catch (heartbeatErr) {
-        console.warn("Background mobile security sweep delayed:", heartbeatErr);
+        console.warn("Background session security heartbeat failed:", heartbeatErr);
     }
 }
-
-// Stanby Foreground Interval clock running every 30 seconds
-setInterval(executeLiveKitchenSuspensionAuditSweep, 30000);
-
-// WAKE-UP INTERCEPTOR (Bypasses background power-saving throttling on mobile Safari/Chrome)
+setInterval(executeLiveKitchenSuspensionAuditSweep, 15000);
 document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "visible") {
-        executeLiveKitchenSuspensionAuditSweep();
-    }
+    if (document.visibilityState === "visible") executeLiveKitchenSuspensionAuditSweep();
 });
 
 </script>

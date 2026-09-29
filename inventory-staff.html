@@ -561,6 +561,69 @@ async function executeInventoryGatewayAuthenticationChallenge() {
                 alert("❌ Error al guardar datos: " + err.message);
             }
         }
+        // =======================================================================
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [INVENTORY APP LIVE LOCKDOWN]
+// =======================================================================
+async function executeLiveInventorySuspensionAuditSweep() {
+    var storedProfileSession = sessionStorage.getItem("inventory_app_authorized_session_profile");
+    if (!storedProfileSession) return;
+
+    try {
+        var activeSessionData = JSON.parse(storedProfileSession);
+        var activeUsername = String(activeSessionData.username || "").trim();
+
+        if (activeUsername) {
+            var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
+            var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
+            if (!targetApiUrl || !targetApiKey) return;
+
+            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
+
+            const checkRes = await fetch(secureQueryUrl, {
+                method: "GET",
+                headers: { 
+                    "apikey": targetApiKey,
+                    "Authorization": "Bearer " + targetApiKey,
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
+            });
+            
+            if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0]; // 🎯 INDEX MATCH LOCK
+                    
+                    if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                        console.warn("🛡️ Security Intercept: Active session account has been suspended.");
+                        
+                        sessionStorage.removeItem("inventory_app_authorized_session_profile");
+                        sessionStorage.clear();
+                        
+                        var appWorkspace = document.getElementById("inventory-dashboard-workspace") || document.body;
+                        if (appWorkspace && appWorkspace !== document.body) {
+                            appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
+                        }
+                        
+                        var lockScreen = document.getElementById("security-gateway-lock-screen");
+                        if (lockScreen) lockScreen.style.display = "flex";
+                        
+                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
+                        location.reload();
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (heartbeatErr) {
+        console.warn("Background session security heartbeat failed:", heartbeatErr);
+    }
+}
+setInterval(executeLiveInventorySuspensionAuditSweep, 15000);
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible") executeLiveInventorySuspensionAuditSweep();
+});
+
     </script>
 </body>
 </html>

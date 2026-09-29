@@ -1274,6 +1274,82 @@ async function executeGlobalApplicationForceRefresh(event) {
         }, 3000);
     }
 }
+// =======================================================================
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP LIVE LOCKDOWN]
+// =======================================================================
+// Forcefully evicts an operator mid-session if they are disabled in the Backoffice,
+// protecting master recipe cost formulas and ingredient proportions from un-authorized access!
+async function executeLiveChefSuspensionAuditSweep() {
+    // Dynamically look for whichever session token string index.html uses to verify the Chef/Owner role
+    var storedProfileSession = sessionStorage.getItem("chef_app_authorized_session_profile") || 
+                               sessionStorage.getItem("authorized_session_profile") ||
+                               sessionStorage.getItem("purchase_app_authorized_session_profile"); // Fallback check
+                               
+    if (!storedProfileSession) return;
+
+    try {
+        var activeSessionData = JSON.parse(storedProfileSession);
+        var activeUsername = String(activeSessionData.username || "").trim();
+
+        if (activeUsername) {
+            var targetApiUrl = (typeof API_URL !== "undefined") ? API_URL : window.API_URL;
+            var targetApiKey = (typeof API_KEY !== "undefined") ? API_KEY : window.API_KEY;
+            if (!targetApiUrl || !targetApiKey) return;
+
+            var secureQueryUrl = `${targetApiUrl}profiles?username=eq.${encodeURIComponent(activeUsername)}`;
+
+            const checkRes = await fetch(secureQueryUrl, {
+                method: "GET",
+                headers: { 
+                    "apikey": targetApiKey,
+                    "Authorization": "Bearer " + targetApiKey,
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
+            });
+            
+            if (checkRes.ok) {
+                const cloudProfileData = await checkRes.json();
+                if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
+                    var liveUserRow = cloudProfileData[0]; // 🎯 INDEX MATCH VERIFIED
+                    
+                    // 💥 MID-SESSION DISABLING INTERCEPT
+                    if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
+                        console.warn("🛡️ Security Intercept: Chef active session has been suspended by management.");
+                        
+                        // Clear out all potential session storage profiles completely
+                        sessionStorage.clear();
+                        
+                        // Wipe the visible recipe workspace container grid immediately
+                        var appWorkspace = document.getElementById("master-recipe-workspace-container") || document.body;
+                        if (appWorkspace && appWorkspace !== document.body) {
+                            appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
+                        }
+                        
+                        var lockScreen = document.getElementById("security-gateway-lock-screen");
+                        if (lockScreen) lockScreen.style.display = "flex";
+                        
+                        alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
+                        
+                        // Hard clear memory remnants completely out of RAM
+                        location.reload();
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (heartbeatErr) {
+        console.warn("Background session security heartbeat failed:", heartbeatErr);
+    }
+}
+
+// ⏱️ Run foreground loop polling perfectly every 15 seconds
+setInterval(executeLiveChefSuspensionAuditSweep, 15000);
+
+// 📱 iOS Standby/Tab Visibility wake-up re-verifier
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible") executeLiveChefSuspensionAuditSweep();
+});
 
 </script>
 </body>
