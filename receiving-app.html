@@ -277,44 +277,47 @@ function renderDashboardGrids() {
         const isReceived = order.status === "received";
         let itemsHtml = "";
         
-                order.items.forEach(function(item) {
+                    order.items.forEach(function(item) {
             const defaultDeliveredQty = (item.quantity_delivered !== null && item.quantity_delivered !== undefined) 
                 ? item.quantity_delivered 
                 : item.quantity_ordered;
                 
-            // Sourced or defaulted to 0 if not yet captured
             const currentLineTotal = item.line_total_cost || 0;
             const isDisabledAttr = isReceived ? "disabled" : "";
 
+            // 🎯 FIXED LAYOUT ALIGNMENT: Explicitly matching the exact grid-template-columns split pattern!
             itemsHtml += `
-                <div class="item-line" style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1.2fr; gap: 10px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
-                    <div style="font-weight: 500; text-align: left;">${item.ingredient_name}</div>
-                    <div style="color: var(--text-muted); text-transform: capitalize; font-size: 0.8rem;">${item.supplier_uom || 'Uds'}</div>
+                <div class="item-line" style="display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
+                    <!-- Column 1: Producto Name -->
+                    <div style="font-weight: 500; text-align: left; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.ingredient_name}</div>
                     
-                    <!-- Cant Real Recibida Input -->
-                    <div>
-                        <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-name="${item.ingredient_name}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px; box-sizing: border-box;">
-                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
+                    <!-- Column 2: Formato / UOM -->
+                    <div style="color: var(--text-muted); text-transform: capitalize; font-size: 0.8rem; text-align: left;">${item.supplier_uom || 'Uds'}</div>
+                    
+                    <!-- Column 3: Cant Real Recibida Input -->
+                    <div style="text-align: left;">
+                        <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-name="${item.ingredient_name}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.85rem; text-align: center;">
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: center;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
                     </div>
                     
-                    <!-- 🪙 NEW: Absolute Line Total Cost Input ($) -->
-                    <div>
+                    <!-- Column 4: Invoice Total Cost Input ($) -->
+                    <div style="text-align: right;">
                         <div style="position: relative; display: flex; align-items: center;">
-                            <span style="position: absolute; left: 4px; font-size: 0.8rem; color: var(--text-muted);">$</span>
-                            <input type="number" class="cost-input" data-item-id="${item.id}" value="${currentLineTotal > 0 ? currentLineTotal.toFixed(2) : ''}" placeholder="0.00" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px 4px 4px 14px; box-sizing: border-box; font-family: monospace; font-weight: 600; text-align: right;">
+                            <span style="position: absolute; left: 4px; font-size: 0.75rem; color: var(--text-muted); font-weight: bold;">$</span>
+                            <input type="number" class="cost-input" data-item-id="${item.id}" value="${currentLineTotal > 0 ? currentLineTotal.toFixed(2) : ''}" placeholder="0.00" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px 4px 4px 14px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-family: monospace; font-weight: 600; text-align: right; font-size: 0.85rem;">
                         </div>
-                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: right;">Total Línea</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: right;">Facturado</div>
                     </div>
                 </div>
             `;
         });
-
 
         // ✨ THE FIX: Cleared the accidental backslashes so the button template renders perfectly
         const actionButtonHtml = isReceived 
             ? '' 
             : `<button type="button" class="btn-receive" onclick="processIncomingDelivery('${order.id}')">Efectuar Recepción ✔️</button>`;
 
+                // 🎯 FIXED GRID LABEL WRAPPER: Matches the row distribution cells above word for word!
         const cardHtml = `
             <div class="po-card ${isReceived ? 'received' : ''}" id="po-card-${order.id}" data-supplier="${order.supplier_name.toLowerCase()}" data-po="${order.po_number.toLowerCase()}">
                 <div class="card-header">
@@ -328,11 +331,15 @@ function renderDashboardGrids() {
                     <label>No. de Factura / Remisión</label>
                     <input type="text" class="invoice-input" id="invoice-${order.id}" value="${order.invoice_number || ''}" placeholder="Ej: FAC-10492" ${isReceived ? 'disabled' : ''}>
                 </div>
-                <div style="margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1fr 1fr; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                
+                <!-- THE SHIFT HEADER ROW: Aligns labels perfectly across the columns -->
+                <div style="margin-top: 15px; margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; font-size: 0.72rem; font-weight: 800; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">
                     <span style="text-align: left;">Producto</span>
-                    <span>Formato</span>
-                    <span>Cant Real Recibida</span>
+                    <span style="text-align: left;">Formato</span>
+                    <span style="text-align: center;">Recibido</span>
+                    <span style="text-align: right;">Total ($)</span>
                 </div>
+                
                 <div class="items-list-container">${itemsHtml}</div>
                 ${actionButtonHtml}
             </div>
