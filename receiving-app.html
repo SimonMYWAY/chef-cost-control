@@ -221,7 +221,7 @@ async function executeNewLocalGatewayAuthenticationChallenge() {
     }
 }
 
-// 🔄 CORE REFRESH LOOP: Downloads pending and received orders concurrently [PART 1 OF 2 - SECURED]
+// 🔄 CORE REFRESH LOOP: Downloads orders, child items, and master ingredients concurrently [PART 1 OF 2]
 async function loadReceivingDashboard() {
     const pendingGrid = document.getElementById("pending-grid");
     const historyGrid = document.getElementById("history-grid");
@@ -231,21 +231,26 @@ async function loadReceivingDashboard() {
 
     try {
         const ordersUrl = API_URL + "purchase_orders?status=in.(dispatched,received)&order=po_number.desc";
-        
-        // 🎯 THE ATOMIC REPAIR: Removed the nonexistent "cost" column from the query string to resolve the 400 Bad Request error!
         const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia,line_total_cost";
+        
+        // 🎯 THE THREE-TABLE HANDSHAKE: Download the master ingredients table at page boot!
+        const ingredientsUrl = API_URL + "ingredients";
 
-        const [ordersRes, itemsRes] = await Promise.all([
-            fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); }),
-            fetch(itemsUrl, { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); })
+        const [ordersRes, itemsRes, ingredientsRes] = await Promise.all([
+            fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(itemsUrl, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(ingredientsUrl, { headers: { "apikey": API_KEY } }).then(r => r.json())
         ]);
 
-        if (ordersRes.message || itemsRes.message) {
-            console.error("Supabase Error Details:", ordersRes.message || itemsRes.message);
+        if (ordersRes.message || itemsRes.message || ingredientsRes.message) {
+            console.error("Supabase Error Details:", ordersRes.message || itemsRes.message || ingredientsRes.message);
             throw new Error("Database validation mapping error.");
         }
 
-        // Nest child lines inside parent matrices safely using mapping loops
+        // 🌟 CACHE THE INGREDIENTS GLOBALLY: Safely populates the memory array for your pricing loop!
+        window._masterIngredientsLookupArray = Array.isArray(ingredientsRes) ? ingredientsRes : [];
+
+        // Nest child lines inside parent purchase orders cleanly
         MASTER_ORDERS_CACHE = ordersRes.map(function(order) {
             order.items = itemsRes.filter(function(item) { 
                 return String(item.po_id) === String(order.id); 
@@ -261,7 +266,7 @@ async function loadReceivingDashboard() {
     }
 }
 
-// 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History [PART 2 OF 2 - REPAIRED]
+// 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History [PART 2 OF 2]
 function renderDashboardGrids() {
     const pendingGrid = document.getElementById("pending-grid");
     const historyGrid = document.getElementById("history-grid");
@@ -277,36 +282,36 @@ function renderDashboardGrids() {
         const isReceived = order.status === "received";
         let itemsHtml = "";
         
-                order.items.forEach(function(item) {
+        order.items.forEach(function(item) {
             const defaultDeliveredQty = (item.quantity_delivered !== null && item.quantity_delivered !== undefined) 
                 ? item.quantity_delivered 
                 : item.quantity_ordered;
                 
             // 🪙 THE THREE-PARAMETER CALCULATION MATRIX (USD to C\$ Córdoba conversion)
-            // Parameter 1: Try to locate the matching base ingredient from the master array cache
+            // Parameter 1: Extract std_cost_per_unit from the globally cached ingredients list
             let masterStdCostUSD = 0;
-            if (typeof _masterIngredientsLookupArray !== "undefined") {
-                const globalMatch = _masterIngredientsLookupArray.find(function(i) {
-                    return String(i.name_es || "").toLowerCase().trim() === String(item.ingredient_name || "").toLowerCase().trim();
-                });
-                if (globalMatch) {
-                    masterStdCostUSD = parseFloat(globalMatch.std_cost_per_unit || globalMatch.cost || 0);
-                }
+            const lookupList = window._masterIngredientsLookupArray || [];
+            
+            const globalMatch = lookupList.find(function(i) {
+                return String(i.name_es || "").toLowerCase().trim() === String(item.ingredient_name || "").toLowerCase().trim();
+            });
+            if (globalMatch) {
+                masterStdCostUSD = parseFloat(globalMatch.std_cost_per_unit || globalMatch.cost || 0);
             }
             
-            // Parameter 2: Pull the exact purchase item order count
+            // Parameter 2: Pull quantity_ordered from purchase_order_items
             const orderQty = parseFloat(item.quantity_ordered || 0);
             
-            // Parameter 3: Extract the standard unit per item multiplier factor (units_per_purchase equivalent)
+            // Parameter 3: Extract equivalencia (units_per_purchase equivalent multiplier factor)
             const packageEquivalenceFactor = parseFloat(item.equivalencia || 1);
             
-            // 🧮 EXECUTE THE THREE-PARAMETER FORMULA SYSTEM:
-            // std price per std unit (USD) x units ordered x std units per package x conversion factor
+            // 🧮 RUN THE ARITHMETIC FORMULA:
+            // std price per std unit (USD) x units ordered x std units per package x exchange rate factor
             const baseTheoreticalLineCostUSD = masterStdCostUSD * orderQty * packageEquivalenceFactor;
             const exchangeRateFactor = 36.6243;
             const suggestedLineCostCordobas = baseTheoreticalLineCostUSD * exchangeRateFactor;
                 
-            // Ensure values fallback to our computed suggestion if no override exists in Supabase
+            // Use saved database price if present; otherwise fallback to the computed Córdoba suggestion
             const currentLineTotal = (item.line_total_cost !== null && item.line_total_cost !== undefined && parseFloat(item.line_total_cost) > 0)
                 ? parseFloat(item.line_total_cost)
                 : suggestedLineCostCordobas;
@@ -350,7 +355,6 @@ function renderDashboardGrids() {
                     <input type="text" class="invoice-input" id="invoice-${order.id}" value="${order.invoice_number || ''}" placeholder="Ej: FAC-10492" ${isReceived ? 'disabled' : ''}>
                 </div>
                 
-                <!-- THE LOCALIZED HEADER ROW: Explicit Córdoba Identifier labels -->
                 <div style="margin-top: 15px; margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; font-size: 0.72rem; font-weight: 800; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">
                     <span style="text-align: left;">Producto</span>
                     <span style="text-align: left;">Formato</span>
@@ -376,14 +380,6 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-    function filterCards() {
-        const query = document.getElementById("search-field").value.toLowerCase().trim();
-        document.querySelectorAll(".po-card").forEach(card => {
-            const supplier = card.getAttribute("data-supplier") || "";
-            const po = card.getAttribute("data-po") || "";
-            card.style.display = (supplier.includes(query) || po.includes(query)) ? "" : "none";
-        });
-    }
 // 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5 - SECURE AUDIT LOGGED]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
