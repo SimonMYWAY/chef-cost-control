@@ -282,10 +282,26 @@ function renderDashboardGrids() {
                 ? item.quantity_delivered 
                 : item.quantity_ordered;
                 
-            const currentLineTotal = item.line_total_cost || 0;
+            // 🪙 THE SUGGESTED PRICE ENGINE (USD to C\$ Córdoba conversion)
+            // 1. Extract the base system standard item cost (which is saved in USD)
+            const usdUnitCost = parseFloat(item.std_cost_per_unit || item.cost || 0);
+            
+            // 2. Calculate the total theoretical cost for this line item in USD
+            const theoreticalLineCostUSD = usdUnitCost * defaultDeliveredQty;
+            
+            // 3. Multiply by your fixed exchange rate factor to get the suggested value in Córdobas (C\$)
+            const exchangeRateFactor = 36.6243;
+            const suggestedLineCostCordobas = theoreticalLineCostUSD * exchangeRateFactor;
+                
+            // If a custom total has already been saved to the database row, use it. 
+            // Otherwise, pre-populate the field with our calculated Córdoba suggestion!
+            const currentLineTotal = (item.line_total_cost !== null && item.line_total_cost !== undefined && parseFloat(item.line_total_cost) > 0)
+                ? parseFloat(item.line_total_cost)
+                : suggestedLineCostCordobas;
+
             const isDisabledAttr = isReceived ? "disabled" : "";
 
-            // 🎯 FIXED LAYOUT ALIGNMENT: Explicitly matching the exact grid-template-columns split pattern!
+            // 🎯 CURRENCY ALIGNED LAYOUT: Displays localized C\$ labels word-for-word
             itemsHtml += `
                 <div class="item-line" style="display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
                     <!-- Column 1: Producto Name -->
@@ -300,24 +316,22 @@ function renderDashboardGrids() {
                         <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: center;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
                     </div>
                     
-                    <!-- Column 4: Invoice Total Cost Input ($) -->
+                    <!-- Column 4: Localized Córdoba Total Cost Input (C$) -->
                     <div style="text-align: right;">
                         <div style="position: relative; display: flex; align-items: center;">
-                            <span style="position: absolute; left: 4px; font-size: 0.75rem; color: var(--text-muted); font-weight: bold;">$</span>
-                            <input type="number" class="cost-input" data-item-id="${item.id}" value="${currentLineTotal > 0 ? currentLineTotal.toFixed(2) : ''}" placeholder="0.00" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px 4px 4px 14px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-family: monospace; font-weight: 600; text-align: right; font-size: 0.85rem;">
+                            <span style="position: absolute; left: 4px; font-size: 0.72rem; color: #16a34a; font-weight: bold;">C$</span>
+                            <input type="number" class="cost-input" data-item-id="${item.id}" value="${currentLineTotal.toFixed(2)}" placeholder="0.00" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px 4px 4px 20px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-family: monospace; font-weight: 600; text-align: right; font-size: 0.85rem; color: #15803d; background-color: ${isReceived ? '#f8fafc' : '#f0fdf4'};">
                         </div>
-                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: right;">Facturado</div>
+                        <div style="font-size:0.62rem; color:var(--text-muted); margin-top:2px; text-align: right;">Total C$</div>
                     </div>
                 </div>
             `;
         });
 
-        // ✨ THE FIX: Cleared the accidental backslashes so the button template renders perfectly
         const actionButtonHtml = isReceived 
             ? '' 
             : `<button type="button" class="btn-receive" onclick="processIncomingDelivery('${order.id}')">Efectuar Recepción ✔️</button>`;
 
-                // 🎯 FIXED GRID LABEL WRAPPER: Matches the row distribution cells above word for word!
         const cardHtml = `
             <div class="po-card ${isReceived ? 'received' : ''}" id="po-card-${order.id}" data-supplier="${order.supplier_name.toLowerCase()}" data-po="${order.po_number.toLowerCase()}">
                 <div class="card-header">
@@ -332,12 +346,12 @@ function renderDashboardGrids() {
                     <input type="text" class="invoice-input" id="invoice-${order.id}" value="${order.invoice_number || ''}" placeholder="Ej: FAC-10492" ${isReceived ? 'disabled' : ''}>
                 </div>
                 
-                <!-- THE SHIFT HEADER ROW: Aligns labels perfectly across the columns -->
+                <!-- THE LOCALIZED HEADER ROW: Explicit Córdoba Identifier labels -->
                 <div style="margin-top: 15px; margin-bottom: 5px; display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; font-size: 0.72rem; font-weight: 800; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">
                     <span style="text-align: left;">Producto</span>
                     <span style="text-align: left;">Formato</span>
                     <span style="text-align: center;">Recibido</span>
-                    <span style="text-align: right;">Total ($)</span>
+                    <span style="text-align: right;">Total (C$)</span>
                 </div>
                 
                 <div class="items-list-container">${itemsHtml}</div>
