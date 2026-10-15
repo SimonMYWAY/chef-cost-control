@@ -277,25 +277,38 @@ function renderDashboardGrids() {
         const isReceived = order.status === "received";
         let itemsHtml = "";
         
-        order.items.forEach(function(item) {
-            // 🛡️ DEFAULT FALLBACK RULE: If quantity_delivered is null, use quantity_ordered as the baseline value
+                order.items.forEach(function(item) {
             const defaultDeliveredQty = (item.quantity_delivered !== null && item.quantity_delivered !== undefined) 
                 ? item.quantity_delivered 
                 : item.quantity_ordered;
                 
+            // Sourced or defaulted to 0 if not yet captured
+            const currentLineTotal = item.line_total_cost || 0;
             const isDisabledAttr = isReceived ? "disabled" : "";
 
             itemsHtml += `
-                <div class="item-line">
+                <div class="item-line" style="display: grid; grid-template-columns: 2fr 1fr 1.2fr 1.2fr; gap: 10px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
                     <div style="font-weight: 500; text-align: left;">${item.ingredient_name}</div>
-                    <div style="color: var(--text-muted); text-transform: capitalize;">${item.supplier_uom || 'Uds'}</div>
+                    <div style="color: var(--text-muted); text-transform: capitalize; font-size: 0.8rem;">${item.supplier_uom || 'Uds'}</div>
+                    
+                    <!-- Cant Real Recibida Input -->
                     <div>
-                        <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-name="${item.ingredient_name}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr}>
-                        <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
+                        <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-name="${item.ingredient_name}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px; box-sizing: border-box;">
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
+                    </div>
+                    
+                    <!-- 🪙 NEW: Absolute Line Total Cost Input ($) -->
+                    <div>
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <span style="position: absolute; left: 4px; font-size: 0.8rem; color: var(--text-muted);">$</span>
+                            <input type="number" class="cost-input" data-item-id="${item.id}" value="${currentLineTotal > 0 ? currentLineTotal.toFixed(2) : ''}" placeholder="0.00" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px 4px 4px 14px; box-sizing: border-box; font-family: monospace; font-weight: 600; text-align: right;">
+                        </div>
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: right;">Total Línea</div>
                     </div>
                 </div>
             `;
         });
+
 
         // ✨ THE FIX: Cleared the accidental backslashes so the button template renders perfectly
         const actionButtonHtml = isReceived 
@@ -384,23 +397,33 @@ async function processIncomingDelivery(orderId) {
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-        // 🛡️ STEP 1: Process child rows sequentially to eliminate asynchronous race conditions
+               // 🛡️ STEP 1: Process child rows sequentially
         for (let input of itemInputs) {
             const itemId = input.getAttribute("data-item-id");
-            const ingTextName = input.getAttribute("data-ing-name"); // Sourced from the data-ing-name tag
+            const ingTextName = input.getAttribute("data-ing-name"); 
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
 
-            console.log(`📦 Processing Item - ID: ${itemId}, Ing Name: ${ingTextName}, Ordered: ${orderedQty}, Delivered: ${deliveredQty}`);
+            // 🎯 NEW COST CAPTURE: Locate the matching cost input for this specific line item row
+            const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
+            const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
 
-            // A. Instantly save the custom delivered quantity to the individual purchase order item line log
+            console.log(`📦 Processing Item - ID: ${itemId}, Delivered Qty: ${deliveredQty}, Total Line Cost: $${enteredLineTotalCost}`);
+
+            // A. Instantly save BOTH custom delivered quantity AND absolute line total cost to the row entry logs
             const itemPatchRes = await fetch(API_URL + "purchase_order_items?id=eq." + itemId, {
                 method: "PATCH",
                 headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                body: JSON.stringify({ quantity_delivered: deliveredQty })
+                body: JSON.stringify({ 
+                    quantity_delivered: deliveredQty,
+                    line_total_cost: enteredLineTotalCost // 🪙 SAVES RAW INVOICE TOTAL
+                })
             });
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
+
+            // ... (Your existing, verified theoretical stock inventory updates continue beneath this line)
+
 
             // B. 🌟 SEQUENTIAL THEORETICAL STOCK ADJUSTMENT: Run stock calculation if a variation is logged
             if (deliveredQty !== orderedQty && ingTextName) {
