@@ -232,8 +232,8 @@ async function loadReceivingDashboard() {
     try {
         const ordersUrl = API_URL + "purchase_orders?status=in.(dispatched,received)&order=po_number.desc";
         
-        // ✨ THE FIX: Removed the nonexistent "ingredient_id" column entirely from the select query string list
-        const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia";
+        // 🎯 THE ATOMIC REPAIR: Added "cost" and "line_total_cost" to the explicit select list query parameter string!
+        const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia,cost,line_total_cost";
 
         const [ordersRes, itemsRes] = await Promise.all([
             fetch(ordersUrl, { headers: { "apikey": API_KEY } }).then(function(r) { return r.json(); }),
@@ -260,6 +260,7 @@ async function loadReceivingDashboard() {
         pendingGrid.innerHTML = `<div style="color:red; padding: 20px;">❌ Error al sincronizar muelles: ${err.message}</div>`;
     }
 }
+
 
 // 🎨 UI RENDER PATTERN: Draws cards splits cleanly into Pending vs History [PART 2 OF 2 - REPAIRED]
 function renderDashboardGrids() {
