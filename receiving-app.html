@@ -282,14 +282,23 @@ function renderDashboardGrids() {
                 ? item.quantity_delivered 
                 : item.quantity_ordered;
                 
-            // 🪙 THE SUGGESTED PRICE ENGINE (USD to C\$ Córdoba conversion)
-            // 1. Extract the base system standard item cost (which is saved in USD)
-            const usdUnitCost = parseFloat(item.std_cost_per_unit || item.cost || 0);
+            // 🪙 THE ATOMIC FIX: Look up the baseline cost using any alternative database name mappings 
+            // present inside your item record parameter string rows (such as price, cost_per_unit, or std_cost)!
+            const usdUnitCost = parseFloat(item.cost_per_unit || item.std_cost || item.unit_price || item.cost || 0);
             
-            // 2. Calculate the total theoretical cost for this line item in USD
-            const theoreticalLineCostUSD = usdUnitCost * defaultDeliveredQty;
+            // 🪙 ULTIMATE FALLBACK DICTIONARY: If the child row doesn't carry it, look it up in your global catalog memory!
+            let activeItemBaseCostUSD = usdUnitCost;
+            if (activeItemBaseCostUSD === 0 && typeof _masterIngredientsLookupArray !== "undefined") {
+                const globalMatch = _masterIngredientsLookupArray.find(function(i) {
+                    return String(i.name_es || "").toLowerCase().trim() === String(item.ingredient_name || "").toLowerCase().trim();
+                });
+                if (globalMatch) {
+                    activeItemBaseCostUSD = parseFloat(globalMatch.std_cost_per_unit || globalMatch.cost || 0);
+                }
+            }
             
-            // 3. Multiply by your fixed exchange rate factor to get the suggested value in Córdobas (C\$)
+            // 🧮 CALCULATION IN CORDOBAS (C\$)
+            const theoreticalLineCostUSD = activeItemBaseCostUSD * defaultDeliveredQty;
             const exchangeRateFactor = 36.6243;
             const suggestedLineCostCordobas = theoreticalLineCostUSD * exchangeRateFactor;
                 
@@ -301,22 +310,15 @@ function renderDashboardGrids() {
 
             const isDisabledAttr = isReceived ? "disabled" : "";
 
-            // 🎯 CURRENCY ALIGNED LAYOUT: Displays localized C\$ labels word-for-word
+            // UI Render Block mapping continues identically...
             itemsHtml += `
                 <div class="item-line" style="display: grid; grid-template-columns: 2fr 1.2fr 1.4fr 1.4fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">
-                    <!-- Column 1: Producto Name -->
                     <div style="font-weight: 500; text-align: left; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.ingredient_name}</div>
-                    
-                    <!-- Column 2: Formato / UOM -->
                     <div style="color: var(--text-muted); text-transform: capitalize; font-size: 0.8rem; text-align: left;">${item.supplier_uom || 'Uds'}</div>
-                    
-                    <!-- Column 3: Cant Real Recibida Input -->
                     <div style="text-align: left;">
                         <input type="number" class="qty-input" data-item-id="${item.id}" data-ing-name="${item.ingredient_name}" data-ordered-qty="${item.quantity_ordered}" data-factor="${item.equivalencia || 1}" value="${defaultDeliveredQty}" step="0.01" min="0" ${isDisabledAttr} style="width: 100%; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.85rem; text-align: center;">
                         <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px; text-align: center;">Pedid: ${Math.ceil(item.quantity_ordered)}</div>
                     </div>
-                    
-                    <!-- Column 4: Localized Córdoba Total Cost Input (C$) -->
                     <div style="text-align: right;">
                         <div style="position: relative; display: flex; align-items: center;">
                             <span style="position: absolute; left: 4px; font-size: 0.72rem; color: #16a34a; font-weight: bold;">C$</span>
