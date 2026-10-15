@@ -232,8 +232,6 @@ async function loadReceivingDashboard() {
     try {
         const ordersUrl = API_URL + "purchase_orders?status=in.(dispatched,received)&order=po_number.desc";
         const itemsUrl = API_URL + "purchase_order_items?select=id,po_id,ingredient_name,supplier_uom,quantity_ordered,quantity_delivered,equivalencia,line_total_cost";
-        
-        // 🎯 THE THREE-TABLE HANDSHAKE: Download the master ingredients table at page boot!
         const ingredientsUrl = API_URL + "ingredients";
 
         const [ordersRes, itemsRes, ingredientsRes] = await Promise.all([
@@ -247,7 +245,7 @@ async function loadReceivingDashboard() {
             throw new Error("Database validation mapping error.");
         }
 
-        // 🌟 CACHE THE INGREDIENTS GLOBALLY: Safely populates the memory array for your pricing loop!
+        // 🎯 THE ACCREDITED SCOPING FIX: Bind the data array row straight to your globally-accessible window index cache!
         window._masterIngredientsLookupArray = Array.isArray(ingredientsRes) ? ingredientsRes : [];
 
         // Nest child lines inside parent purchase orders cleanly
@@ -288,8 +286,9 @@ function renderDashboardGrids() {
                 : item.quantity_ordered;
                 
             // 🪙 THE THREE-PARAMETER CALCULATION MATRIX (USD to C\$ Córdoba conversion)
-            // Parameter 1: Extract std_cost_per_unit from the globally cached ingredients list
             let masterStdCostUSD = 0;
+            
+            // 🎯 FIXED TARGET LOOKUP: Forcefully look inside window._masterIngredientsLookupArray!
             const lookupList = window._masterIngredientsLookupArray || [];
             
             const globalMatch = lookupList.find(function(i) {
@@ -299,19 +298,16 @@ function renderDashboardGrids() {
                 masterStdCostUSD = parseFloat(globalMatch.std_cost_per_unit || globalMatch.cost || 0);
             }
             
-            // Parameter 2: Pull quantity_ordered from purchase_order_items
+            // Parameter 2 & 3: Pull quantities and multiplier factors
             const orderQty = parseFloat(item.quantity_ordered || 0);
-            
-            // Parameter 3: Extract equivalencia (units_per_purchase equivalent multiplier factor)
             const packageEquivalenceFactor = parseFloat(item.equivalencia || 1);
             
-            // 🧮 RUN THE ARITHMETIC FORMULA:
-            // std price per std unit (USD) x units ordered x std units per package x exchange rate factor
+            // 🧮 RUN THE THREE-PARAMETER ARITHMETIC FORMULA:
             const baseTheoreticalLineCostUSD = masterStdCostUSD * orderQty * packageEquivalenceFactor;
             const exchangeRateFactor = 36.6243;
             const suggestedLineCostCordobas = baseTheoreticalLineCostUSD * exchangeRateFactor;
                 
-            // Use saved database price if present; otherwise fallback to the computed Córdoba suggestion
+            // Use saved price if present; otherwise fallback to our computed Córdoba suggestion
             const currentLineTotal = (item.line_total_cost !== null && item.line_total_cost !== undefined && parseFloat(item.line_total_cost) > 0)
                 ? parseFloat(item.line_total_cost)
                 : suggestedLineCostCordobas;
