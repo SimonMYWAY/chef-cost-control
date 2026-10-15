@@ -1283,10 +1283,9 @@ async function executeGlobalApplicationForceRefresh(event) {
     }
 }
 // =======================================================================
-// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP MASTER FORCED ENGINE]
+// 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [CHEF APP MASTER FOOLPROOF ENGINE]
 // =======================================================================
 async function executeLiveChefSuspensionAuditSweep() {
-    // ✨ Target the global window tracking parameter first, fallback to cached storage strings
     var activeUsername = window.activeUsername;
     
     if (!activeUsername) {
@@ -1295,12 +1294,11 @@ async function executeLiveChefSuspensionAuditSweep() {
             try {
                 var activeSessionData = JSON.parse(storedProfileSession);
                 activeUsername = String(activeSessionData.username || "").trim();
-                window.activeUsername = activeUsername; // Bind it for subsequent loops
+                window.activeUsername = activeUsername;
             } catch(e) {}
         }
     }
 
-    // If no profile parameter is authenticated yet, wait for user login handshake
     if (!activeUsername) return;
 
     try {
@@ -1323,32 +1321,31 @@ async function executeLiveChefSuspensionAuditSweep() {
         if (checkRes.ok) {
             const cloudProfileData = await checkRes.json();
             if (Array.isArray(cloudProfileData) && cloudProfileData.length > 0) {
-                var liveUserRow = cloudProfileData; // 🎯 TARGET INDEX 0 PRECISELY
+                var liveUserRow = cloudProfileData[0]; // 🎯 CORRECTLY UNWRAPPED INDEX
                 
                 // 💥 REAL-TIME MID-SESSION EVICTION GATING
                 if (liveUserRow && (liveUserRow.is_active === false || liveUserRow.is_active === "false")) {
                     console.warn("🛡️ Security Intercept: Chef active session has been suspended by management.");
                     
-                    // 1. Wipe out ALL data from browser tab memory instantly
+                    // 1. Wipe out ALL data from browser tab memory instantly to stop ongoing operations
                     sessionStorage.removeItem("chef_app_authorized_session_profile");
                     sessionStorage.clear();
                     window.activeUsername = null;
                     
-                    // 2. Shut down visual recipe grids completely
-                    var appWorkspace = document.getElementById("master-recipe-workspace-container") || document.body;
-                    if (appWorkspace && appWorkspace !== document.body) {
-                        appWorkspace.innerHTML = '<div style="color:#ef4444; font-weight:bold; text-align:center; padding:50px; font-size:1.5rem;">🛑 SESIÓN TERMINADA POR LA GERENCIA. Acceso Revocado.</div>';
-                    }
-                    
-                    // 3. Drop the login lock screen panel back into view over everything
-                    var lockScreen = document.getElementById("security-gateway-lock-screen");
-                    if (lockScreen) {
-                        lockScreen.style.display = "flex";
-                    }
+                    // 2. ✨ FOOLPROOF EVICTION CANVAS: Wipe the actual viewport body to remove all secret recipes out of RAM!
+                    document.body.innerHTML = `
+                        <div style="position: fixed; inset: 0; background: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999999; font-family: system-ui, -apple-system, sans-serif;">
+                            <div style="text-align: center; max-width: 450px; padding: 30px;">
+                                <div style="font-size: 4rem; margin-bottom: 20px;">🛑</div>
+                                <h1 style="color: #ef4444; font-size: 1.5rem; font-weight: 800; margin: 0 0 10px 0;">SESIÓN TERMINADA POR LA GERENCIA</h1>
+                                <p style="color: #64748b; font-size: 0.95rem; line-height: 1.5; margin: 0 0 20px 0;">Esta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato por motivos de seguridad corporativa.</p>
+                                <button onclick="location.reload()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; cursor: pointer;">Volver al Portal de Autenticación</button>
+                            </div>
+                        </div>`;
                     
                     alert("🛑 ACCESO DENEGADO DE INMEDIATO:\n\nEsta cuenta de personal ha sido SUSPENDIDA por la administración. Su sesión activa ha sido revocada de inmediato.");
                     
-                    // 4. Force a hard tab refresh to clear out raw memory remnants completely
+                    // 3. Force a hard tab refresh to clear out raw memory remnants completely
                     location.reload();
                     return;
                 }
