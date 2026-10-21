@@ -936,7 +936,8 @@ async function submitRecipe() {
                 body: JSON.stringify({ name: name, category: category, servings: servings, is_approved: false, status: "draft" })
             });
 
-            if (!newRecipeResponse.ok) throw new Error("Error al crear la cabecera maestro.");
+            // 🎯 THE FIX: Changed 'newRecipeResponse.ok' to 'response.ok' to match the declared variable above!
+            if (!response.ok) throw new Error("Error al crear la cabecera maestro.");
             const data = await response.json();
             
             if (Array.isArray(data) && data.length > 0) {
