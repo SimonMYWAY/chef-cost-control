@@ -1587,7 +1587,7 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                         recMap[targetRecipeId].cost_per_serving = newCostPerServing;
                     }
 
-                                        // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
+                                       // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
                     var patchRecipeRes = await fetch(API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Content-Type": "application/json" },
@@ -1595,26 +1595,22 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                     });
                     if (!patchRecipeRes.ok) console.error("Failed to commit cost mutation to recipes table.");
 
-                    // 🌟 LOOSE TEXT-MATCHING LAYER: Find the ingredient shadow row row safely by stripping white spaces
+                    // 🎯 THE STRICT MAPPING LOCK: We bypass loose string matching completely.
+                    // A raw ingredient is only linked to a recipe if its explicit database column says so.
                     var matchingIngredientRow = ingredients.find(i => {
-                        var ingNameClean = String(i.name_es || "").trim().toLowerCase();
-                        var recNameClean = String(recipeRecord.name || "").trim().toLowerCase();
-                        return ingNameClean === recNameClean || ingNameClean.includes(recNameClean) || recNameClean.includes(ingNameClean);
+                        return i.recipe_id && String(i.recipe_id).toLowerCase().trim() === String(targetRecipeId).toLowerCase().trim();
                     });
                     
                     if (matchingIngredientRow) {
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
-                        
-                        // 🎯 THE MATHEMATICAL CEILING GUARD: Force cast to float
                         var sanitizedCostValue = parseFloat(newCostPerServing);
                         
-                        // ✨ IF THE CALCULATED VALUE IS CORRUPT, INFINITE, OR EXCEEDS THE DATABASE MAX, CAP IT!
+                        // Circuit breaker ceiling guard
                         if (isNaN(sanitizedCostValue) || !isFinite(sanitizedCostValue) || sanitizedCostValue >= 1000000) {
-                            console.warn(`⚠️ Runaway numeric value detected (${newCostPerServing}) for ID ${matchingIngredientRow.id}. Capping at schema safety limits.`);
+                            console.warn(`⚠️ Loop Intercepted: Runaway calculation blocked.`);
                             sanitizedCostValue = 999999.9999; 
                         }
 
-                        // 💾 INGREDIENT MATRIX SECURE LOCK: Wait until the shadow row is fully updated on the server disk
                         var patchIngRes = await fetch(API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
                             method: "PATCH",
                             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
@@ -1622,32 +1618,40 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                         });
                         
                         if (!patchIngRes.ok) {
-                            // 🎯 Enhanced console trace logger link connection for line 1615
                             var errorDetails = await patchIngRes.text();
-                            console.error("❌ Failed to commit cost mutation to ingredients matrix. Database Response:", errorDetails);
+                            console.error("❌ Failed to commit cost mutation to ingredients matrix:", errorDetails);
                         } else {
-                            // Synchronize our ingredient memory maps for subsequent upper tier loops only on absolute network success
                             ingMap[cleanRowId] = sanitizedCostValue;
                         }
                     }
 
-                    // Map the new cost to the Recipe ID key inside ingMap so grandparent recipes find it instantly
-                    ingMap[targetRecipeId] = Number(newCostPerServing) || 0;
+                    // Map clean values to current lookup tracking frames
+                    var sanitizedRecipeCost = parseFloat(newCostPerServing);
+                    if (isNaN(sanitizedRecipeCost) || !isFinite(sanitizedRecipeCost) || sanitizedRecipeCost >= 1000000) {
+                        sanitizedRecipeCost = 999999.9999;
+                    }
+                    ingMap[targetRecipeId] = sanitizedRecipeCost;
 
                     processedUpdatesCount++;
 
-                    // Find grandparent formulas using the resolved ingredient table ID token link
+                    // 🎯 THE GRANDPARENT PROTECTION WALL: Strict ID linkage checking
                     mappings.forEach(m => {
                         if (m.ingredient_id) {
                             var parentCheckId = String(m.ingredient_id).toLowerCase().trim();
                             
-                            // Check if the link matches EITHER the Recipe ID OR the corresponding Ingredient Row representation
-                            var isLinkedAsSub = parentCheckId === targetRecipeId || (matchingIngredientRow && parentCheckId === String(matchingIngredientRow.id).toLowerCase().trim());
+                            // ✨ Only push to the queue if it matches a genuine recipe dependency, 
+                            // never allowing a name match to trick the script into re-calculating itself!
+                            var isLinkedAsSub = parentCheckId === String(targetRecipeId).toLowerCase().trim() || 
+                                                (matchingIngredientRow && parentCheckId === String(matchingIngredientRow.id).toLowerCase().trim());
                             
                             if (isLinkedAsSub) {
                                 var grandParentRecipeId = String(m.recipe_id).toLowerCase().trim();
-                                if (!updateQueue.includes(grandParentRecipeId)) {
-                                    updateQueue.push(grandParentRecipeId); 
+                                
+                                // SAFETY CHECK: Prevent a recipe from ever pushing itself back into its own update timeline!
+                                if (grandParentRecipeId !== String(targetRecipeId).toLowerCase().trim()) {
+                                    if (!updateQueue.includes(grandParentRecipeId)) {
+                                        updateQueue.push(grandParentRecipeId); 
+                                    }
                                 }
                             }
                         }
