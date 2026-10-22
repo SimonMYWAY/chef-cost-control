@@ -1605,9 +1605,14 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                     if (matchingIngredientRow) {
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
                         
-                        // 🎯 CRITICAL MATH GUARD: Force cast to precise float structure to stop '400 Bad Request' schema rejections!
+                        // 🎯 THE MATHEMATICAL CEILING GUARD: Force cast to float
                         var sanitizedCostValue = parseFloat(newCostPerServing);
-                        if (isNaN(sanitizedCostValue)) sanitizedCostValue = 0;
+                        
+                        // ✨ IF THE CALCULATED VALUE IS CORRUPT, INFINITE, OR EXCEEDS THE DATABASE MAX, CAP IT!
+                        if (isNaN(sanitizedCostValue) || !isFinite(sanitizedCostValue) || sanitizedCostValue >= 1000000) {
+                            console.warn(`⚠️ Runaway numeric value detected (${newCostPerServing}) for ID ${matchingIngredientRow.id}. Capping at schema safety limits.`);
+                            sanitizedCostValue = 999999.9999; 
+                        }
 
                         // 💾 INGREDIENT MATRIX SECURE LOCK: Wait until the shadow row is fully updated on the server disk
                         var patchIngRes = await fetch(API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
