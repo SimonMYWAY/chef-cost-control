@@ -1453,7 +1453,6 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
         console.error("Ingredient status toggle failure:", err); 
     });
 }
-
                 function safelyEraseIngredientRecord(id) {
             var cleanIdToken = String(id).trim();
             
@@ -1588,11 +1587,11 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                         recMap[targetRecipeId].cost_per_serving = newCostPerServing;
                     }
 
-                    // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
+                                        // 💾 CLOUD SAVE SECURE LOCK: Wait until the recipe table has completely saved this tier
                     var patchRecipeRes = await fetch(API_URL + "recipes?id=eq." + targetRecipeId, {
                         method: "PATCH",
                         headers: { "apikey": API_KEY, "Content-Type": "application/json" },
-                        body: JSON.stringify({ cost_per_serving: newCostPerServing })
+                        body: JSON.stringify({ cost_per_serving: Number(newCostPerServing) || 0 })
                     });
                     if (!patchRecipeRes.ok) console.error("Failed to commit cost mutation to recipes table.");
 
@@ -1606,20 +1605,29 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                     if (matchingIngredientRow) {
                         var cleanRowId = String(matchingIngredientRow.id).toLowerCase().trim();
                         
+                        // 🎯 CRITICAL MATH GUARD: Force cast to precise float structure to stop '400 Bad Request' schema rejections!
+                        var sanitizedCostValue = parseFloat(newCostPerServing);
+                        if (isNaN(sanitizedCostValue)) sanitizedCostValue = 0;
+
                         // 💾 INGREDIENT MATRIX SECURE LOCK: Wait until the shadow row is fully updated on the server disk
                         var patchIngRes = await fetch(API_URL + "ingredients?id=eq." + matchingIngredientRow.id, {
                             method: "PATCH",
                             headers: { "apikey": API_KEY, "Content-Type": "application/json" },
-                            body: JSON.stringify({ std_cost_per_unit: newCostPerServing })
+                            body: JSON.stringify({ std_cost_per_unit: sanitizedCostValue })
                         });
-                        if (!patchIngRes.ok) console.error("Failed to commit cost mutation to ingredients matrix.");
                         
-                        // Synchronize our ingredient memory maps for subsequent upper tier loops
-                        ingMap[cleanRowId] = newCostPerServing;
+                        if (!patchIngRes.ok) {
+                            // 🎯 Enhanced console trace logger link connection for line 1615
+                            var errorDetails = await patchIngRes.text();
+                            console.error("❌ Failed to commit cost mutation to ingredients matrix. Database Response:", errorDetails);
+                        } else {
+                            // Synchronize our ingredient memory maps for subsequent upper tier loops only on absolute network success
+                            ingMap[cleanRowId] = sanitizedCostValue;
+                        }
                     }
 
                     // Map the new cost to the Recipe ID key inside ingMap so grandparent recipes find it instantly
-                    ingMap[targetRecipeId] = newCostPerServing;
+                    ingMap[targetRecipeId] = Number(newCostPerServing) || 0;
 
                     processedUpdatesCount++;
 
