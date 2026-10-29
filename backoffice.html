@@ -4854,7 +4854,7 @@ async function launchNewMonthlyInventorySession() {
     }
 }
 
-// 🌟 TASK 2: FINALIZE AND COMMIT STAGED VALUES TO MAIN ENGINE DISK (FIXED: WITH STANDARD UOM CONVERSION)
+// 🌟 TASK 2: FINALIZE AND COMMIT STAGED VALUES TO MAIN ENGINE DISK (HIGH-PERFORMANCE BATCH EDITION)
 async function finalizeAndCommitActiveInventorySession(sessionId) {
     if (!confirm("🔒 ¿Está seguro de cerrar y consolidar definitivamente este inventario?\n\nAl confirmar, las cantidades de conteo real verificadas se copiarán directamente en sus registros de stock actuales y se desbloquearán las actividades de compras del día.")) {
         return;
@@ -4868,46 +4868,50 @@ async function finalizeAndCommitActiveInventorySession(sessionId) {
             "Content-Type": "application/json" 
         };
 
-        // STEP A: Download all counts captured inside your typo protection staging tracks
+        // STEP A1: Download all counts captured inside your staging tracks (1 Network Request)
         const countsRes = await fetch(API_URL + `inventory_counts?session_id=eq.${sessionId}`, { headers: { "apikey": API_KEY } });
         const stagedCounts = await countsRes.json();
 
         if (Array.isArray(stagedCounts) && stagedCounts.length > 0) {
             console.log(`⚙️ Executing structural synchronization updates across ${stagedCounts.length} ingredient rows...`);
             
-            // Loop through each row and push the final real quantity directly over to your primary ingredients inventory column
-            for (let i = 0; i < stagedCounts.length; i++) {
-                const countRecord = stagedCounts[i];
-                
-                // 1. Fetch the targeted conversion rule directly from the master ingredients record
-                const ingredientRes = await fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}&select=inventory_conversion_factor,is_active`, { 
-                    headers: { "apikey": API_KEY } 
+            // STEP A2: High-Performance Pull. Fetch ALL ingredient conversion multipliers in ONE single network request!
+            const ingredientRes = await fetch(API_URL + `ingredients?select=id,inventory_conversion_factor`, { 
+                headers: { "apikey": API_KEY } 
+            });
+            const allIngredients = await ingredientRes.json();
+            
+            // Map ingredients into a blazing-fast O(1) memory lookup table
+            const conversionMap = {};
+            if (Array.isArray(allIngredients)) {
+                allIngredients.forEach(ing => {
+                    conversionMap[ing.id] = parseFloat(ing.inventory_conversion_factor) || 1;
                 });
-                const ingredientData = await ingredientRes.json();
-                
-                // Fallback default multiplier to 1 if not defined or if record structure is missing
-                let conversionMultiplier = 1;
-                if (Array.isArray(ingredientData) && ingredientData.length > 0) {
-                    conversionMultiplier = parseFloat(ingredientData[0].inventory_conversion_factor) || 1;
-                }
+            }
 
-                // 2. Transform the counted inventory quantity into the master Standard UOM (e.g. lbs -> oz)
+            // STEP A3: Prepare and fire all update promises concurrently via the network pipeline
+            const updatePromises = stagedCounts.map(countRecord => {
+                const conversionMultiplier = conversionMap[countRecord.ingredient_id] || 1;
                 let standardizedQty = parseFloat(countRecord.real_qty_base) * conversionMultiplier;
 
-                // 3. Enforce our project's strict NUMERIC(10,4) safety ceiling guard
+                // Enforce our strict NUMERIC(10,4) safety ceiling guards
                 if (standardizedQty > 999999.9999) {
                     standardizedQty = 999999.9999;
                 } else if (isNaN(standardizedQty) || standardizedQty < 0) {
                     standardizedQty = 0;
                 }
 
-                // 4. Update the primary production tables with the corrected standard calculation
-                await fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}`, {
+                // Fire the fetch payload but do NOT await it sequentially. Return the promise.
+                return fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}`, {
                     method: "PATCH",
                     headers: headers,
                     body: JSON.stringify({ std_inventory: standardizedQty }) 
                 });
-            }
+            });
+
+            // Wait for all 215 rows to resolve at the exact same time over the wire
+            console.log(`⚡ Dispatching batch synchronization pipeline concurrently...`);
+            await Promise.all(updatePromises);
         }
 
         // STEP B: Close the active session tracker row state
