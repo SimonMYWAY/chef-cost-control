@@ -4854,7 +4854,7 @@ async function launchNewMonthlyInventorySession() {
     }
 }
 
-// 🌟 TASK 2: FINALIZE AND COMMIT STAGED VALUES TO MAIN ENGINE DISK
+// 🌟 TASK 2: FINALIZE AND COMMIT STAGED VALUES TO MAIN ENGINE DISK (FIXED: WITH STANDARD UOM CONVERSION)
 async function finalizeAndCommitActiveInventorySession(sessionId) {
     if (!confirm("🔒 ¿Está seguro de cerrar y consolidar definitivamente este inventario?\n\nAl confirmar, las cantidades de conteo real verificadas se copiarán directamente en sus registros de stock actuales y se desbloquearán las actividades de compras del día.")) {
         return;
@@ -4879,10 +4879,33 @@ async function finalizeAndCommitActiveInventorySession(sessionId) {
             for (let i = 0; i < stagedCounts.length; i++) {
                 const countRecord = stagedCounts[i];
                 
+                // 1. Fetch the targeted conversion rule directly from the master ingredients record
+                const ingredientRes = await fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}&select=inventory_conversion_factor,is_active`, { 
+                    headers: { "apikey": API_KEY } 
+                });
+                const ingredientData = await ingredientRes.json();
+                
+                // Fallback default multiplier to 1 if not defined or if record structure is missing
+                let conversionMultiplier = 1;
+                if (Array.isArray(ingredientData) && ingredientData.length > 0) {
+                    conversionMultiplier = parseFloat(ingredientData[0].inventory_conversion_factor) || 1;
+                }
+
+                // 2. Transform the counted inventory quantity into the master Standard UOM (e.g. lbs -> oz)
+                let standardizedQty = parseFloat(countRecord.real_qty_base) * conversionMultiplier;
+
+                // 3. Enforce our project's strict NUMERIC(10,4) safety ceiling guard
+                if (standardizedQty > 999999.9999) {
+                    standardizedQty = 999999.9999;
+                } else if (isNaN(standardizedQty) || standardizedQty < 0) {
+                    standardizedQty = 0;
+                }
+
+                // 4. Update the primary production tables with the corrected standard calculation
                 await fetch(API_URL + `ingredients?id=eq.${countRecord.ingredient_id}`, {
                     method: "PATCH",
                     headers: headers,
-                    body: JSON.stringify({ std_inventory: countRecord.real_qty_base }) // Copies verified count directly to production!
+                    body: JSON.stringify({ std_inventory: standardizedQty }) 
                 });
             }
         }
@@ -4904,6 +4927,7 @@ async function finalizeAndCommitActiveInventorySession(sessionId) {
         alert("❌ Error al consolidar el inventario en la base de datos: " + err.message);
     }
 }
+
 // =======================================================================
 // 🔍 AUDIT WORKSPACE ENGINE: TWO-TIER VARIANCE REPORT VIEW METRICS (PART 1)
 // =======================================================================
