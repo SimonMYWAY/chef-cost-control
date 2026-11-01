@@ -4576,6 +4576,37 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 line.approved_quantity = definitiveNetFaltanteBase;
             });
 
+                    // =======================================================================
+            // 🛡️ [SAFE-GUARD INJECTION] SAVE RE-CALCULATED INVENTORY VALUES TO SUPABASE
+            // =======================================================================
+            console.log("⚡ Syncing newly calculated theoretical inventory levels back to main database disks...");
+            const inventoryUpdateHeaders = { 
+                "apikey": API_KEY, 
+                "Authorization": "Bearer " + API_KEY, 
+                "Content-Type": "application/json" 
+            };
+
+            const inventorySyncPromises = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
+                let safetyStockCeiling = parseFloat(line.actual_std_inventory);
+
+                // Enforce our project's strict NUMERIC(10,4) boundary guards
+                if (safetyStockCeiling > 999999.9999) {
+                    safetyStockCeiling = 999999.9999;
+                } else if (isNaN(safetyStockCeiling) || safetyStockCeiling < 0) {
+                    safetyStockCeiling = 0.0000;
+                }
+
+                return fetch(API_URL + `ingredients?id=eq.${line.ingredient_id}`, {
+                    method: "PATCH",
+                    headers: inventoryUpdateHeaders,
+                    body: JSON.stringify({ std_inventory: safetyStockCeiling })
+                });
+            });
+
+            // Wait for all inventory adjustments to resolve simultaneously over the wire
+            await Promise.all(inventorySyncPromises);
+            console.log("✅ Core stock registers successfully decreased and consolidated on cloud disk.");
+            // =======================================================================
         }
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
