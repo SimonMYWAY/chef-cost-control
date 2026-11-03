@@ -4544,7 +4544,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         }
         // =======================================================================
 
-        // 2️⃣ DYNAMIC RE-CALCULATION LAYER: Re-read the latest real-time stock levels
+               // 2️⃣ DYNAMIC RE-CALCULATION LAYER: Re-read the latest real-time stock levels
         console.log("📊 Pulling fresh stock snapshot to recalculate exact purchase requirements...");
         const freshIngredientsRes = await fetch(API_URL + "ingredients?select=id,std_inventory", {
             method: "GET", headers: { "apikey": API_KEY }
@@ -4555,10 +4555,16 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             var latestStockMap = {};
             freshIngs.forEach(ing => { latestStockMap[String(ing.id)] = parseFloat(ing.std_inventory || 0); });
 
-                        // Apply the latest live snapshot data onto our temporary requirements list
+            // 🛡️ Safe-Guard Array: Tracks EVERY ingredient that had consumption today, regardless of point of order status
+            const itemsToDeductList = [];
+
+            // Apply the latest live snapshot data onto our temporary requirements list
             TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
                 var currentLiveStock = latestStockMap[String(line.ingredient_id)] || 0;
-                var projectedStockAfterSales = currentLiveStock - parseFloat(line.consumption || 0);
+                var netConsumptionToday = parseFloat(line.consumption || 0);
+                
+                // Calculate stock deduction using pure net totals (ignoring scrap multipliers for inventory)
+                var projectedStockAfterSales = currentLiveStock - netConsumptionToday;
                 if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00;
 
                 var stockMax = parseFloat(line.stock_max || 0);
@@ -4574,20 +4580,28 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                 line.faltante_base = definitiveNetFaltanteBase; 
                 line.suggested_quantity = definitiveNetFaltanteBase;
                 line.approved_quantity = definitiveNetFaltanteBase;
+
+                // Always track the subtraction if there was a real consumption today
+                if (netConsumptionToday > 0) {
+                    itemsToDeductList.push({
+                        ingredient_id: line.ingredient_id,
+                        actual_std_inventory: projectedStockAfterSales
+                    });
+                }
             });
 
-                    // =======================================================================
+            // =======================================================================
             // 🛡️ [SAFE-GUARD INJECTION] SAVE RE-CALCULATED INVENTORY VALUES TO SUPABASE
             // =======================================================================
-            console.log("⚡ Syncing newly calculated theoretical inventory levels back to main database disks...");
+            console.log(`⚡ Syncing newly calculated theoretical inventory levels across ${itemsToDeductList.length} consumed items...`);
             const inventoryUpdateHeaders = { 
                 "apikey": API_KEY, 
                 "Authorization": "Bearer " + API_KEY, 
                 "Content-Type": "application/json" 
             };
 
-            const inventorySyncPromises = TEMPORARY_STAGED_PURCHASE_LINES.map(line => {
-                let safetyStockCeiling = parseFloat(line.actual_std_inventory);
+            const inventorySyncPromises = itemsToDeductList.map(item => {
+                let safetyStockCeiling = parseFloat(item.actual_std_inventory);
 
                 // Enforce our project's strict NUMERIC(10,4) boundary guards
                 if (safetyStockCeiling > 999999.9999) {
@@ -4596,7 +4610,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
                     safetyStockCeiling = 0.0000;
                 }
 
-                return fetch(API_URL + `ingredients?id=eq.${line.ingredient_id}`, {
+                return fetch(API_URL + `ingredients?id=eq.${item.ingredient_id}`, {
                     method: "PATCH",
                     headers: inventoryUpdateHeaders,
                     body: JSON.stringify({ std_inventory: safetyStockCeiling })
@@ -4605,9 +4619,10 @@ async function broadcastActiveCalculationsToPurchaseApp() {
 
             // Wait for all inventory adjustments to resolve simultaneously over the wire
             await Promise.all(inventorySyncPromises);
-            console.log("✅ Core stock registers successfully decreased and consolidated on cloud disk.");
+            console.log("✅ Core stock registers successfully decreased for all items with recorded sales consumption.");
             // =======================================================================
         }
+
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
         TEMPORARY_STAGED_PURCHASE_LINES.forEach(function(line) {
