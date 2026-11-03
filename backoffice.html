@@ -4544,7 +4544,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
         }
         // =======================================================================
 
-               // 2️⃣ DYNAMIC RE-CALCULATION LAYER: Re-read the latest real-time stock levels
+        // 2️⃣ DYNAMIC RE-CALCULATION LAYER: Re-read the latest real-time stock levels
         console.log("📊 Pulling fresh stock snapshot to recalculate exact purchase requirements...");
         const freshIngredientsRes = await fetch(API_URL + "ingredients?select=id,std_inventory", {
             method: "GET", headers: { "apikey": API_KEY }
@@ -4555,39 +4555,46 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             var latestStockMap = {};
             freshIngs.forEach(ing => { latestStockMap[String(ing.id)] = parseFloat(ing.std_inventory || 0); });
 
-            // 🛡️ Safe-Guard Array: Tracks EVERY ingredient that had consumption today, regardless of point of order status
+            // 🛡️ Safe-Guard Array: Tracks EVERY ingredient that had real sales consumption today
             const itemsToDeductList = [];
 
-            // Apply the latest live snapshot data onto our temporary requirements list
+            // 🔄 CORRECTED SNAPSHOT CORNERSTONE: Iterate over the MASTER database records, NOT the filtered staging array!
+            freshIngs.forEach(ing => {
+                var ingIdStr = String(ing.id);
+                // Check our global in-memory recipe exploder matrix for recorded usage today
+                var usageToday = GLOBAL_DAILY_CONSUMPTION_LEDGER[ingIdStr] || 0.0;
+                
+                if (usageToday > 0) {
+                    var currentLiveStock = latestStockMap[ingIdStr] || 0;
+                    
+                    // Deduct exact net recipe units (without scrap factor buffers)
+                    var projectedStockAfterSales = currentLiveStock - usageToday;
+                    if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00;
+
+                    itemsToDeductList.push({
+                        ingredient_id: ing.id,
+                        actual_std_inventory: projectedStockAfterSales
+                    });
+                }
+            });
+
+            // Keep your standard purchasing UI staging array synchronized for Step 3️⃣ and 4️⃣ downstream logic
             TEMPORARY_STAGED_PURCHASE_LINES.forEach(line => {
                 var currentLiveStock = latestStockMap[String(line.ingredient_id)] || 0;
                 var netConsumptionToday = parseFloat(line.consumption || 0);
                 
-                // Calculate stock deduction using pure net totals (ignoring scrap multipliers for inventory)
                 var projectedStockAfterSales = currentLiveStock - netConsumptionToday;
                 if (projectedStockAfterSales < 0) projectedStockAfterSales = 0.00;
 
                 var stockMax = parseFloat(line.stock_max || 0);
                 var purchaseQtyNeeded = stockMax - projectedStockAfterSales;
-
-                // 🌟 FIXED NET DEFICIT CALCULATIONS GATEway:
                 var definitiveNetFaltanteBase = purchaseQtyNeeded > 0 ? purchaseQtyNeeded : 0;
 
                 line.last_std_inventory = currentLiveStock;
                 line.actual_std_inventory = projectedStockAfterSales;
-                
-                // 🔒 SCHEMA CORRECTION: Force faltante_base to explicitly calculate (Stock Max - Inventory)
                 line.faltante_base = definitiveNetFaltanteBase; 
                 line.suggested_quantity = definitiveNetFaltanteBase;
                 line.approved_quantity = definitiveNetFaltanteBase;
-
-                // Always track the subtraction if there was a real consumption today
-                if (netConsumptionToday > 0) {
-                    itemsToDeductList.push({
-                        ingredient_id: line.ingredient_id,
-                        actual_std_inventory: projectedStockAfterSales
-                    });
-                }
             });
 
             // =======================================================================
@@ -4622,6 +4629,7 @@ async function broadcastActiveCalculationsToPurchaseApp() {
             console.log("✅ Core stock registers successfully decreased for all items with recorded sales consumption.");
             // =======================================================================
         }
+
 
         // 3️⃣ GROUP RUNTIME CALCULATIONS BY RESOLVED SUPPLIER [REPAIRED INGREDIENT-ONLY LOOKUP]
         var supplierGroups = {};
