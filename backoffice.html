@@ -1770,265 +1770,257 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
             reader.readAsText(file);
         }
 
-                // 📊 INTEGRATED VARIANCE ENGINE (PART 1): Processes Theoretical Sales Consumption
-        async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
-            var theoreticalUsage = {}; 
-            var unmatchedSalesCount = 0;
-            var totalTheoreticalSalesCost = 0;
+// 📊 INTEGRATED VARIANCE ENGINE (REPAIRED RECURSION MATRIX - PART 1)
+async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
+    var theoreticalUsage = {}; 
+    var unmatchedSalesCount = 0;
+    var totalTheoreticalSalesCost = 0;
+    
+    // 1. Process each line row entry inside the Revo file dataset (Theoretical)
+    for (var l = 1; l < lines.length; l++) {
+        var line = lines[l].trim();
+        if (!line || line === "") continue;
+        
+        var cols = line.split(",");
+        if (cols.length < headers.length) continue;
+        
+        var rawQty = cols[idxQty].replace(/["']/g, "").trim();
+        var rawProd = cols[idxProd].replace(/["']/g, "").trim();
+        var rawId = cols[idxId].replace(/["']/g, "").trim();
+        
+        var qtySold = parseFloat(rawQty) || 0;
+        if (qtySold <= 0) continue;
+        
+        var matchedRecipe = recMapByRevo[rawId.toLowerCase()] || recMapByName[rawProd.toLowerCase()];
+        if (!matchedRecipe) {
+            unmatchedSalesCount++;
+            continue;
+        }
+        
+        // 🛡️ REPAIRED CONCURRENT STACK QUEUE: 
+        // We accumulate the definitive composite multiplier directly onto the recursive stack frame
+        var componentQueue = [{ recipeId: String(matchedRecipe.id).toLowerCase(), currentCumulativeMultiplier: qtySold }];
+        
+        while (componentQueue.length > 0) {
+            var activeExplodeTask = componentQueue.shift();
+            var currentRecipeId = activeExplodeTask.recipeId;
+            var currentMult = activeExplodeTask.currentCumulativeMultiplier;
             
-            // 1. Process each line row entry inside the Revo file dataset (Theoretical)
-            for (var l = 1; l < lines.length; l++) {
-                var line = lines[l].trim();
-                if (!line || line === "") continue;
-                
-                var cols = line.split(",");
-                if (cols.length < headers.length) continue;
-                
-                var rawQty = cols[idxQty].replace(/["']/g, "").trim();
-                var rawProd = cols[idxProd].replace(/["']/g, "").trim();
-                var rawId = cols[idxId].replace(/["']/g, "").trim();
-                
-                var qtySold = parseFloat(rawQty) || 0;
-                if (qtySold <= 0) continue;
-                
-                var matchedRecipe = recMapByRevo[rawId.toLowerCase()] || recMapByName[rawProd.toLowerCase()];
-                if (!matchedRecipe) {
-                    unmatchedSalesCount++;
-                    continue;
-                }
-                
-                var componentQueue = [{ recipeId: String(matchedRecipe.id).toLowerCase(), multiplierFactor: qtySold }];
-                
-                while (componentQueue.length > 0) {
-                    var activeExplodeTask = componentQueue.shift();
-                    var currentRecipeId = activeExplodeTask.recipeId;
-                    var currentMult = activeExplodeTask.multiplierFactor;
-                    
-                    var targetRecipeRecord = recMapById[currentRecipeId];
-                    if (!targetRecipeRecord) continue;
-                    
-                    var recipeYieldServings = parseFloat(targetRecipeRecord.servings) || 1;
-                    var recipeComponents = mappings.filter(m => String(m.recipe_id).toLowerCase().trim() === currentRecipeId);
-                    
-                    recipeComponents.forEach(c => {
-                        var componentId = String(c.ingredient_id).toLowerCase().trim();
-                        var qtyNeededPerYield = parseFloat(c.quantity) || 0;
-                        var scrapPct = parseFloat(c.scrap_percentage || 0);
-                        var wasteFactor = 1 + (scrapPct / 100);
-                        
-                        var totalTheoreticalQtyNeeded = (qtyNeededPerYield / recipeYieldServings) * currentMult * wasteFactor;
-                        
-                        if (recMapById[componentId]) {
-                            componentQueue.push({ recipeId: componentId, multiplierFactor: (qtyNeededPerYield / recipeYieldServings) * currentMult });
-                        } else {
-                            var baseIng = ingMap[componentId];
-                            if (baseIng) {
-                                var unitPrice = parseFloat(baseIng.std_cost_per_unit || baseIng.cost) || 0;
-                                var totalLineCost = totalTheoreticalQtyNeeded * unitPrice;
-                                
-                                if (!theoreticalUsage[componentId]) {
-                                    theoreticalUsage[componentId] = {
-                                        id: componentId,
-                                        name: baseIng.name_es || "Ingrediente Desconocido",
-                                        unit: baseIng.uom || "N/A",
-                                        theoreticalQty: 0,
-                                        theoreticalCost: 0,
-                                        actualQty: 0,
-                                        actualCost: 0
-                                    };
-                                }
-                                theoreticalUsage[componentId].theoreticalQty += totalTheoreticalQtyNeeded;
-                                theoreticalUsage[componentId].theoreticalCost += totalLineCost;
-                                totalTheoreticalSalesCost += totalLineCost;
-                            }
-                        }
-                    });
-                }
-            }
+            var targetRecipeRecord = recMapById[currentRecipeId];
+            if (!targetRecipeRecord) continue;
             
-            // Check if 100% of the products in the file were skipped/deleted upfront
-            var itemsArray = [];
-            for (var key in theoreticalUsage) { itemsArray.push(theoreticalUsage[key]); }
-            if (itemsArray.length === 0) {
-                resultsContainer.innerHTML = 
-                    "<div class='card' style='margin-top:20px; text-align:center; background-color:var(--bg-surface); border:1px solid #ef4444; border-radius:6px; padding:20px;'> " +
-                        "<div style='font-size:2rem; margin-bottom:10px;'>⚠️</div> " +
-                        "<h4 style='color:#ef4444; margin-bottom:8px;'>No se encontraron recetas activas</h4> " +
-                        "<p style='color:var(--text-muted); font-size:0.9rem; max-width:450px; margin:0 auto;'>El archivo de ventas seleccionado no contiene ningún producto que coincida con tus recetas actuales vigentes.</p> " +
-                    "</div>";
-                return;
-            }
+            var recipeYieldServings = parseFloat(targetRecipeRecord.servings) || 1;
+            var recipeComponents = mappings.filter(m => String(m.recipe_id).toLowerCase().trim() === currentRecipeId);
+            
+            recipeComponents.forEach(c => {
+                var componentId = String(c.ingredient_id).toLowerCase().trim();
+                var qtyNeededPerYield = parseFloat(c.quantity) || 0;
+                var scrapPct = parseFloat(c.scrap_percentage || 0);
+                var wasteFactor = 1 + (scrapPct / 100);
+                
+                // 📊 THE CORE FIX: Scaled quantity is portion requirement normalized by parent yield * composite multiplier * current tier waste
+                var totalTheoreticalQtyNeeded = (qtyNeededPerYield / recipeYieldServings) * currentMult * wasteFactor;
+                
+                // Protect numeric boundary variables against javascript float runaways
+                if (totalTheoreticalQtyNeeded > 999999.9999) {
+                    totalTheoreticalQtyNeeded = 999999.9999;
+                }
 
-            // Continue directly into Part 2 right below
-            try {
-                // 2. 🌐 NETWORK INVOICE INTEGRATOR LAYER: Fetch live delivery records from invoice_items table filtered by selected dates
-                var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
-                var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
-                var realPurchasedLines = await invoiceRes.json();
-                
-                var totalRealInvoiceSpending = 0;
-                
-                // Aggregate real purchases from your invoice lines into our memory map matrix using your exact schema keys
-                if (Array.isArray(realPurchasedLines) && !realPurchasedLines.message) {
-                    realPurchasedLines.forEach(line => {
-                        if (!line.ingredient_id) return;
-                        var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+                // If the component is another recipe (Tier 2/Sub-recipe), push it back to queue with its scaled base multiplier
+                if (recMapById[componentId]) {
+                    componentQueue.push({ 
+                        recipeId: componentId, 
+                        // The sub-recipe inherits the raw scaled proportion value to cascade downstream
+                        currentCumulativeMultiplier: (qtyNeededPerYield / recipeYieldServings) * currentMult 
+                    });
+                } else {
+                    // It's a fundamental base raw material ingredient
+                    var baseIng = ingMap[componentId];
+                    if (baseIng) {
+                        var unitPrice = parseFloat(baseIng.std_cost_per_unit || baseIng.cost) || 0;
+                        var totalLineCost = totalTheoreticalQtyNeeded * unitPrice;
                         
-                        var purchasedQty = parseFloat(line.actual_quantity_purchased) || 0;
-                        var purchasedCost = parseFloat(line.actual_total_cost) || 0;
-                        
-                        totalRealInvoiceSpending += purchasedCost;
-                        
-                        // If an item was purchased but not sold, initialize its tracking map node structure
-                        if (!theoreticalUsage[cleanIngId]) {
-                            var dbIng = ingMap[cleanIngId];
-                            theoreticalUsage[cleanIngId] = {
-                                id: cleanIngId,
-                                name: dbIng ? (dbIng.name_es || "Ingrediente Extra") : "Compra Fuera de Catálogo",
-                                unit: dbIng ? (dbIng.uom || "N/A") : "N/A",
+                        if (!theoreticalUsage[componentId]) {
+                            theoreticalUsage[componentId] = {
+                                id: componentId,
+                                name: baseIng.name_es || "Ingrediente Desconocido",
+                                unit: baseIng.uom || "N/A",
                                 theoreticalQty: 0,
                                 theoreticalCost: 0,
                                 actualQty: 0,
                                 actualCost: 0
                             };
                         }
-                        
-                        theoreticalUsage[cleanIngId].actualQty += purchasedQty;
-                        theoreticalUsage[cleanIngId].actualCost += purchasedCost;
-                    });
+                        theoreticalUsage[componentId].theoreticalQty += totalTheoreticalQtyNeeded;
+                        theoreticalUsage[componentId].theoreticalCost += totalLineCost;
+                        totalTheoreticalSalesCost += totalLineCost;
+                    }
                 }
-                
-                // Re-compile working data arrays to calculate side-by-side variances
-                itemsArray = [];
-                for (var k in theoreticalUsage) { itemsArray.push(theoreticalUsage[k]); }
-                itemsArray.sort((a,b) => b.theoreticalCost - a.theoreticalCost); // Order by top expenditures
-                
-                // Continue directly into Part 3 right below to draw the layout dashboard
-                                // 3. Output Matrix Dashboard Builder: Compiles your real-world financial cost variance report cards
-                var financialVarianceTotal = totalRealInvoiceSpending - totalTheoreticalSalesCost;
-                var varianceColor = financialVarianceTotal <= 0 ? "#22c55e" : "#ef4444";
-                var varianceLabelPrefix = financialVarianceTotal <= 0 ? "Ahorro/Eficiencia: -" : "Pérdida/Desviación: +";
-
-                var html = "<div class='card' style='margin-top:20px; text-align:left; background-color:var(--bg-surface); border:1px solid var(--border-color);'>" +
-                           "<h4>Balance de Desviaciones de Costo (" + dateFrom + " al " + dateTo + ")</h4>" +
-                           
-                           // Double Financial KPI metrics row panel
-                           "<div style='display:flex; gap:15px; margin: 15px 0;'>" +
-                               "<div style='flex:1; padding:12px; background-color:rgba(0,122,251,0.05); border-left:4px solid #007afb; border-radius:4px;'>" +
-                                   "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Teórico (Ventas)</div>" +
-                                   "<div style='font-size:1.2rem; font-weight:700; color:var(--text-main); margin-top:4px;'>$" + totalTheoreticalSalesCost.toFixed(2) + "</div>" +
-                               "</div>" +
-                               "<div style='flex:1; padding:12px; background-color:rgba(142,142,147,0.05); border-left:4px solid #8e8e93; border-radius:4px;'> " +
-                                   "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Real (Facturas WhatsApp)</div>" +
-                                   "<div style='font-size:1.2rem; font-weight:700; color:var(--text-main); margin-top:4px;'>$" + totalRealInvoiceSpending.toFixed(2) + "</div>" +
-                               "</div>" +
-                               "<div style='flex:1; padding:12px; background-color:" + varianceColor + "15; border-left:4px solid " + varianceColor + "; border-radius:4px;'> " +
-                                   "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:" + varianceColor + ";'>" + varianceLabelPrefix + "</div>" +
-                                   "<div style='font-size:1.2rem; font-weight:700; color:" + varianceColor + "; margin-top:4px;'>$" + Math.abs(financialVarianceTotal).toFixed(2) + "</div>" +
-                               "</div>" +
-                           "</div>";
-                           
-                if (unmatchedSalesCount > 0) {
-                    html += "<div style='margin-bottom:15px; padding:10px; background-color:rgba(245,158,11,0.1); border-left:4px solid #f59e0b; color:#b45309; font-size:0.85rem; border-radius:4px;'>" +
-                                "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV de ventas porque no están registrados en el catálogo maestro." +
-                            "</div>";
-                }
-                
-                // Interactive Variance Grid Columns upgraded to professional cost accounting headers
-                html += "<div style='overflow-x:auto;'><table style='width:100%; border-collapse:collapse; margin-top:10px; font-size:0.85rem;'>" +
-                            "<thead>" +
-                                "<tr style='border-bottom:2px solid var(--border-color); color:var(--text-main); font-weight:700; background-color:var(--bg-main);'>" +
-                                    "<th style='text-align:left; padding:10px;'>Ingrediente</th>" +
-                                    "<th style='text-align:center; padding:10px;'>Unidad Base</th>" +
-                                    "<th style='text-align:right; padding:10px;'>Consumo Teórico</th>" +
-                                    "<th style='text-align:right; padding:10px;'>Compras Reales (Equivalencia)</th>" +
-                                    "<th style='text-align:right; padding:10px;'>Desviación Eficiencia (Uso)</th>" +
-                                    "<th style='text-align:right; padding:10px;'>Desviación Compra (Precio)</th>" +
-                                    "<th style='text-align:right; padding:10px;'>Variación Total</th>" +
-                                "</tr>" +
-                            "</thead>" +
-                            "<tbody>";
-
-                // Continue directly into Part 2 right below
-                itemsArray.forEach(function(item) {
-                    var cleanKey = String(item.id).toLowerCase().trim();
-                    var dbIng = ingMap[cleanKey];
-                    var stdCost = dbIng ? (parseFloat(dbIng.std_cost_per_unit || dbIng.cost) || 0) : 0;
-                    
-                    if (stdCost === 0 && item.theoreticalQty > 0) {
-                        stdCost = item.theoreticalCost / item.theoreticalQty;
-                    }
-                    
-                    // 🌟 MULTI-UNIT ALIGNMENT ENGINE LOGIC: 
-                    // Safely extracts tracking parameters to cross-convert invoice units back into core recipe units.
-                    var recipeUOM = String(item.unit || "gr").toLowerCase().trim();
-                    var realQtyConvertedToRecipeUOM = item.actualQty; 
-                    var invoiceUnitStringLabel = recipeUOM; 
-                    
-                    // Detect custom unit relationships dynamically (e.g. Invoiced in pounds but calculated in ounces)
-                    if (recipeUOM === "oz") {
-                        realQtyConvertedToRecipeUOM = item.actualQty * 16; 
-                        invoiceUnitStringLabel = "lb";
-                    } else if (recipeUOM === "gr" || recipeUOM === "g") {
-                        realQtyConvertedToRecipeUOM = item.actualQty * 1000;
-                        invoiceUnitStringLabel = "kg";
-                    } else if (recipeUOM === "ml") {
-                        realQtyConvertedToRecipeUOM = item.actualQty * 1000;
-                        invoiceUnitStringLabel = "L";
-                    }
-                    
-                    // Calculate real unit cost paid on invoices using our synchronized values
-                    var realUnitCost = realQtyConvertedToRecipeUOM > 0 ? (item.actualCost / realQtyConvertedToRecipeUOM) : stdCost;
-                    
-                    // Efficiency/Quantity Variance = (Theoretical Qty - Real Qty Converted) * Std Cost
-                    var qtyVarianceFinancial = (item.theoreticalQty - realQtyConvertedToRecipeUOM) * stdCost;
-                    
-                    // Price Variance = (Std Cost - Real Cost) * Real Qty Converted
-                    var priceVarianceFinancial = (stdCost - realUnitCost) * realQtyConvertedToRecipeUOM;
-                    
-                    // Total Variance = Efficiency Variance + Price Variance
-                    var totalVarianceFinancial = qtyVarianceFinancial + priceVarianceFinancial;
-                    
-                    // Format Efficiency/Quantity helper text colors (invert display colors: positive is good!)
-                    var qtyColor = qtyVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
-                    var qtyText = qtyVarianceFinancial >= -0.01 ? "+$" + Math.abs(qtyVarianceFinancial).toFixed(2) : "-$" + Math.abs(qtyVarianceFinancial).toFixed(2);
-                    if (Math.abs(qtyVarianceFinancial) < 0.01) { qtyText = "$0.00"; qtyColor = "var(--text-main)"; }
-                    
-                    // Format Price helper text colors
-                    var priceColor = priceVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
-                    var priceText = priceVarianceFinancial >= -0.01 ? "+$" + Math.abs(priceVarianceFinancial).toFixed(2) : "-$" + Math.abs(priceVarianceFinancial).toFixed(2);
-                    if (Math.abs(priceVarianceFinancial) < 0.01) { priceText = "$0.00"; priceColor = "var(--text-main)"; }
-                    
-                    // Format Total net variation row summary cell alerts
-                    var totalColor = totalVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
-                    var totalText = totalVarianceFinancial >= -0.01 ? "+$" + Math.abs(totalVarianceFinancial).toFixed(2) : "-$" + Math.abs(totalVarianceFinancial).toFixed(2);
-                    if (Math.abs(totalVarianceFinancial) < 0.01) { totalText = "$0.00"; totalColor = "var(--text-main)"; }
-
-                    // 🌟 DYNAMIC RENDERING EXPRESSION CELL: Outputs recipe unit mapping next to invoice anchors (e.g. 160.00 (10.00 lb))
-                    var purchasesDisplayString = realQtyConvertedToRecipeUOM.toFixed(2);
-                    if (item.actualQty > 0 && recipeUOM !== invoiceUnitStringLabel) {
-                        purchasesDisplayString += " <span style='color:#6b7280; font-size:0.75rem; font-weight:normal;'>(" + item.actualQty.toFixed(2) + " " + invoiceUnitStringLabel + ")</span>";
-                    }
-
-                    html += "<tr style='border-bottom:1px solid var(--border-color); color:var(--text-main);' onmouseover=\"this.style.backgroundColor='var(--bg-main)'\" onmouseout=\"this.style.backgroundColor='transparent'\">" +
-                                "<td style='padding:10px; font-weight:600;'>" + item.name + "</td>" +
-                                "<td style='padding:10px; text-align:center; color:var(--text-muted);'>" + item.unit + "</td>" +
-                                "<td style='padding:10px; text-align:right; font-family:monospace;'>" + item.theoreticalQty.toFixed(2) + "</td>" +
-                                "<td style='padding:10px; text-align:right; font-family:monospace; font-weight:600;'>" + purchasesDisplayString + "</td>" +
-                                "<td style='padding:10px; text-align:right; font-weight:600; color:" + qtyColor + ";'>" + qtyText + "</td>" +
-                                "<td style='padding:10px; text-align:right; font-weight:600; color:" + priceColor + ";'>" + priceText + "</td>" +
-                                "<td style='padding:10px; text-align:right; font-weight:700; color:" + totalColor + ";'>" + totalText + "</td>" +
-                            "</tr>";
-                });
-                
-                html += "</tbody></table></div></div>";
-                resultsContainer.innerHTML = html;
-                
-            } catch (err) {
-                console.error("Integrated variance processing module failure:", err);
-                resultsContainer.innerHTML = "<div style='color:#ef4444; padding:15px;'>❌ Error crítico al cruzar el consumo teórico contra las facturas de compra de Supabase.</div>";
-            }
+            });
         }
+    }
+    // Check if 100% of the products in the file were skipped/deleted upfront
+    var itemsArray = [];
+    for (var key in theoreticalUsage) { itemsArray.push(theoreticalUsage[key]); }
+    if (itemsArray.length === 0) {
+        resultsContainer.innerHTML = 
+            "<div class='card' style='margin-top:20px; text-align:center; background-color:var(--bg-surface); border:1px solid #ef4444; border-radius:6px; padding:20px;'> " +
+                "<div style='font-size:2rem; margin-bottom:10px;'>⚠️</div> " +
+                "<h4 style='color:#ef4444; margin-bottom:8px;'>No se encontraron recetas activas</h4> " +
+                "<p style='color:var(--text-muted); font-size:0.9rem; max-width:450px; margin:0 auto;'>El archivo de ventas seleccionado no contiene ningún producto que coincida con tus recetas actuales vigentes.</p> " +
+            "</div>";
+        return;
+    }
+
+    try {
+        // 2. 🌐 NETWORK INVOICE INTEGRATOR LAYER: Fetch live delivery records from invoice_items table
+        var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
+        var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
+        var realPurchasedLines = await invoiceRes.json();
+        
+        var totalRealInvoiceSpending = 0;
+        
+        if (Array.isArray(realPurchasedLines) && !realPurchasedLines.message) {
+            realPurchasedLines.forEach(line => {
+                if (!line.ingredient_id) return;
+                var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
+                
+                var purchasedQty = parseFloat(line.actual_quantity_purchased) || 0;
+                var purchasedCost = parseFloat(line.actual_total_cost) || 0;
+                
+                totalRealInvoiceSpending += purchasedCost;
+                
+                if (!theoreticalUsage[cleanIngId]) {
+                    var dbIng = ingMap[cleanIngId];
+                    theoreticalUsage[cleanIngId] = {
+                        id: cleanIngId,
+                        name: dbIng ? (dbIng.name_es || "Ingrediente Extra") : "Compra Fuera de Catálogo",
+                        unit: dbIng ? (dbIng.uom || "N/A") : "N/A",
+                        theoreticalQty: 0,
+                        theoreticalCost: 0,
+                        actualQty: 0,
+                        actualCost: 0
+                    };
+                }
+                
+                theoreticalUsage[cleanIngId].actualQty += purchasedQty;
+                theoreticalUsage[cleanIngId].actualCost += purchasedCost;
+            });
+        }
+
+        // Re-compile working data arrays to calculate side-by-side variances
+        itemsArray = [];
+        for (var k in theoreticalUsage) { itemsArray.push(theoreticalUsage[k]); }
+        itemsArray.sort((a,b) => b.theoreticalCost - a.theoreticalCost); // Order by top expenditures
+        
+        // 3. Output Matrix Dashboard Builder: Compiles financial cost variance cards
+        var financialVarianceTotal = totalRealInvoiceSpending - totalTheoreticalSalesCost;
+        var varianceColor = financialVarianceTotal <= 0 ? "#22c55e" : "#ef4444";
+        var varianceLabelPrefix = financialVarianceTotal <= 0 ? "Ahorro/Eficiencia: -" : "Pérdida/Desviación: +";
+
+        var html = "<div class='card' style='margin-top:20px; text-align:left; background-color:var(--bg-surface); border:1px solid var(--border-color);'>" +
+                   "<h4>Balance de Desviaciones de Costo (" + dateFrom + " al " + dateTo + ")</h4>" +
+                   
+                   "<div style='display:flex; gap:15px; margin: 15px 0;'>" +
+                       "<div style='flex:1; padding:12px; background-color:rgba(0,122,251,0.05); border-left:4px solid #007afb; border-radius:4px;'>" +
+                           "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Teórico (Ventas)</div>" +
+                           "<div style='font-size:1.2rem; font-weight:700; color:var(--text-main); margin-top:4px;'>$" + totalTheoreticalSalesCost.toFixed(2) + "</div>" +
+                       "</div>" +
+                       "<div style='flex:1; padding:12px; background-color:rgba(142,142,147,0.05); border-left:4px solid #8e8e93; border-radius:4px;'> " +
+                           "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Real (Facturas WhatsApp)</div>" +
+                           "<div style='font-size:1.2rem; font-weight:700; color:var(--text-main); margin-top:4px;'>$" + totalRealInvoiceSpending.toFixed(2) + "</div>" +
+                       "</div>" +
+                       "<div style='flex:1; padding:12px; background-color:" + varianceColor + "15; border-left:4px solid " + varianceColor + "; border-radius:4px;'> " +
+                           "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:" + varianceColor + ";'>" + varianceLabelPrefix + "</div>" +
+                           "<div style='font-size:1.2rem; font-weight:700; color:" + varianceColor + "; margin-top:4px;'>$" + Math.abs(financialVarianceTotal).toFixed(2) + "</div>" +
+                       "</div>" +
+                   "</div>";
+                   
+        if (unmatchedSalesCount > 0) {
+            html += "<div style='margin-bottom:15px; padding:10px; background-color:rgba(245,158,11,0.1); border-left:4px solid #f59e0b; color:#b45309; font-size:0.85rem; border-radius:4px;'>" +
+                        "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV de ventas porque no están registrados en el catálogo maestro." +
+                    "</div>";
+        }
+        html += "<div style='overflow-x:auto;'><table style='width:100%; border-collapse:collapse; margin-top:10px; font-size:0.85rem;'>" +
+                    "<thead>" +
+                        "<tr style='border-bottom:2px solid var(--border-color); color:var(--text-main); font-weight:700; background-color:var(--bg-main);'>" +
+                            "<th style='text-align:left; padding:10px;'>Ingrediente</th>" +
+                            "<th style='text-align:center; padding:10px;'>Unidad Base</th>" +
+                            "<th style='text-align:right; padding:10px;'>Consumo Teórico</th>" +
+                            "<th style='text-align:right; padding:10px;'>Compras Reales (Equivalencia)</th>" +
+                            "<th style='text-align:right; padding:10px;'>Desviación Eficiencia (Uso)</th>" +
+                            "<th style='text-align:right; padding:10px;'>Desviación Compra (Precio)</th>" +
+                            "<th style='text-align:right; padding:10px;'>Variación Total</th>" +
+                        "</tr>" +
+                    "</thead>" +
+                    "<tbody>";
+
+        itemsArray.forEach(function(item) {
+            var cleanKey = String(item.id).toLowerCase().trim();
+            var dbIng = ingMap[cleanKey];
+            var stdCost = dbIng ? (parseFloat(dbIng.std_cost_per_unit || dbIng.cost) || 0) : 0;
+            
+            if (stdCost === 0 && item.theoreticalQty > 0) {
+                stdCost = item.theoreticalCost / item.theoreticalQty;
+            }
+            
+            var recipeUOM = String(item.unit || "gr").toLowerCase().trim();
+            var realQtyConvertedToRecipeUOM = item.actualQty; 
+            var invoiceUnitStringLabel = recipeUOM; 
+            
+            if (recipeUOM === "oz") {
+                realQtyConvertedToRecipeUOM = item.actualQty * 16; 
+                invoiceUnitStringLabel = "lb";
+            } else if (recipeUOM === "gr" || recipeUOM === "g") {
+                realQtyConvertedToRecipeUOM = item.actualQty * 1000;
+                invoiceUnitStringLabel = "kg";
+            } else if (recipeUOM === "ml") {
+                realQtyConvertedToRecipeUOM = item.actualQty * 1000;
+                invoiceUnitStringLabel = "L";
+            }
+            
+            var realUnitCost = realQtyConvertedToRecipeUOM > 0 ? (item.actualCost / realQtyConvertedToRecipeUOM) : stdCost;
+            
+            var qtyVarianceFinancial = (item.theoreticalQty - realQtyConvertedToRecipeUOM) * stdCost;
+            var priceVarianceFinancial = (stdCost - realUnitCost) * realQtyConvertedToRecipeUOM;
+            var totalVarianceFinancial = qtyVarianceFinancial + priceVarianceFinancial;
+
+            var qtyColor = qtyVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
+            var qtyText = qtyVarianceFinancial >= -0.01 ? "+$" + Math.abs(qtyVarianceFinancial).toFixed(2) : "-$" + Math.abs(qtyVarianceFinancial).toFixed(2);
+            if (Math.abs(qtyVarianceFinancial) < 0.01) { qtyText = "$0.00"; qtyColor = "var(--text-main)"; }
+            
+            var priceColor = priceVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
+            var priceText = priceVarianceFinancial >= -0.01 ? "+$" + Math.abs(priceVarianceFinancial).toFixed(2) : "-$" + Math.abs(priceVarianceFinancial).toFixed(2);
+            if (Math.abs(priceVarianceFinancial) < 0.01) { priceText = "$0.00"; priceColor = "var(--text-main)"; }
+            
+            var totalColor = totalVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
+            var totalText = totalVarianceFinancial >= -0.01 ? "+$" + Math.abs(totalVarianceFinancial).toFixed(2) : "-$" + Math.abs(totalVarianceFinancial).toFixed(2);
+            if (Math.abs(totalVarianceFinancial) < 0.01) { totalText = "$0.00"; totalColor = "var(--text-main)"; }
+
+            var purchasesDisplayString = realQtyConvertedToRecipeUOM.toFixed(2);
+            if (item.actualQty > 0 && recipeUOM !== invoiceUnitStringLabel) {
+                purchasesDisplayString += " <span style='color:#6b7280; font-size:0.75rem; font-weight:normal;'>(" + item.actualQty.toFixed(2) + " " + invoiceUnitStringLabel + ")</span>";
+            }
+
+            html += "<tr style='border-bottom:1px solid var(--border-color); color:var(--text-main);' onmouseover=\"this.style.backgroundColor='var(--bg-main)'\" onmouseout=\"this.style.backgroundColor='transparent'\">" +
+                        "<td style='padding:10px; font-weight:600;'>" + item.name + "</td>" +
+                        "<td style='padding:10px; text-align:center; color:var(--text-muted);'>" + item.unit + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-family:monospace;'>" + item.theoreticalQty.toFixed(2) + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-family:monospace; font-weight:600;'>" + purchasesDisplayString + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-weight:600; color:" + qtyColor + ";'>" + qtyText + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-weight:600; color:" + priceColor + ";'>" + priceText + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-weight:700; color:" + totalColor + ";'>" + totalText + "</td>" +
+                    "</tr>";
+        });
+        
+        html += "</tbody></table></div></div>";
+        resultsContainer.innerHTML = html;
+        
+    } catch (err) {
+        console.error("Integrated variance processing module failure:", err);
+        resultsContainer.innerHTML = "<div style='color:#ef4444; padding:15px;'>❌ Error crítico al cruzar el consumo teórico contra las facturas de compra de Supabase.</div>";
+    }
+}
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
                 // 📊 SUPPLIER LIFECYCLE CONTROLS (PART 1): Fixed numerical primitive type routing to prevent silent Supabase skips
