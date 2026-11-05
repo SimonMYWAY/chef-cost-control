@@ -1920,7 +1920,12 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
 
         var html = "<div class='card' style='margin-top:20px; text-align:left; background-color:var(--bg-surface); border:1px solid var(--border-color);'>" +
                    "<h4>Balance de Desviaciones de Costo (" + dateFrom + " al " + dateTo + ")</h4>" +
-                   
+            
+                   <!-- 📊 EXPORT TO ACCELERATED EXCEL DISK LINK TOOL -->
+                   <button id="btn-export-variance-excel" onclick="downloadVarianceReportAsCSV()" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 15px; padding: 10px 16px; background-color: #16a34a; color: #ffffff; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#15803d'" onmouseout="this.style.backgroundColor='#16a34a'">
+                   💾 Exportar Reporte a Excel (CSV)
+                   </button>
+
                    "<div style='display:flex; gap:15px; margin: 15px 0;'>" +
                        "<div style='flex:1; padding:12px; background-color:rgba(0,122,251,0.05); border-left:4px solid #007afb; border-radius:4px;'>" +
                            "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Teórico (Ventas)</div>" +
@@ -2020,6 +2025,78 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
         console.error("Integrated variance processing module failure:", err);
         resultsContainer.innerHTML = "<div style='color:#ef4444; padding:15px;'>❌ Error crítico al cruzar el consumo teórico contra las facturas de compra de Supabase.</div>";
     }
+}
+// 💾 TASK: EXPORT ACTIVE COST VARIANCE ACCOUNTING DATA TO EXCEL MACHINE DISK
+function downloadVarianceReportAsCSV() {
+    // 1. Double check that we have verified data arrays ready to pull down
+    var tableRows = document.querySelectorAll("#deviation-results-container table tbody tr");
+    
+    if (tableRows.length === 0) {
+        alert("⚠️ No hay datos disponibles en pantalla para exportar. Genere el reporte primero.");
+        return;
+    }
+
+    var dateFrom = document.getElementById("deviation-date-from")?.value || "Inicio";
+    var dateTo = document.getElementById("deviation-date-to")?.value || "Fin";
+
+    console.log(`💾 Compiling Excel spreadsheet matrix across ${tableRows.length} ingredient items...`);
+
+    // 2. Establish standard financial cost accounting spreadsheet column headers
+    var csvContent = [];
+    csvContent.push(["Ingrediente", "Unidad Base", "Consumo Teorico", "Compras Reales", "Desviacion Eficiencia (Uso)", "Desviacion Compra (Precio)", "Variacion Total"].join(";"));
+
+    // 3. Extract text nodes cleanly from active browser screen slots
+    tableRows.forEach(row => {
+        var cells = row.querySelectorAll("td");
+        if (cells.length < 7) return;
+
+        var name = cells[0].innerText.replace(/["';]/g, "").trim();
+        var unit = cells[1].innerText.trim();
+        var theoreticalQty = cells[2].innerText.trim();
+        
+        // Strip out secondary purchase layout sub-labels if they exist: "160.00 (10.00 lb)" -> "160.00"
+        var realPurchases = cells[3].innerText.split("\n")[0].split("(")[0].trim();
+        
+        // Clean out monetary prefix symbols (+$, -$, etc.) for clean number formatting in cells
+        var efficiencyVar = cells[4].innerText.replace(/[+$ ]/g, "").trim();
+        var priceVar = cells[5].innerText.replace(/[+$ ]/g, "").trim();
+        var totalVar = cells[6].innerText.replace(/[+$ ]/g, "").trim();
+
+        var lineData = [
+            `"${name}"`,
+            `"${unit}"`,
+            theoreticalQty,
+            realPurchases,
+            efficiencyVar,
+            priceVar,
+            totalVar
+        ];
+
+        csvContent.push(lineData.join(";")); // Using semicolon layout for direct, native Excel localization compatibility
+    });
+
+    // 4. Wrap data inside an ironclad Blob block using Excel UTF-8 BOM byte keys to secure accents and currency formats
+    var finalCsvString = csvContent.join("\r\n");
+    var excelBlob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), finalCsvString], {
+        type: "text/csv;charset=utf-8;"
+    });
+
+    // 5. Trigger automatic cloud container anchor simulation to deploy disk file
+    var downloadLink = document.createElement("a");
+    var dynamicFileName = `Desviacion_Costos_${dateFrom}_al_${dateTo}.csv`;
+
+    if (navigator.msSaveBlob) { // Safe-guard fallbacks for legacy browsers
+        navigator.msSaveBlob(excelBlob, dynamicFileName);
+    } else {
+        downloadLink.href = URL.createObjectURL(excelBlob);
+        downloadLink.setAttribute("download", dynamicFileName);
+        downloadLink.style.visibility = "hidden";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }
+
+    console.log("✅ Cost accounting spreadsheet file downloaded successfully.");
 }
 
         // Phase 5: Render Live Suppliers Directory matching absolute path strings and schema
