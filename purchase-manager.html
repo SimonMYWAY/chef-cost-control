@@ -2111,45 +2111,86 @@ setInterval(executeLivePurchaseSuspensionAuditSweep, 15000);
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "visible") executeLivePurchaseSuspensionAuditSweep();
 });
-// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS
+// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS (PART 1 - LAYOUT & LIVE BADGE)
 function injectEmergencyManualOrderPanel(containerSelector) {
     if (document.getElementById("emergency-manual-order-panel")) return;
 
-    const target = document.querySelector(containerSelector) || document.body;
+    const target = document.querySelector(containerSelector);
+    if (!target) return;
+
     const panel = document.createElement("div");
     panel.id = "emergency-manual-order-panel";
-    panel.style.cssText = "background: var(--bg-surface, #ffffff); border: 2px dashed #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: left;";
+    panel.style.cssText = "background: var(--bg-surface, #ffffff); border: 2px dashed #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: left; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);";
     
     panel.innerHTML = `
-        <h4 style="margin: 0 0 10px 0; color: #d97706; display: flex; align-items: center; gap: 8px;">
-            ⚠️ Añadir Insumo de Emergencia / Manual
+        <h4 style="margin: 0 0 10px 0; color: #d97706; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 700;">
+            ⚠️ Añadir Insumo de Emergencia / Compra Manual
         </h4>
         <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
             <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px;">1. Seleccionar Insumo:</label>
-                <select id="em-select-ingredient" onchange="handleEmergencyIngredientChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1);"></select>
+                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">1. Seleccionar Insumo:</label>
+                <select id="em-select-ingredient" onchange="handleEmergencySelectionChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
             </div>
             <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px;">2. Proveedor Destino:</label>
-                <select id="em-select-provider" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1);"></select>
+                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">2. Proveedor Asignado:</label>
+                <select id="em-select-provider" onchange="handleEmergencySelectionChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
             </div>
-            <div style="flex: 1; min-width: 100px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px;">3. Cantidad Formato:</label>
-                <input type="number" id="em-input-qty" min="1" value="1" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1);">
+            <div style="flex: 1; min-width: 140px;">
+                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">3. Cantidad a Comprar:</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <input type="number" id="em-input-qty" min="1" step="1" value="1" style="width:70px; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem; font-weight: 600; text-align: center;">
+                    <span id="em-purchase-uom-badge" style="padding: 8px 12px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-weight: 700; font-size: 0.8rem; border: 1px solid #bae6fd; min-width: 50px; text-align: center;">--</span>
+                </div>
             </div>
-            <div style="flex: 1; min-width: 120px;">
-                <button onclick="executeEmergencyOrderAttachmentPipeline()" style="width:100%; padding:9px; background:#d97706; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
+            <div style="flex: 1; min-width: 140px;">
+                <button onclick="executeEmergencyOrderAttachmentPipeline()" style="width:100%; padding:9px; background:#d97706; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
                     ➕ Insertar a PO
                 </button>
             </div>
         </div>
-        <div id="em-uom-helper" style="font-size: 0.75rem; color: var(--text-muted, #64748b); margin-top: 6px; font-style: italic;"></div>
+        <div id="em-uom-helper" style="font-size: 0.75rem; color: #64748b; margin-top: 8px; font-style: italic;"></div>
     `;
     
     target.prepend(panel);
     populateEmergencyDropdowns();
 }
-// ⚡ CORE DATA MATRIX ENGINE: SECURELY MERGES EMERGENCY UN-SUGGESTED ITEMS INTO OPEN POs
+
+// 🔄 DYNAMIC RE-COUPLING ENGINE: LOOKS UP THE LOGISTICAL UNIT MAPPINGS IN REAL-TIME
+function handleEmergencySelectionChange() {
+    const ingId = document.getElementById("em-select-ingredient").value;
+    const providerName = document.getElementById("em-select-provider").value;
+    const uomBadge = document.getElementById("em-purchase-uom-badge");
+    const helperDiv = document.getElementById("em-uom-helper");
+
+    if (!uomBadge || !helperDiv) return;
+
+    if (!ingId || !providerName) {
+        uomBadge.innerText = "--";
+        helperDiv.innerHTML = "";
+        return;
+    }
+
+    const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
+    const matchedRule = formatSource.find(f => String(f.ingredient_id).toLowerCase().trim() === ingId.toLowerCase().trim() && String(f.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim());
+
+    if (matchedRule) {
+        const pUom = matchedRule.purchase_uom || "Unidad";
+        const factor = parseFloat(matchedRule.units_per_purchase || 1.0);
+        
+        let baseUom = "unidades";
+        if (typeof LOCAL_STAGED_ROWS !== "undefined") {
+            const match = LOCAL_STAGED_ROWS.find(r => masterNameToUuidMap[String(r.ingredient_name).toLowerCase().trim()] === ingId);
+            if (match) baseUom = match.recipe_uom || "unidad";
+        }
+
+        uomBadge.innerText = pUom;
+        helperDiv.innerHTML = `⚙️ <b>Regla Logística Detectada:</b> 1x ${pUom} equivale exactamente a <b>${factor.toFixed(2)} ${baseUom}</b> netas en cocina.`;
+    } else {
+        uomBadge.innerText = "Unidad";
+        helperDiv.innerHTML = `⚠️ <b>Aviso:</b> No hay un formato de compra específico para este proveedor. Se asumirá un factor de equivalencia 1 a 1.`;
+    }
+}
+// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (PART 2 - DATABASE & STATE COMMIT)
 async function executeEmergencyOrderAttachmentPipeline() {
     const ingredientId = document.getElementById("em-select-ingredient").value;
     const providerName = document.getElementById("em-select-provider").value;
@@ -2161,81 +2202,76 @@ async function executeEmergencyOrderAttachmentPipeline() {
     }
 
     try {
-        console.log(`📡 Analyzing pipeline for emergency item allocation to: ${providerName}`);
+        console.log(`📡 Committing manual format purchase allocation for: ${providerName}`);
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
 
-        // 1️⃣ LOOKUP EXISTING OPEN HEADER RECORDS FOR THIS PROVIDER (Draft or Pending matches only)
-        const checkPoRes = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=in.(draft,Pending)`, {
-            headers: { "apikey": API_KEY }
-        });
-        const openOrders = await checkPoRes.json();
+        const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
+        const activeMapping = formatSource.find(m => String(m.ingredient_id).toLowerCase().trim() === ingredientId.toLowerCase().trim() && String(m.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim());
         
-        let targetPoId = null;
+        const equivalenceMultiplier = activeMapping ? parseFloat(activeMapping.units_per_purchase || 1.0) : 1.0;
+        const purchaseUom = activeMapping ? (activeMapping.purchase_uom || "Formato") : "Unidad";
+        
+        // Convert format box counts to core standard recipe metrics
+        let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety gate
 
-        if (Array.isArray(openOrders) && openOrders.length > 0) {
-            // SCENARIO A: An open mutable transaction exists! Link directly to it.
-            targetPoId = openOrders[0].id;
-            console.log(`🎯 Active open order discovered! Merging item inside existing PO Header ID: ${targetPoId}`);
-        } else {
-            // SCENARIO B: No open order matches. Instantiate a brand new PO header log tracking record.
-            console.log(`✨ No active open orders found for ${providerName}. Generating fresh PO log header...`);
-            
-            // Read next seed tracking number if your layout has one, or default to timestamping
-            const newPoRes = await fetch(`${API_URL}purchase_orders`, {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({
-                    provider_name: providerName,
-                    status: "Pending", // Initialize as mutable Pending order state
-                    created_at: new Date().toISOString()
-                })
-            });
-            
-            // Re-fetch or request returning payload to capture generated UUID token keys
-            const lookupNewPo = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=eq.Pending&order=created_at.desc&limit=1`, {
-                headers: { "apikey": API_KEY }
-            });
-            const newPoData = await lookupNewPo.json();
-            targetPoId = newPoData[0].id;
+        let targetIngName = "Insumo de Emergencia";
+        let targetRecipeUom = "unidad";
+        if (typeof masterNameToUuidMap !== "undefined") {
+            const keys = Object.keys(masterNameToUuidMap);
+            const foundKey = keys.find(k => masterNameToUuidMap[k] === ingredientId);
+            if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
+        }
+        if (typeof LOCAL_STAGED_ROWS !== "undefined") {
+            const match = LOCAL_STAGED_ROWS.find(r => masterNameToUuidMap[String(r.ingredient_name).toLowerCase().trim()] === ingredientId);
+            if (match) targetRecipeUom = match.recipe_uom || "unidad";
         }
 
-        // 2️⃣ FORMAT CONVERSION & NUMERIC SAFETY CEILING GUARD
-        // Fetch specific layout conversion rule for selected provider format
-        const formatSource = (typeof CACHED_CONVERSION_MAPPINGS !== "undefined") ? CACHED_CONVERSION_MAPPINGS : [];
-        const activeMapping = formatSource.find(m => String(m.ingredient_id) === ingredientId && m.provider_name === providerName);
-        
-        const unitsPerPurchase = activeMapping ? parseFloat(activeMapping.units_per_purchase || 1) : 1;
-        const totalKitchenBaseQty = purchaseQty * unitsPerPurchase; // Convert Format counts to Standard quantities (e.g. 2 Boxes * 10kg = 20kg)
-
-        // Enforce structural numeric column guards
-        let safetyQty = totalKitchenBaseQty;
-        if (safetyQty > 999999.9999) safetyQty = 999999.9999;
-
-        // 3️⃣ COMMIT CHILD ITEM TO PRODUCTION DISK MATRIX
+        // Post the tracking row directly to your database logs layout
+        console.log("✈️ Transmitting verified conversion payload straight over the network channel...");
         await fetch(`${API_URL}purchase_order_items`, {
             method: "POST",
             headers: headers,
             body: JSON.stringify({
-                po_id: targetPoId,
                 ingredient_id: ingredientId,
-                pedido_sugerido: purchaseQty, // Store wholesale format units count ordered
-                faltante_base: safetyQty,      // Store converted standard kitchen units metric base
+                pedido_sugerido: purchaseQty,
+                approved_formats_quantity: purchaseQty,
+                faltante_base: safetyFaltanteBase,
+                equivalencia: equivalenceMultiplier,
+                supplier_uom: purchaseUom,
+                is_approved: true,
                 created_at: new Date().toISOString()
             })
         });
 
-        alert("🎯 ¡Insumo de emergencia integrado con éxito en la orden del proveedor!");
-        
-        // Hot-reload screen view grids to reflect changes in real-time
-        if (typeof renderCurrentPurchaseManagerGrid === "function") {
-            renderCurrentPurchaseManagerGrid();
+        // Sync directly into local memory state to execute an instant dashboard update
+        if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
+            LOCAL_STAGED_ROWS.push({
+                ingredient_id: ingredientId,
+                ingredient_name: targetIngName,
+                supplier_name: providerName,
+                pedido_sugerido: purchaseQty,
+                approved_formats_quantity: purchaseQty,
+                faltante_base: safetyFaltanteBase,
+                equivalencia: equivalenceMultiplier,
+                supplier_uom: purchaseUom,
+                recipe_uom: targetRecipeUom,
+                is_approved: true,
+                db_saved_status: "Pending"
+            });
         }
 
+        alert(`🎯 ¡Insumo registrado! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel de ${providerName}.`);
+
+        // Force interactive layout redraw instantly
+        renderInteractiveManagerSpreadsheetGrid();
+
     } catch (err) {
-        console.error("Emergency line-item attachment crashed:", err);
-        alert("❌ Error crítico al insertar el insumo de emergencia: " + err.message);
+        console.error("Emergency pipeline execution crash:", err);
+        alert("❌ Error crítico al procesar la inserción de la orden de formato manual: " + err.message);
     }
 }
+
 // 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS
 function injectEmergencyManualOrderPanel(containerSelector) {
     if (document.getElementById("emergency-manual-order-panel")) return;
