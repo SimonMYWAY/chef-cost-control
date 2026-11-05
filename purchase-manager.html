@@ -2111,7 +2111,7 @@ setInterval(executeLivePurchaseSuspensionAuditSweep, 15000);
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "visible") executeLivePurchaseSuspensionAuditSweep();
 });
-// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS (PART 1 - FIXED CASING BIND)
+// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS (PART 1 - ACCURATE SCHEMA REPAIR)
 function injectEmergencyManualOrderPanel(containerSelector) {
     if (document.getElementById("emergency-manual-order-panel")) return;
 
@@ -2155,7 +2155,7 @@ function injectEmergencyManualOrderPanel(containerSelector) {
     populateEmergencyDropdowns();
 }
 
-// 🔄 DYNAMIC RE-COUPLING ENGINE: FIXED TO INTERCEPT RAW OR UUID ALIGNMENTS
+// 🔄 DYNAMIC RE-COUPLING ENGINE: POWERED BY ACTUAL SCHEMA KEYS (supplier_uom & equivalencia)
 function handleEmergencySelectionChange() {
     const ingId = document.getElementById("em-select-ingredient").value;
     const providerName = document.getElementById("em-select-provider").value;
@@ -2165,41 +2165,32 @@ function handleEmergencySelectionChange() {
     if (!uomBadge || !helperDiv) return;
     if (!ingId || !providerName) { uomBadge.innerText = "--"; helperDiv.innerHTML = ""; return; }
 
-    // Recover structural text keys from mapping configuration dictionary to match formats
-    let rawIngredientTextKey = "";
-    if (typeof masterNameToUuidMap !== "undefined") {
-        rawIngredientTextKey = Object.keys(masterNameToUuidMap).find(k => String(masterNameToUuidMap[k]).toLowerCase() === ingId.toLowerCase()) || "";
-    }
-
     const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
     
-    // 🛡️ RE-INSULATED DUAL MATCH LOGIC: Check both UUID keys AND text matches to force synchronization!
+    // Search using your actual columns: provider_name, ingredient_id, supplier_uom, equivalencia
     const matchedRule = formatSource.find(f => {
-        const matchesProv = String(f.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim();
-        const matchesUuid = f.ingredient_id && String(f.ingredient_id).toLowerCase().trim() === ingId.toLowerCase().trim();
-        const matchesName = f.ingredient_name && rawIngredientTextKey && String(f.ingredient_name).toLowerCase().trim() === rawIngredientTextKey.toLowerCase().trim();
-        return matchesProv && (matchesUuid || matchesName);
+        return String(f.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim() &&
+               String(f.ingredient_id).toLowerCase().trim() === ingId.toLowerCase().trim();
     });
 
     if (matchedRule) {
-        const pUom = matchedRule.purchase_uom || "Unidad";
-        const factor = parseFloat(matchedRule.units_per_purchase || 1.0);
+        const pUom = matchedRule.supplier_uom || "Unidad";
+        const factor = parseFloat(matchedRule.equivalencia || 1.0);
         
-        let baseUom = "unidades";
+        let baseUom = "unidad";
         if (typeof LOCAL_STAGED_ROWS !== "undefined") {
-            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingId.toLowerCase() || String(r.ingredient_name).toLowerCase().trim() === rawIngredientTextKey.toLowerCase().trim());
+            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingId.toLowerCase());
             if (match) baseUom = match.recipe_uom || "unidad";
         }
 
         uomBadge.innerText = pUom;
-        helperDiv.innerHTML = `⚙️ <b>Regla Logística Detectada:</b> 1x ${pUom} equivale exactamente a <b>${factor.toFixed(2)} ${baseUom}</b> netas en cocina.`;
+        helperDiv.innerHTML = `⚙️ <b>Regla Logística:</b> 1x ${pUom} equivale a <b>${factor.toFixed(2)} ${baseUom}</b> netas en cocina.`;
     } else {
         uomBadge.innerText = "Unidad";
-        helperDiv.innerHTML = `⚠️ <b>Aviso:</b> No hay un formato específico en catálogo para esta combinación. Se aplicará equivalencia básica 1 a 1.`;
+        helperDiv.innerHTML = `⚠️ No hay un formato específico en catálogo para esta combinación. Equivalencia básica 1 a 1.`;
     }
 }
-
-// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (PART 2 - CONVERSION FIXED)
+// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (PART 2 - ALIGNED INTEGRATION)
 async function executeEmergencyOrderAttachmentPipeline() {
     const ingredientId = document.getElementById("em-select-ingredient").value;
     const providerName = document.getElementById("em-select-provider").value;
@@ -2214,36 +2205,32 @@ async function executeEmergencyOrderAttachmentPipeline() {
         console.log(`📡 Committing manual format purchase allocation for: ${providerName}`);
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
 
-        let rawIngredientTextKey = "";
-        if (typeof masterNameToUuidMap !== "undefined") {
-            rawIngredientTextKey = Object.keys(masterNameToUuidMap).find(k => String(masterNameToUuidMap[k]).toLowerCase() === ingredientId.toLowerCase()) || "";
-        }
-
         const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
-        
-        // Use identical dual match safety checks here
         const activeMapping = formatSource.find(f => {
-            const matchesProv = String(f.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim();
-            const matchesUuid = f.ingredient_id && String(f.ingredient_id).toLowerCase().trim() === ingredientId.toLowerCase().trim();
-            const matchesName = f.ingredient_name && rawIngredientTextKey && String(f.ingredient_name).toLowerCase().trim() === rawIngredientTextKey.toLowerCase().trim();
-            return matchesProv && (matchesUuid || matchesName);
+            return String(f.provider_name).toLowerCase().trim() === providerName.toLowerCase().trim() &&
+                   String(f.ingredient_id).toLowerCase().trim() === ingredientId.toLowerCase().trim();
         });
         
-        const equivalenceMultiplier = activeMapping ? parseFloat(activeMapping.units_per_purchase || 1.0) : 1.0;
-        const purchaseUom = activeMapping ? (activeMapping.purchase_uom || "Formato") : "Unidad";
+        const equivalenceMultiplier = activeMapping ? parseFloat(activeMapping.equivalencia || 1.0) : 1.0;
+        const purchaseUom = activeMapping ? (activeMapping.supplier_uom || "Unidad") : "Unidad";
         
         let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
-        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guard
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) boundary protection
 
-        let targetIngName = rawIngredientTextKey ? (rawIngredientTextKey.charAt(0).toUpperCase() + rawIngredientTextKey.slice(1)) : "Insumo de Emergencia";
+        let targetIngName = "Insumo de Emergencia";
         let targetRecipeUom = "unidad";
         
+        if (typeof masterNameToUuidMap !== "undefined") {
+            const foundKey = Object.keys(masterNameToUuidMap).find(k => String(masterNameToUuidMap[k]).toLowerCase() === ingredientId.toLowerCase());
+            if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
+        }
+        
         if (typeof LOCAL_STAGED_ROWS !== "undefined") {
-            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingredientId.toLowerCase() || String(r.ingredient_name).toLowerCase().trim() === rawIngredientTextKey.toLowerCase().trim());
+            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingredientId.toLowerCase());
             if (match) targetRecipeUom = match.recipe_uom || "unidad";
         }
 
-        console.log("✈Header POSTing transaction payload...");
+        console.log("✈️ Transmitting payload with native fields (supplier_uom, equivalencia)...");
         await fetch(`${API_URL}purchase_order_items`, {
             method: "POST",
             headers: headers,
@@ -2259,7 +2246,6 @@ async function executeEmergencyOrderAttachmentPipeline() {
             })
         });
 
-        // Insert neatly into frontend staging memory structure
         if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
             LOCAL_STAGED_ROWS.push({
                 ingredient_id: ingredientId,
