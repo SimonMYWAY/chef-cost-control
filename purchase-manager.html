@@ -2277,131 +2277,70 @@ function injectEmergencyManualOrderPanel(containerSelector) {
     populateEmergencyDropdowns();
 }
 
-// 🔄 AUXILIARY POOL ENGINE: POPULATES ACCORDION OPTIONS FROM MEMORY CACHES
+// 🔄 AUXILIARY LOADING ENGINE: POPULATES THE EMERGENCY SELECT SECTIONS (FIXED RAM LOOKUP)
 function populateEmergencyDropdowns() {
     const ingSelect = document.getElementById("em-select-ingredient");
     const provSelect = document.getElementById("em-select-provider");
+    
     if (!ingSelect || !provSelect) return;
-
-    // Utilize existing array caches present in your manager application profile context
-    const masterIngredients = (typeof GLOBAL_INGREDIENTS_CACHE !== "undefined") ? GLOBAL_INGREDIENTS_CACHE : [];
-    const mappingsSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
 
     ingSelect.innerHTML = "<option value=''>-- Seleccionar Insumo --</option>";
     provSelect.innerHTML = "<option value=''>-- Seleccionar Proveedor --</option>";
 
-    // Populate active items cleanly adhering to our is_active boolean constraint
-    masterIngredients.forEach(ing => {
-        if (ing.is_active !== false) {
-            let opt = document.createElement("option");
-            opt.value = ing.id;
-            opt.innerText = ing.name_es || ing.name || "Insumo Sin Nombre";
-            ingSelect.appendChild(opt);
-        }
-    });
+    // 1. POPULATE INGREDIENTS: Extract items dynamically from your active master name map!
+    if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap !== null) {
+        // Get all ingredient names from your system's active translation dictionary
+        const ingredientNames = Object.keys(masterNameToUuidMap).sort();
+        
+        ingredientNames.forEach(rawName => {
+            const uuid = masterNameToUuidMap[rawName];
+            if (uuid) {
+                let opt = document.createElement("option");
+                opt.value = uuid; // Pass the type-safe UUID to the backend
+                
+                // Capitalize first letter beautifully for the manager's UI view
+                opt.innerText = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                ingSelect.appendChild(opt);
+            }
+        });
+    }
 
-    // Extract unique suppliers dynamically from the active formats list
-    const uniqueProviders = [...new Set(mappingsSource.map(m => m.provider_name).filter(Boolean))].sort();
-    uniqueProviders.forEach(pName => {
-        let opt = document.createElement("option");
-        opt.value = pName;
-        opt.innerText = pName;
-        provSelect.appendChild(opt);
-    });
+    // 2. POPULATE PROVIDERS: Extract unique provider names directly from your active working rows
+    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
+        const providerSet = new Set();
+        
+        LOCAL_STAGED_ROWS.forEach(row => {
+            if (row.supplier_name && row.supplier_name !== "Proveedor No Asignado") {
+                providerSet.add(row.supplier_name.trim());
+            }
+        });
+
+        // Convert set back to a sorted clean array
+        const activeProviders = [...providerSet].sort();
+        activeProviders.forEach(pName => {
+            let opt = document.createElement("option");
+            opt.value = pName;
+            opt.innerText = pName;
+            provSelect.appendChild(opt);
+        });
+    }
 }
 
-// Dynamic info sub-label updating helper text
+// 💡 Update helper metadata function to adapt safely to name map keys
 function handleEmergencyIngredientChange() {
     const ingId = document.getElementById("em-select-ingredient").value;
     const helperDiv = document.getElementById("em-uom-helper");
     if (!helperDiv) return;
 
-    const masterIngredients = (typeof GLOBAL_INGREDIENTS_CACHE !== "undefined") ? GLOBAL_INGREDIENTS_CACHE : [];
-    const selected = masterIngredients.find(i => String(i.id) === ingId);
-    
-    if (selected) {
-        helperDiv.innerText = `💡 Unidad base del sistema configurada para recetas: "${selected.uom || 'unidades'}"`;
-    } else {
-        helperDiv.innerText = "";
-    }
-}
-
-// ⚡ CORE PIPELINE ENGINE: COMMITS AND INTERPOLATES MANUAL INSERTS IN REAL-TIME
-async function executeEmergencyOrderAttachmentPipeline() {
-    const ingredientId = document.getElementById("em-select-ingredient").value;
-    const providerName = document.getElementById("em-select-provider").value;
-    const purchaseQty = parseFloat(document.getElementById("em-input-qty").value) || 0;
-
-    if (!ingredientId || !providerName || purchaseQty <= 0) {
-        alert("⚠️ Por favor complete todos los campos con cantidades de compra válidas.");
-        return;
-    }
-
-    try {
-        console.log(`📡 Committing manual purchase allocation for: ${providerName}`);
-        const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
-
-        // 1. Resolve unit mapping multipliers from GLOBAL_SUPPLIER_FORMATS_LIST
-        const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
-        const activeMapping = formatSource.find(m => String(m.ingredient_id) === ingredientId && m.provider_name === providerName);
-        
-        const equivalenceMultiplier = activeMapping ? parseFloat(activeMapping.units_per_purchase || 1) : 1.0;
-        const purchaseUom = activeMapping ? (activeMapping.purchase_uom || "Formato") : "Unidad";
-        
-        // Convert format box count to basic standard recipe metrics
-        let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
-        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guard
-
-        // 2. Fetch parent identity details for the selected ingredient
-        const masterIngredients = (typeof GLOBAL_INGREDIENTS_CACHE !== "undefined") ? GLOBAL_INGREDIENTS_CACHE : [];
-        const targetIngredient = masterIngredients.find(i => String(i.id) === ingredientId) || {};
-
-        // 3. Post a clean transaction record directly to your purchase_order_items table
-        // (Assuming you hit RPC/endpoints or directly append rows, adapting to your schema logic layout)
-        console.log("✈️ Transmitting item record straight over the network...");
-        const postRes = await fetch(`${API_URL}purchase_order_items`, {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify({
-                ingredient_id: ingredientId,
-                pedido_sugerido: purchaseQty,
-                approved_formats_quantity: purchaseQty,
-                faltante_base: safetyFaltanteBase,
-                equivalencia: equivalenceMultiplier,
-                supplier_uom: purchaseUom,
-                is_approved: true,
-                created_at: new Date().toISOString()
-            })
-        });
-
-        // 4. THE LIVE STATE INTERPOLATION LOOP: 
-        // We push a perfectly structured object directly into LOCAL_STAGED_ROWS array in RAM 
-        // matching the exact column layout your supplier card template expects.
-        if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
-            LOCAL_STAGED_ROWS.push({
-                ingredient_id: ingredientId,
-                ingredient_name: targetIngredient.name_es || targetIngredient.name || "Insumo de Emergencia",
-                supplier_name: providerName,
-                pedido_sugerido: purchaseQty,
-                approved_formats_quantity: purchaseQty,
-                faltante_base: safetyFaltanteBase,
-                equivalencia: equivalenceMultiplier,
-                supplier_uom: purchaseUom,
-                recipe_uom: targetIngredient.uom || "unidad",
-                is_approved: true,
-                db_saved_status: "Pending" // Mount as mutable Pending order state
-            });
+    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
+        // Look if the item is already anywhere in your active rows to steal its UOM tag
+        const match = LOCAL_STAGED_ROWS.find(r => masterNameToUuidMap[String(r.ingredient_name).toLowerCase().trim()] === ingId);
+        if (match) {
+            helperDiv.innerText = `💡 Unidad base del sistema para este insumo: "${match.recipe_uom || 'unidad'}"`;
+            return;
         }
-
-        alert("🎯 ¡Insumo de emergencia registrado en la base de datos e insertado en la vista del panel con éxito!");
-
-        // 5. Trigger immediate UI redrawing to render the updated supplier card structure instantly
-        renderInteractiveManagerSpreadsheetGrid();
-
-    } catch (err) {
-        console.error("Emergency pipeline execution halted:", err);
-        alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
+    helperDiv.innerText = "";
 }
 
     </script>
