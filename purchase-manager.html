@@ -2111,7 +2111,12 @@ setInterval(executeLivePurchaseSuspensionAuditSweep, 15000);
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "visible") executeLivePurchaseSuspensionAuditSweep();
 });
-// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS (PART 1 - DIRECT SUPABASE LOOKUP)
+
+// =======================================================================
+// 🚨 UNIFIED MODULE: EMERGENCY MANUAL PURCHASE ENGINE (PART 1 OF 2)
+// =======================================================================
+
+// 1️⃣ UI INJECTOR: Mounts the clean panel frame into your workspace container
 function injectEmergencyManualOrderPanel(containerSelector) {
     if (document.getElementById("emergency-manual-order-panel")) return;
 
@@ -2126,114 +2131,153 @@ function injectEmergencyManualOrderPanel(containerSelector) {
         <h4 style="margin: 0 0 10px 0; color: #d97706; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 700;">
             ⚠️ Añadir Insumo de Emergencia / Compra Manual
         </h4>
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
-            <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">1. Seleccionar Insumo:</label>
-                <select id="em-select-ingredient" onchange="handleEmergencySelectionChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="max-width: 400px;">
+                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">1. Seleccionar Insumo del Catálogo:</label>
+                <select id="em-select-ingredient" onchange="renderAvailableSupplierFormatsForIngredient()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
             </div>
-            <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">2. Proveedor Asignado:</label>
-                <select id="em-select-provider" onchange="handleEmergencySelectionChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
+            
+            <!-- Dynamic Format Selection Radio List Grid -->
+            <div id="em-formats-matrix-area" style="margin-top: 5px; display: none;">
+                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:6px; color: var(--text-main);">2. Seleccionar Formato Autorizado por Proveedor:</label>
+                <div id="em-formats-radio-list" style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-main); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color, #cbd5e1);"></div>
             </div>
-            <div style="flex: 1; min-width: 140px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">3. Cantidad a Comprar:</label>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <input type="number" id="em-input-qty" min="1" step="1" value="1" style="width:70px; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem; font-weight: 600; text-align: center;">
-                    <span id="em-purchase-uom-badge" style="padding: 8px 12px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-weight: 700; font-size: 0.8rem; border: 1px solid #bae6fd; min-width: 50px; text-align: center;">--</span>
+
+            <!-- Quantitative Action Submission Cluster -->
+            <div id="em-quantity-action-area" style="display: none; align-items: flex-end; gap: 12px; margin-top: 5px;">
+                <div>
+                    <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">3. Cantidad en el Formato elegido:</label>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <input type="number" id="em-input-qty" min="1" step="1" value="1" style="width:80px; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem; font-weight: 600; text-align: center;">
+                        <span id="em-active-format-uom-label" style="font-weight: 700; font-size: 0.85rem; color: var(--primary);">unidades</span>
+                    </div>
+                </div>
+                <div>
+                    <button onclick="executeEmergencyOrderAttachmentPipeline()" style="padding: 9px 20px; background:#d97706; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
+                        ➕ Insertar a PO de Proveedor
+                    </button>
                 </div>
             </div>
-            <div style="flex: 1; min-width: 140px;">
-                <button onclick="executeEmergencyOrderAttachmentPipeline()" style="width:100%; padding:9px; background:#d97706; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
-                    ➕ Insertar a PO
-                </button>
-            </div>
         </div>
-        <div id="em-uom-helper" style="font-size: 0.75rem; color: #64748b; margin-top: 8px; font-style: italic;"></div>
     `;
     
     target.prepend(panel);
     populateEmergencyDropdowns();
 }
 
-// 🔄 LIVE SUPABASE QUERY ENGINE: Fetches conversion rules directly from the cloud on change
-async function handleEmergencySelectionChange() {
-    const ingId = document.getElementById("em-select-ingredient").value;
-    const providerName = document.getElementById("em-select-provider").value;
-    const uomBadge = document.getElementById("em-purchase-uom-badge");
-    const helperDiv = document.getElementById("em-uom-helper");
+// 2️⃣ DROPDOWN LOADER: Hydrates selection fields from your active memory translation maps
+function populateEmergencyDropdowns() {
+    const ingSelect = document.getElementById("em-select-ingredient");
+    if (!ingSelect) return;
 
-    if (!uomBadge || !helperDiv) return;
-    if (!ingId || !providerName) { uomBadge.innerText = "--"; helperDiv.innerHTML = ""; return; }
+    ingSelect.innerHTML = "<option value=''>-- Seleccionar Insumo --</option>";
 
-    try {
-        uomBadge.innerText = "⏳";
+    if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap !== null) {
+        const ingredientNames = Object.keys(masterNameToUuidMap).sort();
         
-        // 📡 Querying recipe ingredients metadata tables directly from Supabase via PostgREST REST API
-        const formatUrl = `${API_URL}recipe_ingredients?ingredient_id=eq.${ingId}&provider_name=eq.${encodeURIComponent(providerName)}&select=*`;
-        const res = await fetch(formatUrl, { headers: { "apikey": API_KEY } });
-        const formatRecords = await res.json();
-
-        // Fallback checks to discover column variations natively from returned keys
-        if (Array.isArray(formatRecords) && formatRecords.length > 0) {
-            const rule = formatRecords[0];
-            
-            // Auto-detect columns whether named supplier_uom, purchase_uom, equivalencia or units_per_purchase
-            const detectedUom = rule.supplier_uom || rule.purchase_uom || rule.purchase_unit || "Unidad";
-            const detectedMultiplier = parseFloat(rule.equivalencia || rule.units_per_purchase || rule.multiplier || 1.0);
-
-            uomBadge.innerText = detectedUom;
-            uomBadge.dataset.multiplier = detectedMultiplier; // Temporarily lock multiplier onto DOM node dataset
-            uomBadge.dataset.uom = detectedUom;
-
-            helperDiv.innerHTML = `⚙️ <b>Supabase Cloud Rule:</b> 1x ${detectedUom} = <b>${detectedMultiplier.toFixed(2)} unidades</b> netas en cocina.`;
-        } else {
-            // Default baseline if combination isn't explicitly configured in table registers
-            uomBadge.innerText = "Unidad";
-            uomBadge.dataset.multiplier = "1.0";
-            uomBadge.dataset.uom = "Unidad";
-            helperDiv.innerHTML = `⚠️ No hay formato específico en la base de datos para este proveedor. Equivalencia básica 1 a 1.`;
-        }
-    } catch (err) {
-        console.error("Supabase format fetch failed:", err);
-        uomBadge.innerText = "Error";
+        ingredientNames.forEach(rawName => {
+            const uuid = masterNameToUuidMap[rawName];
+            if (uuid) {
+                let opt = document.createElement("option");
+                opt.value = uuid;
+                opt.innerText = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                ingSelect.appendChild(opt);
+            }
+        });
     }
 }
-// ⚡ DIRECT SUPABASE PIPE: COMMITS CONVERTED QUANTITY AND REDRAWS THE MANAGER PORTAL
-async function executeEmergencyOrderAttachmentPipeline() {
-    const ingredientId = document.getElementById("em-select-ingredient").value;
-    const providerName = document.getElementById("em-select-provider").value;
-    const purchaseQty = parseFloat(document.getElementById("em-input-qty").value) || 0;
-    const uomBadge = document.getElementById("em-purchase-uom-badge");
 
-    if (!ingredientId || !providerName || purchaseQty <= 0) {
-        alert("⚠️ Por favor complete todos los campos con cantidades válidas.");
+// 3️⃣ MATRIX GENERATOR LOOP: Displays exact formatting layouts configured for the chosen ingredient
+function renderAvailableSupplierFormatsForIngredient() {
+    const ingId = document.getElementById("em-select-ingredient").value;
+    const matrixArea = document.getElementById("em-formats-matrix-area");
+    const radioList = document.getElementById("em-formats-radio-list");
+    const actionArea = document.getElementById("em-quantity-action-area");
+
+    if (!matrixArea || !radioList || !actionArea) return;
+
+    if (!ingId) {
+        matrixArea.style.display = "none";
+        actionArea.style.display = "none";
         return;
     }
+
+    const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
+    const structuralMatches = formatSource.filter(f => String(f.ingredient_id).toLowerCase().trim() === ingId.toLowerCase().trim());
+
+    radioList.innerHTML = "";
+
+    if (structuralMatches.length === 0) {
+        radioList.innerHTML = `<div style="font-size:0.8rem; color:#ef4444; font-style:italic;">⚠️ Este insumo no tiene formatos de proveedor configurados en Supabase.</div>`;
+        matrixArea.style.display = "block";
+        actionArea.style.display = "none";
+        return;
+    }
+
+    structuralMatches.forEach((fmt, index) => {
+        const pName = fmt.provider_name || "Proveedor No Asignado";
+        const fUom = fmt.supplier_uom || "Unidad";
+        const factor = parseFloat(fmt.equivalencia || 1.0);
+
+        let baseUom = "unidad";
+        if (typeof LOCAL_STAGED_ROWS !== "undefined") {
+            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingId.toLowerCase());
+            if (match) baseUom = match.recipe_uom || "unidad";
+        }
+
+        const rowLabel = document.createElement("label");
+        rowLabel.style.cssText = "display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); cursor: pointer; background: var(--bg-surface); font-size: 0.85rem;";
+        
+        rowLabel.innerHTML = `
+            <input type="radio" name="em_active_format_selection" value="${index}" data-provider="${pName}" data-uom="${fUom}" data-factor="${factor}" data-recipeuom="${baseUom}" ${index === 0 ? "checked" : ""} onchange="document.getElementById('em-active-format-uom-label').innerText = '${fUom}'">
+            <div>
+                🏢 Proveedor: <b>${pName}</b> | Formato Compra: <span style="color:var(--primary); font-weight:700;">${fUom}</span> 
+                <span style="color:#64748b; font-size:0.75rem; font-style:italic;">(1x = ${factor.toFixed(2)} ${baseUom})</span>
+            </div>
+        `;
+        radioList.appendChild(rowLabel);
+    });
+
+    matrixArea.style.display = "block";
+    actionArea.style.display = "flex";
+    
+    const initialChecked = radioList.querySelector("input[type='radio']:checked");
+    if (initialChecked) document.getElementById("em-active-format-uom-label").innerText = initialChecked.dataset.uom;
+}
+// =======================================================================
+// 🚨 UNIFIED MODULE: EMERGENCY MANUAL PURCHASE ENGINE (PART 2 OF 2)
+// =======================================================================
+
+// 4️⃣ TRANSACTION PIPELINE: Performs conversion calculations and updates the display grid in real-time
+async function executeEmergencyOrderAttachmentPipeline() {
+    const ingredientId = document.getElementById("em-select-ingredient").value;
+    const selectedRadio = document.querySelector("input[name='em_active_format_selection']:checked");
+    const purchaseQty = parseFloat(document.getElementById("em-input-qty").value) || 0;
+
+    if (!ingredientId || !selectedRadio || purchaseQty <= 0) {
+        alert("⚠️ Por favor complete la selección y especifique una cantidad válida.");
+        return;
+    }
+
+    const providerName = selectedRadio.dataset.provider;
+    const purchaseUom = selectedRadio.dataset.uom;
+    const equivalenceMultiplier = parseFloat(selectedRadio.dataset.factor) || 1.0;
+    const targetRecipeUom = selectedRadio.dataset.recipeuom || "unidad";
 
     try {
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
 
-        // Read conversion multipliers directly from the secure live DOM dataset locked by Part 1
-        const equivalenceMultiplier = parseFloat(uomBadge.dataset.multiplier) || 1.0;
-        const purchaseUom = uomBadge.dataset.uom || "Unidad";
-        
-        // Transform the box/format count into the type-safe NUMERIC(10,4) base standard recipe metrics
+        // Convert the entered pack count to standard recipe weight units
         let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
-        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; 
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guardrail
 
         let targetIngName = "Insumo de Emergencia";
-        let targetRecipeUom = "unidad";
-        
         if (typeof masterNameToUuidMap !== "undefined") {
             const foundKey = Object.keys(masterNameToUuidMap).find(k => String(masterNameToUuidMap[k]).toLowerCase() === ingredientId.toLowerCase());
             if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
         }
-        if (typeof LOCAL_STAGED_ROWS !== "undefined" && LOCAL_STAGED_ROWS.length > 0) {
-            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingredientId.toLowerCase());
-            if (match) targetRecipeUom = match.recipe_uom || "unidad";
-        }
 
-        console.log("✈️ Transmitting item record straight over the network...");
+        console.log("✈️ Transmitting item record straight to Supabase database registers...");
         await fetch(`${API_URL}purchase_order_items`, {
             method: "POST",
             headers: headers,
@@ -2249,7 +2293,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
             })
         });
 
-        // Insert item cleanly into frontend staging matrix array to trigger instant display update
+        // Inject the newly formatted row straight into live frontend RAM storage
         if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
             LOCAL_STAGED_ROWS.push({
                 ingredient_id: ingredientId,
@@ -2262,126 +2306,19 @@ async function executeEmergencyOrderAttachmentPipeline() {
                 supplier_uom: purchaseUom,
                 recipe_uom: targetRecipeUom,
                 is_approved: true,
-                db_saved_status: "Pending" 
+                db_saved_status: "Pending"
             });
         }
 
-        alert(`🎯 ¡Registrado con éxito! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel.`);
+        alert(`🎯 ¡Registrado con éxito! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel de ${providerName}.`);
         
-        // Redraw grid workspace view layout instantly
+        // Trigger immediate visual layout grid re-render
         renderInteractiveManagerSpreadsheetGrid();
 
     } catch (err) {
         console.error("Emergency pipeline execution crash:", err);
-        alert("❌ Error crítico al insertar la orden manual: " + err.message);
+        alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
-}
-
-// 🚨 INTERFACE TOOL: INJECTS EMERGENCY PURCHASE ACCORDION TRAYS
-function injectEmergencyManualOrderPanel(containerSelector) {
-    if (document.getElementById("emergency-manual-order-panel")) return;
-
-    const target = document.querySelector(containerSelector);
-    if (!target) return;
-
-    const panel = document.createElement("div");
-    panel.id = "emergency-manual-order-panel";
-    panel.style.cssText = "background: var(--bg-surface, #ffffff); border: 2px dashed #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: left; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);";
-    
-    panel.innerHTML = `
-        <h4 style="margin: 0 0 10px 0; color: #d97706; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 700;">
-            ⚠️ Añadir Insumo de Emergencia / Compra Manual
-        </h4>
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
-            <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">1. Seleccionar Insumo:</label>
-                <select id="em-select-ingredient" onchange="handleEmergencyIngredientChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
-            </div>
-            <div style="flex: 2; min-width: 200px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">2. Proveedor Asignado:</label>
-                <select id="em-select-provider" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
-            </div>
-            <div style="flex: 1; min-width: 100px;">
-                <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">3. Cantidad Formato:</label>
-                <input type="number" id="em-input-qty" min="0.01" step="0.01" value="1" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem; font-weight: 600;">
-            </div>
-            <div style="flex: 1; min-width: 140px;">
-                <button onclick="executeEmergencyOrderAttachmentPipeline()" style="width:100%; padding:9px; background:#d97706; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
-                    ➕ Insertar a PO
-                </button>
-            </div>
-        </div>
-        <div id="em-uom-helper" style="font-size: 0.75rem; color: #64748b; margin-top: 6px; font-style: italic;"></div>
-    `;
-    
-    target.prepend(panel);
-    populateEmergencyDropdowns();
-}
-
-// 🔄 AUXILIARY LOADING ENGINE: POPULATES THE EMERGENCY SELECT SECTIONS (FIXED RAM LOOKUP)
-function populateEmergencyDropdowns() {
-    const ingSelect = document.getElementById("em-select-ingredient");
-    const provSelect = document.getElementById("em-select-provider");
-    
-    if (!ingSelect || !provSelect) return;
-
-    ingSelect.innerHTML = "<option value=''>-- Seleccionar Insumo --</option>";
-    provSelect.innerHTML = "<option value=''>-- Seleccionar Proveedor --</option>";
-
-    // 1. POPULATE INGREDIENTS: Extract items dynamically from your active master name map!
-    if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap !== null) {
-        // Get all ingredient names from your system's active translation dictionary
-        const ingredientNames = Object.keys(masterNameToUuidMap).sort();
-        
-        ingredientNames.forEach(rawName => {
-            const uuid = masterNameToUuidMap[rawName];
-            if (uuid) {
-                let opt = document.createElement("option");
-                opt.value = uuid; // Pass the type-safe UUID to the backend
-                
-                // Capitalize first letter beautifully for the manager's UI view
-                opt.innerText = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-                ingSelect.appendChild(opt);
-            }
-        });
-    }
-
-    // 2. POPULATE PROVIDERS: Extract unique provider names directly from your active working rows
-    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
-        const providerSet = new Set();
-        
-        LOCAL_STAGED_ROWS.forEach(row => {
-            if (row.supplier_name && row.supplier_name !== "Proveedor No Asignado") {
-                providerSet.add(row.supplier_name.trim());
-            }
-        });
-
-        // Convert set back to a sorted clean array
-        const activeProviders = [...providerSet].sort();
-        activeProviders.forEach(pName => {
-            let opt = document.createElement("option");
-            opt.value = pName;
-            opt.innerText = pName;
-            provSelect.appendChild(opt);
-        });
-    }
-}
-
-// 💡 Update helper metadata function to adapt safely to name map keys
-function handleEmergencyIngredientChange() {
-    const ingId = document.getElementById("em-select-ingredient").value;
-    const helperDiv = document.getElementById("em-uom-helper");
-    if (!helperDiv) return;
-
-    if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
-        // Look if the item is already anywhere in your active rows to steal its UOM tag
-        const match = LOCAL_STAGED_ROWS.find(r => masterNameToUuidMap[String(r.ingredient_name).toLowerCase().trim()] === ingId);
-        if (match) {
-            helperDiv.innerText = `💡 Unidad base del sistema para este insumo: "${match.recipe_uom || 'unidad'}"`;
-            return;
-        }
-    }
-    helperDiv.innerText = "";
 }
 
     </script>
