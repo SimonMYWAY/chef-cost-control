@@ -1770,7 +1770,7 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
             reader.readAsText(file);
         }
 
-// 📊 INTEGRATED VARIANCE ENGINE (REPAIRED RECURSION MATRIX - PART 1)
+// 📊 INTEGRATED VARIANCE ENGINE (LIVE RECEIVING APP INTEGRATION - PART 1 OF 3)
 async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
     var theoreticalUsage = {}; 
     var unmatchedSalesCount = 0;
@@ -1797,8 +1797,6 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             continue;
         }
         
-        // 🛡️ REPAIRED CONCURRENT STACK QUEUE: 
-        // We accumulate the definitive composite multiplier directly onto the recursive stack frame
         var componentQueue = [{ recipeId: String(matchedRecipe.id).toLowerCase(), currentCumulativeMultiplier: qtySold }];
         
         while (componentQueue.length > 0) {
@@ -1818,26 +1816,19 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 var scrapPct = parseFloat(c.scrap_percentage || 0);
                 var wasteFactor = 1 + (scrapPct / 100);
                 
-                // 📊 THE CORE FIX: Scaled quantity is portion requirement normalized by parent yield * composite multiplier * current tier waste
                 var totalTheoreticalQtyNeeded = (qtyNeededPerYield / recipeYieldServings) * currentMult * wasteFactor;
                 
-                // Protect numeric boundary variables against javascript float runaways
-                if (totalTheoreticalQtyNeeded > 999999.9999) {
-                    totalTheoreticalQtyNeeded = 999999.9999;
-                }
+                if (totalTheoreticalQtyNeeded > 999999.9999) totalTheoreticalQtyNeeded = 999999.9999;
 
-                // If the component is another recipe (Tier 2/Sub-recipe), push it back to queue with its scaled base multiplier
                 if (recMapById[componentId]) {
                     componentQueue.push({ 
                         recipeId: componentId, 
-                        // The sub-recipe inherits the raw scaled proportion value to cascade downstream
                         currentCumulativeMultiplier: (qtyNeededPerYield / recipeYieldServings) * currentMult 
                     });
                 } else {
-                    // It's a fundamental base raw material ingredient
                     var baseIng = ingMap[componentId];
                     if (baseIng) {
-                        var unitPrice = parseFloat(baseIng.std_cost_per_unit || baseIng.cost) || 0;
+                        var unitPrice = parseFloat(baseIng.std_cost_per_unit || baseIng.cost || 0);
                         var totalLineCost = totalTheoreticalQtyNeeded * unitPrice;
                         
                         if (!theoreticalUsage[componentId]) {
@@ -1847,7 +1838,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                                 unit: baseIng.uom || "N/A",
                                 theoreticalQty: 0,
                                 theoreticalCost: 0,
-                                actualQty: 0,
+                                actualQtyConverted: 0, // Tracked strictly in Standard Recipe UOM
                                 actualCost: 0
                             };
                         }
@@ -1859,6 +1850,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             });
         }
     }
+
     // Check if 100% of the products in the file were skipped/deleted upfront
     var itemsArray = [];
     for (var key in theoreticalUsage) { itemsArray.push(theoreticalUsage[key]); }
@@ -1867,13 +1859,12 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             "<div class='card' style='margin-top:20px; text-align:center; background-color:var(--bg-surface); border:1px solid #ef4444; border-radius:6px; padding:20px;'> " +
                 "<div style='font-size:2rem; margin-bottom:10px;'>⚠️</div> " +
                 "<h4 style='color:#ef4444; margin-bottom:8px;'>No se encontraron recetas activas</h4> " +
-                "<p style='color:var(--text-muted); font-size:0.9rem; max-width:450px; margin:0 auto;'>El archivo de ventas seleccionado no contiene ningún producto que coincida con tus recetas actuales vigentes.</p> " +
             "</div>";
         return;
     }
 
     try {
-        // 2. 🌐 NETWORK INVOICE INTEGRATOR LAYER: Fetch live delivery records from invoice_items table
+        // 2. 🌐 LIVE CONNECTIVITY MATRIX: Fetch real data strings logged by the Receiving App
         var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
         var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
         var realPurchasedLines = await invoiceRes.json();
@@ -1885,8 +1876,12 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 if (!line.ingredient_id) return;
                 var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
                 
-                var purchasedQty = parseFloat(line.actual_quantity_purchased) || 0;
-                var purchasedCost = parseFloat(line.actual_total_cost) || 0;
+                var rawPurchasedQty = parseFloat(line.actual_quantity_purchased || 0);
+                var lineMultiplierFactor = parseFloat(line.equivalencia || 1.0);
+                var purchasedCost = parseFloat(line.actual_total_cost || 0);
+                
+                // ⚡ DYNAMIC ALIGNMENT ENGINE: Convert to Standard UOM line-by-line using individual receipt multipliers
+                var standardQtyConvertedValue = rawPurchasedQty * lineMultiplierFactor;
                 
                 totalRealInvoiceSpending += purchasedCost;
                 
@@ -1898,16 +1893,15 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                         unit: dbIng ? (dbIng.uom || "N/A") : "N/A",
                         theoreticalQty: 0,
                         theoreticalCost: 0,
-                        actualQty: 0,
+                        actualQtyConverted: 0,
                         actualCost: 0
                     };
                 }
                 
-                theoreticalUsage[cleanIngId].actualQty += purchasedQty;
+                theoreticalUsage[cleanIngId].actualQtyConverted += standardQtyConvertedValue;
                 theoreticalUsage[cleanIngId].actualCost += purchasedCost;
             });
         }
-
         // Re-compile working data arrays to calculate side-by-side variances
         itemsArray = [];
         for (var k in theoreticalUsage) { itemsArray.push(theoreticalUsage[k]); }
@@ -1920,8 +1914,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
 
         var html = "<div class='card' style='margin-top:20px; text-align:left; background-color:var(--bg-surface); border:1px solid var(--border-color);'>" +
                    "<h4>Balance de Desviaciones de Costo (" + dateFrom + " al " + dateTo + ")</h4>" +
-            
-                  
+                   
                    "<div style='display:flex; gap:15px; margin: 15px 0;'>" +
                        "<div style='flex:1; padding:12px; background-color:rgba(0,122,251,0.05); border-left:4px solid #007afb; border-radius:4px;'>" +
                            "<div style='font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted);'>Costo Teórico (Ventas)</div>" +
@@ -1942,6 +1935,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                         "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV de ventas porque no están registrados en el catálogo maestro." +
                     "</div>";
         }
+        
         html += "<div style='overflow-x:auto;'><table style='width:100%; border-collapse:collapse; margin-top:10px; font-size:0.85rem;'>" +
                     "<thead>" +
                         "<tr style='border-bottom:2px solid var(--border-color); color:var(--text-main); font-weight:700; background-color:var(--bg-main);'>" +
@@ -1965,25 +1959,17 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 stdCost = item.theoreticalCost / item.theoreticalQty;
             }
             
-            var recipeUOM = String(item.unit || "gr").toLowerCase().trim();
-            var realQtyConvertedToRecipeUOM = item.actualQty; 
-            var invoiceUnitStringLabel = recipeUOM; 
+            // 🛡️ Both elements are already strictly mapped to Standard Recipe UOM
+            var realQtyInRecipeUOM = item.actualQtyConverted; 
             
-            if (recipeUOM === "oz") {
-                realQtyConvertedToRecipeUOM = item.actualQty * 16; 
-                invoiceUnitStringLabel = "lb";
-            } else if (recipeUOM === "gr" || recipeUOM === "g") {
-                realQtyConvertedToRecipeUOM = item.actualQty * 1000;
-                invoiceUnitStringLabel = "kg";
-            } else if (recipeUOM === "ml") {
-                realQtyConvertedToRecipeUOM = item.actualQty * 1000;
-                invoiceUnitStringLabel = "L";
-            }
+            // Calculate real unit cost paid per standard unit (e.g. real cost paid per ounce)
+            var realUnitCost = realQtyInRecipeUOM > 0 ? (item.actualCost / realQtyInRecipeUOM) : stdCost;
             
-            var realUnitCost = realQtyConvertedToRecipeUOM > 0 ? (item.actualCost / realQtyConvertedToRecipeUOM) : stdCost;
+            // Efficiency Variance = (Theoretical Qty - Real Qty received in Standard UOM) * Standard Cost
+            var qtyVarianceFinancial = (item.theoreticalQty - realQtyInRecipeUOM) * stdCost;
             
-            var qtyVarianceFinancial = (item.theoreticalQty - realQtyConvertedToRecipeUOM) * stdCost;
-            var priceVarianceFinancial = (stdCost - realUnitCost) * realQtyConvertedToRecipeUOM;
+            // Price Variance = (Standard Cost - Real Cost paid per Standard UOM) * Real Qty received in Standard UOM
+            var priceVarianceFinancial = (stdCost - realUnitCost) * realQtyInRecipeUOM;
             var totalVarianceFinancial = qtyVarianceFinancial + priceVarianceFinancial;
 
             var qtyColor = qtyVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
@@ -1997,11 +1983,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             var totalColor = totalVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
             var totalText = totalVarianceFinancial >= -0.01 ? "+$" + Math.abs(totalVarianceFinancial).toFixed(2) : "-$" + Math.abs(totalVarianceFinancial).toFixed(2);
             if (Math.abs(totalVarianceFinancial) < 0.01) { totalText = "$0.00"; totalColor = "var(--text-main)"; }
-
-            var purchasesDisplayString = realQtyConvertedToRecipeUOM.toFixed(2);
-            if (item.actualQty > 0 && recipeUOM !== invoiceUnitStringLabel) {
-                purchasesDisplayString += " <span style='color:#6b7280; font-size:0.75rem; font-weight:normal;'>(" + item.actualQty.toFixed(2) + " " + invoiceUnitStringLabel + ")</span>";
-            }
+            var purchasesDisplayString = realQtyInRecipeUOM.toFixed(2);
 
             html += "<tr style='border-bottom:1px solid var(--border-color); color:var(--text-main);' onmouseover=\"this.style.backgroundColor='var(--bg-main)'\" onmouseout=\"this.style.backgroundColor='transparent'\">" +
                         "<td style='padding:10px; font-weight:600;'>" + item.name + "</td>" +
@@ -2016,8 +1998,11 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
         
         html += "</tbody></table></div></div>";
         resultsContainer.innerHTML = html;
-        // Hook this line at the absolute bottom of your existing rendering engine to fire the button injector:
-injectVarianceExcelExportButton();
+        
+        // Triggers the automated Excel/CSV file generation button underneath the KPI block
+        if (typeof injectVarianceExcelExportButton === "function") {
+            injectVarianceExcelExportButton();
+        }
 
     } catch (err) {
         console.error("Integrated variance processing module failure:", err);
