@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5 - SECURE AUDIT LOGGED]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5 - REPAIRED DISK MATRIX]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -408,19 +408,23 @@ async function processIncomingDelivery(orderId) {
 
     try {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
-        const updateItemPromises = [];
+        const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
         
         // ✨ THE FIX: Download the master ingredients mapping dictionary on demand to match string names to true UUID codes
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-               // 🛡️ STEP 1: Process child rows sequentially
+        // Define precise local reception date tracking signature (YYYY-MM-DD)
+        const currentReceptionDateText = new Date().toISOString().split('T')[0];
+
+        // 🛡️ STEP 1: Process child rows sequentially
         for (let input of itemInputs) {
             const itemId = input.getAttribute("data-item-id");
             const ingTextName = input.getAttribute("data-ing-name"); 
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
+            const supplierUomString = input.getAttribute("data-uom") || "Unidad"; // Sourced from card properties
 
             // 🎯 NEW COST CAPTURE: Locate the matching cost input for this specific line item row
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
@@ -431,7 +435,7 @@ async function processIncomingDelivery(orderId) {
             // A. Instantly save BOTH custom delivered quantity AND absolute line total cost to the row entry logs
             const itemPatchRes = await fetch(API_URL + "purchase_order_items?id=eq." + itemId, {
                 method: "PATCH",
-                headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
+                headers: headers,
                 body: JSON.stringify({ 
                     quantity_delivered: deliveredQty,
                     line_total_cost: enteredLineTotalCost // 🪙 SAVES RAW INVOICE TOTAL
@@ -439,65 +443,66 @@ async function processIncomingDelivery(orderId) {
             });
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
 
-            // ... (Your existing, verified theoretical stock inventory updates continue beneath this line)
+            // Find matching ingredient item from master repository cache strings to secure true tracking IDs
+            const matchedIngredient = masterIngredients.find(function(i) {
+                const dbNameClean = String(i.name_es || "").toLowerCase().trim();
+                const itemNameClean = String(ingTextName || "").toLowerCase().trim();
+                return dbNameClean === itemNameClean;
+            });
 
+            const ingUuid = matchedIngredient ? matchedIngredient.id : null;
 
-            // B. 🌟 SEQUENTIAL THEORETICAL STOCK ADJUSTMENT: Run stock calculation if a variation is logged
-            if (deliveredQty !== orderedQty && ingTextName) {
-                const packagesDifference = deliveredQty - orderedQty; // Negative value if short-shipped (e.g., 8 - 10 = -2)
-                const recipeUnitsDifference = packagesDifference * equivalenceMultiplier; // Transforms to baseline unit scales (Kg/Lts/Uds)
-
-                // Locate the matching ingredient row in the master catalog using a clean text comparison
-                const matchedIngredient = masterIngredients.find(function(i) {
-                    const dbNameClean = String(i.name_es || "").toLowerCase().trim();
-                    const itemNameClean = String(ingTextName).toLowerCase().trim();
-                    return dbNameClean === itemNameClean;
+            // =======================================================================
+            // 🌟 NEW CLOUD ENGINE INJECTION: WRITE TO INVOICE_ITEMS ANALYTICS TABLE
+            // =======================================================================
+            if (ingUuid && deliveredQty > 0) {
+                console.log(`✈️ Dispatching permanent analytics logging payload to invoice_items for: ${ingTextName}`);
+                const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({
+                        po_id: orderId,
+                        ingredient_id: ingUuid,
+                        invoice_number: invoiceNum,
+                        invoice_date: currentReceptionDateText, // Enforces active reception date entry lock
+                        actual_quantity_purchased: deliveredQty, // Count in wholesale formats (e.g. 2 boxes)
+                        actual_total_cost: enteredLineTotalCost,   // Total currency amount on invoice
+                        equivalencia: equivalenceMultiplier,      // Dynamic format transformation rate
+                        supplier_uom: supplierUomString
+                    })
                 });
-
-                if (matchedIngredient) {
-                    const ingUuid = matchedIngredient.id;
-                    const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
-                    
-                    // 🧮 ROCK-SOLID THEORETICAL INVENTORY CORRECTION:
-                    const updatedNewStockTarget = currentStdInventory + recipeUnitsDifference;
-
-                    console.log(`⚖️ Discrepancy caught! Insumo: ${ingTextName} (UUID: ${ingUuid}), Old std_inventory: ${currentStdInventory}, New std_inventory: ${updatedNewStockTarget}`);
-
-                    const inventoryPatchRes = await fetch(API_URL + "ingredients?id=eq." + ingUuid, {
-                        method: "PATCH",
-                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                        body: JSON.stringify({ std_inventory: updatedNewStockTarget })
-                    });
-                    
-                    if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
-                } else {
-                    console.warn(`⚠️ Warning: No matching row found in ingredients catalog for name description text: ${ingTextName}`);
-                }
+                if (!invoiceItemPostRes.ok) console.error(`⚠️ Fail-silent: Failed to push analytical line logging row for item ID ${itemId}`);
             }
-        }
+            // =======================================================================
 
-        // 🛡️ STEP 2: Overwrite the Master Parent Purchase Order Document Header state parameters
-        console.log(`📝 Finalizing order state transformation to: received by ${activeGuardUsername}...`);
-        const orderPatchResponse = await fetch(API_URL + "purchase_orders?id=eq." + orderId, {
-            method: "PATCH",
-            headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                status: "received",
-                invoice_number: invoiceNum,
-                received_at: new Date().toISOString(),
-                // ✨ THE LOG INTEGRATION: Writes the exact guard profile string down to your new database column row!
-                received_by_user: activeGuardUsername
-            })
-        });
+            // B. 🧮 UNIFIED PHYSICAL STOCK INCREMENT REGISTRATION: Updates inventory natively on ALL arrivals!
+            if (ingUuid && deliveredQty > 0) {
+                // Calculate physical units introduced to facilities (Boxes ordered * multiplier factor = standard metric count)
+                const standardKitchenUnitsIntroduced = deliveredQty * equivalenceMultiplier;
 
-        if (!orderPatchResponse.ok) throw new Error("Error al modificar el estado general de la Orden de Compra.");
+                // Protect numeric properties values from sliding into floats overflows
+                let safetyUnitsAmount = standardKitchenUnitsIntroduced;
+                if (safetyUnitsAmount > 999999.9999) safetyUnitsAmount = 999999.9999;
 
-        // 🌟 STEP 3: SMOOTH EXIT INTERFACE TRANSITION ANIMATION
-        if (cardNode) {
-            cardNode.style.opacity = "0";
-            cardNode.style.transform = "scale(0.8) translateY(-40px)";
-            cardNode.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-            await new Promise(r => setTimeout(r, 400));
+                const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
+                const updatedNewStockTarget = currentStdInventory + safetyUnitsAmount;
+
+                // Enforce project NUMERIC(10,4) safety ceilings guards
+                let finalSafeStock = updatedNewStockTarget;
+                if (finalSafeStock > 999999.9999) finalSafeStock = 999999.9999;
+
+                console.log(`⚖️ Stock adjustment active: ${ingTextName}, Pre-arrival: ${currentStdInventory}, Post-arrival: ${finalSafeStock}`);
+
+                const inventoryPatchRes = await fetch(API_URL + "ingredients?id=eq." + ingUuid, {
+                    method: "PATCH",
+                    headers: headers,
+                    body: JSON.stringify({ std_inventory: finalSafeStock })
+                });
+                
+                if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
+            } else if (!ingUuid && ingTextName) {
+                console.warn(`⚠️ Warning: No matching row found in ingredients catalog for name description text: ${ingTextName}`);
+            }
         }
 
         alert("✅ ¡Recepción procesada exitosamente! Bitácoras e inventarios teóricos calibrados con precisión en Supabase.");
