@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [SECTION 5 - REPAIRED DISK MATRIX]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [REPAIRED STACK MATRIX]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -410,11 +410,11 @@ async function processIncomingDelivery(orderId) {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
         
-        // ✨ THE FIX: Download the master ingredients mapping dictionary on demand to match string names to true UUID codes
+        // Fetch full data parameters from Supabase in parallel
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-        // Define precise local reception date tracking signature (YYYY-MM-DD)
+        // 🎯 THE CORE STRUCTURAL FIX: Extract purely index zero string from the split matrix array! ("YYYY-MM-DD")
         const currentReceptionDateText = new Date().toISOString().split('T')[0];
 
         // 🛡️ STEP 1: Process child rows sequentially
@@ -424,9 +424,11 @@ async function processIncomingDelivery(orderId) {
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
-            const supplierUomString = input.getAttribute("data-uom") || "Unidad"; // Sourced from card properties
+            
+            // Safe-guard layout lookup attributes case differences
+            const supplierUomString = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad"; 
 
-            // 🎯 NEW COST CAPTURE: Locate the matching cost input for this specific line item row
+            // Locate the matching cost input for this specific line item row
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
             const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
 
@@ -438,7 +440,7 @@ async function processIncomingDelivery(orderId) {
                 headers: headers,
                 body: JSON.stringify({ 
                     quantity_delivered: deliveredQty,
-                    line_total_cost: enteredLineTotalCost // 🪙 SAVES RAW INVOICE TOTAL
+                    line_total_cost: enteredLineTotalCost
                 })
             });
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
@@ -457,6 +459,7 @@ async function processIncomingDelivery(orderId) {
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
                 console.log(`✈️ Dispatching permanent analytics logging payload to invoice_items for: ${ingTextName}`);
+                
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
                     headers: headers,
@@ -464,32 +467,30 @@ async function processIncomingDelivery(orderId) {
                         po_id: orderId,
                         ingredient_id: ingUuid,
                         invoice_number: invoiceNum,
-                        invoice_date: currentReceptionDateText, // Enforces active reception date entry lock
-                        actual_quantity_purchased: deliveredQty, // Count in wholesale formats (e.g. 2 boxes)
-                        actual_total_cost: enteredLineTotalCost,   // Total currency amount on invoice
-                        equivalencia: equivalenceMultiplier,      // Dynamic format transformation rate
+                        invoice_date: currentReceptionDateText, // Safe type-safe pure string passed here
+                        actual_quantity_purchased: deliveredQty,
+                        actual_total_cost: enteredLineTotalCost,
+                        equivalencia: equivalenceMultiplier,
                         supplier_uom: supplierUomString
                     })
                 });
-                if (!invoiceItemPostRes.ok) console.error(`⚠️ Fail-silent: Failed to push analytical line logging row for item ID ${itemId}`);
+                
+                if (!invoiceItemPostRes.ok) {
+                    const postErrText = await invoiceItemPostRes.text();
+                    console.error(`⚠️ Database Write Error inside invoice_items: ${postErrText}`);
+                }
             }
-            // =======================================================================
 
             // B. 🧮 UNIFIED PHYSICAL STOCK INCREMENT REGISTRATION: Updates inventory natively on ALL arrivals!
             if (ingUuid && deliveredQty > 0) {
-                // Calculate physical units introduced to facilities (Boxes ordered * multiplier factor = standard metric count)
                 const standardKitchenUnitsIntroduced = deliveredQty * equivalenceMultiplier;
-
-                // Protect numeric properties values from sliding into floats overflows
-                let safetyUnitsAmount = standardKitchenUnitsIntroduced;
-                if (safetyUnitsAmount > 999999.9999) safetyUnitsAmount = 999999.9999;
-
                 const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
-                const updatedNewStockTarget = currentStdInventory + safetyUnitsAmount;
+                const updatedNewStockTarget = currentStdInventory + standardKitchenUnitsIntroduced;
 
                 // Enforce project NUMERIC(10,4) safety ceilings guards
                 let finalSafeStock = updatedNewStockTarget;
                 if (finalSafeStock > 999999.9999) finalSafeStock = 999999.9999;
+                else if (isNaN(finalSafeStock) || finalSafeStock < 0) finalSafeStock = 0.0000;
 
                 console.log(`⚖️ Stock adjustment active: ${ingTextName}, Pre-arrival: ${currentStdInventory}, Post-arrival: ${finalSafeStock}`);
 
