@@ -2113,10 +2113,9 @@ document.addEventListener("visibilitychange", function() {
 });
 
 // =======================================================================
-// 🚨 UNIFIED MODULE: EMERGENCY MANUAL PURCHASE ENGINE (PART 1 OF 2)
+// 🚨 UNIFIED MODULE: EMERGENCY MANUAL PURCHASE ENGINE (PART 1 OF 2 - COUPLING FIXED)
 // =======================================================================
 
-// 1️⃣ UI INJECTOR: Mounts the clean panel frame into your workspace container
 function injectEmergencyManualOrderPanel(containerSelector) {
     if (document.getElementById("emergency-manual-order-panel")) return;
 
@@ -2137,13 +2136,11 @@ function injectEmergencyManualOrderPanel(containerSelector) {
                 <select id="em-select-ingredient" onchange="renderAvailableSupplierFormatsForIngredient()" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border-color, #cbd5e1); background: var(--bg-main); color: var(--text-main); font-size: 0.85rem;"></select>
             </div>
             
-            <!-- Dynamic Format Selection Radio List Grid -->
             <div id="em-formats-matrix-area" style="margin-top: 5px; display: none;">
                 <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:6px; color: var(--text-main);">2. Seleccionar Formato Autorizado por Proveedor:</label>
                 <div id="em-formats-radio-list" style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-main); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color, #cbd5e1);"></div>
             </div>
 
-            <!-- Quantitative Action Submission Cluster -->
             <div id="em-quantity-action-area" style="display: none; align-items: flex-end; gap: 12px; margin-top: 5px;">
                 <div>
                     <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:4px; color: var(--text-main);">3. Cantidad en el Formato elegido:</label>
@@ -2165,7 +2162,6 @@ function injectEmergencyManualOrderPanel(containerSelector) {
     populateEmergencyDropdowns();
 }
 
-// 2️⃣ DROPDOWN LOADER: Hydrates selection fields from your active memory translation maps
 function populateEmergencyDropdowns() {
     const ingSelect = document.getElementById("em-select-ingredient");
     if (!ingSelect) return;
@@ -2187,7 +2183,6 @@ function populateEmergencyDropdowns() {
     }
 }
 
-// 3️⃣ MATRIX GENERATOR LOOP: Displays exact formatting layouts configured for the chosen ingredient
 function renderAvailableSupplierFormatsForIngredient() {
     const ingId = document.getElementById("em-select-ingredient").value;
     const matrixArea = document.getElementById("em-formats-matrix-area");
@@ -2195,15 +2190,10 @@ function renderAvailableSupplierFormatsForIngredient() {
     const actionArea = document.getElementById("em-quantity-action-area");
 
     if (!matrixArea || !radioList || !actionArea) return;
-
-    if (!ingId) {
-        matrixArea.style.display = "none";
-        actionArea.style.display = "none";
-        return;
-    }
+    if (!ingId) { matrixArea.style.display = "none"; actionArea.style.display = "none"; return; }
 
     const formatSource = (typeof GLOBAL_SUPPLIER_FORMATS_LIST !== "undefined") ? GLOBAL_SUPPLIER_FORMATS_LIST : [];
-    const structuralMatches = formatSource.filter(f => String(f.ingredient_id).toLowerCase().trim() === ingId.toLowerCase().trim());
+    const structuralMatches = formatSource.filter(f => String(f.ingredient_id || "").toLowerCase().trim() === ingId.toLowerCase().trim());
 
     radioList.innerHTML = "";
 
@@ -2215,13 +2205,14 @@ function renderAvailableSupplierFormatsForIngredient() {
     }
 
     structuralMatches.forEach((fmt, index) => {
-        const pName = fmt.provider_name || "Proveedor No Asignado";
-        const fUom = fmt.supplier_uom || "Unidad";
-        const factor = parseFloat(fmt.equivalencia || 1.0);
+        // 🔬 SELF-EXAMINATION DETECTOR CORE: Extracts structural properties dynamically by testing existing key fields
+        const pName = fmt.provider_name || fmt.provider_id || "Proveedor No Asignado";
+        const fUom = fmt.supplier_uom || fmt.purchase_uom || fmt.purchase_unit || fmt.uom || "Unidad";
+        const factor = parseFloat(fmt.equivalencia || fmt.units_per_purchase || fmt.conversion_factor || fmt.multiplier || 1.0);
 
         let baseUom = "unidad";
         if (typeof LOCAL_STAGED_ROWS !== "undefined") {
-            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id).toLowerCase() === ingId.toLowerCase());
+            const match = LOCAL_STAGED_ROWS.find(r => String(r.ingredient_id || "").toLowerCase() === ingId.toLowerCase());
             if (match) baseUom = match.recipe_uom || "unidad";
         }
 
@@ -2244,11 +2235,7 @@ function renderAvailableSupplierFormatsForIngredient() {
     const initialChecked = radioList.querySelector("input[type='radio']:checked");
     if (initialChecked) document.getElementById("em-active-format-uom-label").innerText = initialChecked.dataset.uom;
 }
-// =======================================================================
-// 🚨 UNIFIED MODULE: EMERGENCY MANUAL PURCHASE ENGINE (PART 2 OF 2)
-// =======================================================================
-
-// 4️⃣ TRANSACTION PIPELINE: Performs conversion calculations and updates the display grid in real-time
+// ⚡ RE-ENGINEERED PIPELINE ENGINE (PART 2 OF 2 - CONVERSION BALANCED)
 async function executeEmergencyOrderAttachmentPipeline() {
     const ingredientId = document.getElementById("em-select-ingredient").value;
     const selectedRadio = document.querySelector("input[name='em_active_format_selection']:checked");
@@ -2293,7 +2280,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
             })
         });
 
-        // Inject the newly formatted row straight into live frontend RAM storage
+        // Inject row directly into frontend state to execute instant card refresh
         if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
             LOCAL_STAGED_ROWS.push({
                 ingredient_id: ingredientId,
@@ -2312,7 +2299,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
 
         alert(`🎯 ¡Registrado con éxito! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel de ${providerName}.`);
         
-        // Trigger immediate visual layout grid re-render
+        // Redraw interactive manager spreadsheet grid
         renderInteractiveManagerSpreadsheetGrid();
 
     } catch (err) {
@@ -2320,6 +2307,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
         alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
 }
+
 
     </script>
 </body>
