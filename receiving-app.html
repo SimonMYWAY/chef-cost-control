@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [FIXED SCHEMA PAYLOAD]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [CORRELATED EDITION]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -389,6 +389,15 @@ async function processIncomingDelivery(orderId) {
 
     const confirmation = confirm("¿Confirmar que las cantidades en pantalla corresponden a la entrega física recibida?");
     if (!confirmation) return;
+
+    // 🏷️ PO CORELATION STRAP: Scrape the human-readable PO text string directly from the card header!
+    let extractedPoNumberText = "Desconocido";
+    if (cardNode) {
+        const poBadgeNode = cardNode.querySelector(".po-badge") || cardNode.querySelector(".po-number") || cardNode.querySelector(".supplier-title-bar div:last-child");
+        if (poBadgeNode) {
+            extractedPoNumberText = poBadgeNode.innerText.replace(/["';]/g, "").trim();
+        }
+    }
 
     var activeGuardUsername = "Guardia Desconocido";
     try {
@@ -412,7 +421,7 @@ async function processIncomingDelivery(orderId) {
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-        // Clear layout dates array index to pass a pristine single YYYY-MM-DD text token
+        // Extract native string token ("YYYY-MM-DD")
         const currentReceptionDateText = new Date().toISOString().split('T')[0];
 
         // 🛡️ STEP 1: Process child rows sequentially
@@ -430,7 +439,7 @@ async function processIncomingDelivery(orderId) {
 
             console.log(`📦 Processing Item - ID: ${itemId}, Delivered Qty: ${deliveredQty}, Total Line Cost: $${enteredLineTotalCost}`);
 
-            // A. Instantly save BOTH custom delivered quantity AND absolute line total cost to the row entry logs
+            // A. Save custom delivered quantity AND line total cost to the row entry logs
             const itemPatchRes = await fetch(API_URL + "purchase_order_items?id=eq." + itemId, {
                 method: "PATCH",
                 headers: headers,
@@ -450,18 +459,19 @@ async function processIncomingDelivery(orderId) {
             const ingUuid = matchedIngredient ? matchedIngredient.id : null;
 
             // =======================================================================
-            // 🌟 NEW CLOUD ENGINE INJECTION: WRITE TO INVOICE_ITEMS ANALYTICS TABLE
+            // 🌟 NEW CLOUD ENGINE INJECTION: WRITE CORRELEATED INVOICE_ITEMS
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
-                console.log(`✈️ Dispatching analytical record to invoice_items table for: ${ingTextName}`);
+                console.log(`✈️ Dispatching correlated record to invoice_items: ${ingTextName} -> ${extractedPoNumberText}`);
                 
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
                     headers: headers,
                     body: JSON.stringify({
-                        po_id: orderId,
+                        po_id: orderId,                     // Links order UUID key
+                        po_number: extractedPoNumberText,   // Links human-readable PO string text
                         ingredient_id: ingUuid,
-                        invoice_number: invoiceNum, // Enabled! Securely mapped upon completing Step 1 SQL alteration
+                        invoice_number: invoiceNum, 
                         invoice_date: currentReceptionDateText, 
                         actual_quantity_purchased: deliveredQty,
                         actual_total_cost: enteredLineTotalCost,
@@ -481,7 +491,6 @@ async function processIncomingDelivery(orderId) {
                 const currentStdInventory = parseFloat(matchedIngredient.std_inventory || 0);
                 const updatedNewStockTarget = currentStdInventory + standardKitchenUnitsIntroduced;
 
-                // Enforce project NUMERIC(10,4) safety ceilings guards
                 let finalSafeStock = updatedNewStockTarget;
                 if (finalSafeStock > 999999.9999) finalSafeStock = 999999.9999;
                 else if (isNaN(finalSafeStock) || finalSafeStock < 0) finalSafeStock = 0.0000;
@@ -495,8 +504,6 @@ async function processIncomingDelivery(orderId) {
                 });
                 
                 if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
-            } else if (!ingUuid && ingTextName) {
-                console.warn(`⚠️ Warning: No matching row found in ingredients catalog for name description text: ${ingTextName}`);
             }
         }
 
