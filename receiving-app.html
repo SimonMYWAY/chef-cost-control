@@ -418,7 +418,15 @@ async function processIncomingDelivery(orderId) {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
         
-        const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
+        // Parallel data fetch pipeline to secure master catalogs natively
+        const results = await Promise.all([
+            fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+            fetch(API_URL + "supplier_formats", { headers: { "apikey": API_KEY } }).then(r => r.json()) // 📡 Dynamic format table mapping added!
+        ]);
+
+        const masterIngredients = results[0];
+        const supplierFormatsCatalog = results[1];
+
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
         // Extract native string token ("YYYY-MM-DD") cleanly from ISO matrix dates
@@ -431,9 +439,6 @@ async function processIncomingDelivery(orderId) {
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
-
-            // Isolate the true wholesale packaging format string label (e.g. Caja, Bolsa, Kg)
-            const supplierUomString = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad";
 
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
             const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
@@ -451,19 +456,31 @@ async function processIncomingDelivery(orderId) {
             });
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
 
+            const dbNameClean = String(ingTextName || "").toLowerCase().trim();
             const matchedIngredient = masterIngredients.find(function(i) {
-                const dbNameClean = String(i.name_es || "").toLowerCase().trim();
-                const itemNameClean = String(ingTextName || "").toLowerCase().trim();
-                return dbNameClean === itemNameClean;
+                return String(i.name_es || "").toLowerCase().trim() === dbNameClean || String(i.name || "").toLowerCase().trim() === dbNameClean;
             });
 
             const ingUuid = matchedIngredient ? matchedIngredient.id : null;
+
+            // 🎯 THE CORE ALIGNMENT INTERPOLATOR: 
+            // Look up the formatting cell dynamically using your true 'purchase_uom' key column!
+            let trueSupplierPurchaseUomLabel = "Unidad";
+            if (ingUuid && Array.isArray(supplierFormatsCatalog)) {
+                const matchedFormatRule = supplierFormatsCatalog.find(f => String(f.ingredient_id).toLowerCase().trim() === ingUuid.toLowerCase().trim());
+                if (matchedFormatRule && matchedFormatRule.purchase_uom) {
+                    trueSupplierPurchaseUomLabel = String(matchedFormatRule.purchase_uom).trim(); // Captures "Libra" flawlessly!
+                } else {
+                    // Alternative HTML backup check if fallback configurations are active
+                    trueSupplierPurchaseUomLabel = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad";
+                }
+            }
 
             // =======================================================================
             // 🌟 NEW CLOUD ENGINE INJECTION: WRITE CORRELATED INVOICE_ITEMS
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
-                console.log(`✈️ Dispatching analytical record to invoice_items table for: ${ingTextName}`);
+                console.log(`✈️ Dispatching analytical record to invoice_items table for: ${ingTextName} -> ${trueSupplierPurchaseUomLabel}`);
                 
                 const invoicePayload = {
                     po_id: orderId,                     
@@ -473,7 +490,7 @@ async function processIncomingDelivery(orderId) {
                     invoice_date: currentReceptionDateText, 
                     actual_quantity_purchased: deliveredQty,
                     actual_total_cost: enteredLineTotalCost,
-                    supplier_uom: supplierUomString // 🔓 FULLY ACTIVATED SATELLITE FIELD WRITE
+                    supplier_uom: trueSupplierPurchaseUomLabel // 🔓 WRITES "Libra" SECURELY TO SUPABASE
                 };
 
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
@@ -509,6 +526,7 @@ async function processIncomingDelivery(orderId) {
                 if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
             }
         }
+
         // =======================================================================
         // 🛡️ STEP 2: Overwrite the Master Parent Purchase Order Document Header
         // =======================================================================
