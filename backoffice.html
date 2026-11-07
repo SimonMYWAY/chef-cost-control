@@ -1787,8 +1787,8 @@ async function processSalesCostDeviation() {
     reader.readAsText(file);
 }
 
-// 📊 INTEGRATED VARIANCE ENGINE (LIVE RECEIVING APP INTEGRATION - PART 1 OF 3)
-async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
+// 📊 INTEGRATED VARIANCE ENGINE (PERPETUAL SNAPSHOT MATRIX EDITION - PART 1 OF 3)
+async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo, openingStockMap, closingStockMap) {
     var theoreticalUsage = {}; 
     var unmatchedSalesCount = 0;
     var totalTheoreticalSalesCost = 0;
@@ -1834,7 +1834,6 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 var wasteFactor = 1 + (scrapPct / 100);
                 
                 var totalTheoreticalQtyNeeded = (qtyNeededPerYield / recipeYieldServings) * currentMult * wasteFactor;
-                
                 if (totalTheoreticalQtyNeeded > 999999.9999) totalTheoreticalQtyNeeded = 999999.9999;
 
                 if (recMapById[componentId]) {
@@ -1855,7 +1854,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                                 unit: baseIng.uom || "N/A",
                                 theoreticalQty: 0,
                                 theoreticalCost: 0,
-                                actualQtyConverted: 0, // Tracked strictly in Standard Recipe UOM
+                                actualQtyPurchasedConverted: 0, // Tracked strictly in Standard Recipe UOM
                                 actualCost: 0
                             };
                         }
@@ -1868,20 +1867,8 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
         }
     }
 
-    // Check if 100% of the products in the file were skipped/deleted upfront
-    var itemsArray = [];
-    for (var key in theoreticalUsage) { itemsArray.push(theoreticalUsage[key]); }
-    if (itemsArray.length === 0) {
-        resultsContainer.innerHTML = 
-            "<div class='card' style='margin-top:20px; text-align:center; background-color:var(--bg-surface); border:1px solid #ef4444; border-radius:6px; padding:20px;'> " +
-                "<div style='font-size:2rem; margin-bottom:10px;'>⚠️</div> " +
-                "<h4 style='color:#ef4444; margin-bottom:8px;'>No se encontraron recetas activas</h4> " +
-            "</div>";
-        return;
-    }
-
     try {
-                // 2. 🌐 LIVE CONNECTIVITY MATRIX: Fetch real data strings logged by the Receiving App
+        // 2. 🌐 LIVE RECEIVING DATA: Fetch real data strings logged by the Receiving App
         var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
         var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
         var realPurchasedLines = await invoiceRes.json();
@@ -1896,41 +1883,59 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 var rawPurchasedQty = parseFloat(line.actual_quantity_purchased || 0);
                 var purchasedCost = parseFloat(line.actual_total_cost || 0);
                 
-                // ⚡ CORE FIX: Pull the type-safe multiplier rule directly from your master ingredient map registers!
                 var masterIngredientAssetRow = ingMap[cleanIngId];
                 var lineMultiplierFactor = 1.0;
                 if (masterIngredientAssetRow) {
                     lineMultiplierFactor = parseFloat(masterIngredientAssetRow.inventory_conversion_factor) || 1.0;
                 }
                 
-                // ⚡ DYNAMIC ALIGNMENT ENGINE: Convert to Standard UOM using the true master asset multiplier
                 var standardQtyConvertedValue = rawPurchasedQty * lineMultiplierFactor;
-                
                 totalRealInvoiceSpending += purchasedCost;
                 
                 if (!theoreticalUsage[cleanIngId]) {
-                    var dbIng = masterIngredientAssetRow; // Re-uses our local lookup variable cleanly!
+                    var dbIng = masterIngredientAssetRow;
                     theoreticalUsage[cleanIngId] = {
                         id: cleanIngId,
                         name: dbIng ? (dbIng.name_es || "Ingrediente Extra") : "Compra Fuera de Catálogo",
                         unit: dbIng ? (dbIng.uom || "N/A") : "N/A",
                         theoreticalQty: 0,
                         theoreticalCost: 0,
-                        actualQtyConverted: 0,
+                        actualQtyPurchasedConverted: 0,
                         actualCost: 0
                     };
                 }
                 
-                theoreticalUsage[cleanIngId].actualQtyConverted += standardQtyConvertedValue;
+                theoreticalUsage[cleanIngId].actualQtyPurchasedConverted += standardQtyConvertedValue;
                 theoreticalUsage[cleanIngId].actualCost += purchasedCost;
             });
         }
         // Re-compile working data arrays to calculate side-by-side variances
-        itemsArray = [];
+        var itemsArray = [];
         for (var k in theoreticalUsage) { itemsArray.push(theoreticalUsage[k]); }
-        itemsArray.sort((a,b) => b.theoreticalCost - a.theoreticalCost); // Order by top expenditures
+        
+        // Ensure any ingredient present in the snapshots cache but not sold/purchased is captured
+        Object.keys(openingStockMap).forEach(snapIngId => {
+            if (!theoreticalUsage[snapIngId]) {
+                var dbIng = ingMap[snapIngId];
+                if (dbIng) {
+                    var node = {
+                        id: snapIngId,
+                        name: dbIng.name_es || "Ingrediente Inactivo",
+                        unit: dbIng.uom || "N/A",
+                        theoreticalQty: 0,
+                        theoreticalCost: 0,
+                        actualQtyPurchasedConverted: 0,
+                        actualCost: 0
+                    };
+                    theoreticalUsage[snapIngId] = node;
+                    itemsArray.push(node);
+                }
+            }
+        });
 
-        // 3. Output Matrix Dashboard Builder: Compiles financial cost variance cards
+        itemsArray.sort((a,b) => b.theoreticalCost - a.theoreticalCost); // Order by top expenditures
+        
+        // 3. Output Matrix Dashboard Builder: Compiles true financial cost variance cards
         var financialVarianceTotal = totalRealInvoiceSpending - totalTheoreticalSalesCost;
         var varianceColor = financialVarianceTotal <= 0 ? "#22c55e" : "#ef4444";
         var varianceLabelPrefix = financialVarianceTotal <= 0 ? "Ahorro/Eficiencia: -" : "Pérdida/Desviación: +";
@@ -1954,8 +1959,8 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                    "</div>";
                    
         if (unmatchedSalesCount > 0) {
-            html += "<div style='margin-bottom:15px; padding:10px; background-color:rgba(245,158,11,0.1); border-left:4px solid #f59e0b; color:#b45309; font-size:0.85rem; border-radius:4px;'>" +
-                        "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV de ventas porque no están registrados en el catálogo maestro." +
+            html += "<div style='margin-bottom:15px; padding:10px; background-color:rgba(245,158,11,0.1); border-left:4px solid #f59e0b; color:#b45309; font-size:0.85rem; border-radius:4px;'> " +
+                        "⚠️ Nota: Se saltaron " + unmatchedSalesCount + " productos del CSV por falta de receta maestra asociada." +
                     "</div>";
         }
         
@@ -1965,7 +1970,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                             "<th style='text-align:left; padding:10px;'>Ingrediente</th>" +
                             "<th style='text-align:center; padding:10px;'>Unidad Base</th>" +
                             "<th style='text-align:right; padding:10px;'>Consumo Teórico</th>" +
-                            "<th style='text-align:right; padding:10px;'>Compras Reales (Equivalencia)</th>" +
+                            "<th style='text-align:right; padding:10px;'>Consumo Real de Cocina</th>" +
                             "<th style='text-align:right; padding:10px;'>Desviación Eficiencia (Uso)</th>" +
                             "<th style='text-align:right; padding:10px;'>Desviación Compra (Precio)</th>" +
                             "<th style='text-align:right; padding:10px;'>Variación Total</th>" +
@@ -1978,21 +1983,25 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             var dbIng = ingMap[cleanKey];
             var stdCost = dbIng ? (parseFloat(dbIng.std_cost_per_unit || dbIng.cost) || 0) : 0;
             
-            if (stdCost === 0 && item.theoreticalQty > 0) {
-                stdCost = item.theoreticalCost / item.theoreticalQty;
-            }
+            if (stdCost === 0 && item.theoreticalQty > 0) stdCost = item.theoreticalCost / item.theoreticalQty;
             
-            // 🛡️ Both elements are already strictly mapped to Standard Recipe UOM
-            var realQtyInRecipeUOM = item.actualQtyConverted; 
+            // 📊 1. EXTRACT CRITICAL TIME snapshots FOR THE SPECIFIC INGREDIENT ROW
+            var initialStockLevel = openingStockMap[cleanKey] || 0.0000;
+            var finalStockLevel = closingStockMap[cleanKey] || 0.0000;
+            var totalPurchasesVolume = item.actualQtyPurchasedConverted || 0.0000;
+
+            // 🧮 2. PERPETUAL KITCHEN USE EQUATION: Real Consumption = Opening + Purchases - Closing
+            var realKitchenConsumptionQty = initialStockLevel + totalPurchasesVolume - finalStockLevel;
+            if (realKitchenConsumptionQty < 0) realKitchenConsumptionQty = 0.0000;
+
+            // 🪙 3. FIFO UNIT COST EVALUATION: Real cost per standard unit delivered
+            var realUnitCost = totalPurchasesVolume > 0 ? (item.actualCost / totalPurchasesVolume) : stdCost;
             
-            // Calculate real unit cost paid per standard unit (e.g. real cost paid per ounce)
-            var realUnitCost = realQtyInRecipeUOM > 0 ? (item.actualCost / realQtyInRecipeUOM) : stdCost;
+            // Usage/Efficiency Variance = (Theoretical Quantity - Actual Kitchen Use) * Standard Price Cost
+            var qtyVarianceFinancial = (item.theoreticalQty - realKitchenConsumptionQty) * stdCost;
             
-            // Efficiency Variance = (Theoretical Qty - Real Qty received in Standard UOM) * Standard Cost
-            var qtyVarianceFinancial = (item.theoreticalQty - realQtyInRecipeUOM) * stdCost;
-            
-            // Price Variance = (Standard Cost - Real Cost paid per Standard UOM) * Real Qty received in Standard UOM
-            var priceVarianceFinancial = (stdCost - realUnitCost) * realQtyInRecipeUOM;
+            // Price Variance = (Standard Cost Price - Real Cost Paid per Unit) * Real Quantity Purchased Converted
+            var priceVarianceFinancial = (stdCost - realUnitCost) * totalPurchasesVolume;
             var totalVarianceFinancial = qtyVarianceFinancial + priceVarianceFinancial;
 
             var qtyColor = qtyVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
@@ -2006,13 +2015,14 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
             var totalColor = totalVarianceFinancial >= -0.01 ? "#22c55e" : "#ef4444";
             var totalText = totalVarianceFinancial >= -0.01 ? "+$" + Math.abs(totalVarianceFinancial).toFixed(2) : "-$" + Math.abs(totalVarianceFinancial).toFixed(2);
             if (Math.abs(totalVarianceFinancial) < 0.01) { totalText = "$0.00"; totalColor = "var(--text-main)"; }
-            var purchasesDisplayString = realQtyInRecipeUOM.toFixed(2);
+            // Display total real kitchen consumption units calculated dynamically via our equations
+            var realConsumptionDisplayString = realKitchenConsumptionQty.toFixed(2);
 
             html += "<tr style='border-bottom:1px solid var(--border-color); color:var(--text-main);' onmouseover=\"this.style.backgroundColor='var(--bg-main)'\" onmouseout=\"this.style.backgroundColor='transparent'\">" +
                         "<td style='padding:10px; font-weight:600;'>" + item.name + "</td>" +
                         "<td style='padding:10px; text-align:center; color:var(--text-muted);'>" + item.unit + "</td>" +
                         "<td style='padding:10px; text-align:right; font-family:monospace;'>" + item.theoreticalQty.toFixed(2) + "</td>" +
-                        "<td style='padding:10px; text-align:right; font-family:monospace; font-weight:600;'>" + purchasesDisplayString + "</td>" +
+                        "<td style='padding:10px; text-align:right; font-family:monospace; font-weight:600;'>" + realConsumptionDisplayString + "</td>" +
                         "<td style='padding:10px; text-align:right; font-weight:600; color:" + qtyColor + ";'>" + qtyText + "</td>" +
                         "<td style='padding:10px; text-align:right; font-weight:600; color:" + priceColor + ";'>" + priceText + "</td>" +
                         "<td style='padding:10px; text-align:right; font-weight:700; color:" + totalColor + ";'>" + totalText + "</td>" +
