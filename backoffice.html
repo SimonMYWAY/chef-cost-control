@@ -1671,104 +1671,121 @@ function toggleIngredientCloudStatus(id, currentlyEnabled) {
                 alert("❌ Error al procesar el recálculo automático en cascada.");
             }
         }
-                // 📊 CORE SALES VARIANCE ENGINE (PART 1): Securely loads file pointers with ironclad screen wipes
-        async function processSalesCostDeviation() {
-            var dateFrom = document.getElementById("deviation-date-from").value;
-            var dateTo = document.getElementById("deviation-date-to").value;
-            var fileInput = document.getElementById("revo-sales-file");
-            var resultsContainer = document.getElementById("deviation-results-container");
+       // 📊 CORE SALES VARIANCE ENGINE (LIVE RECOVERY WITH NIGHTLY SNAPSHOT MATRIX DETECTORS)
+async function processSalesCostDeviation() {
+    var dateFrom = document.getElementById("deviation-date-from").value;
+    var dateTo = document.getElementById("deviation-date-to").value;
+    var fileInput = document.getElementById("revo-sales-file");
+    var resultsContainer = document.getElementById("deviation-results-container");
+    
+    if (!dateFrom || !dateTo) {
+        alert("⚠️ Por favor seleccione el rango de fechas (Desde / Hasta) antes de calcular.");
+        return;
+    }
+    if (!fileInput || fileInput.files.length === 0) {
+        alert("⚠️ Por favor seleccione su archivo CSV de ventas Revo para continuar.");
+        return;
+    }
+    
+    resultsContainer.innerHTML = ""; 
+    resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase, bitácoras de remisión y matriz de inventario...</div>";
+    
+    var file = fileInput.files[0];
+    var reader = new FileReader();
+    
+    reader.onload = async function(e) {
+        try {
+            var text = e.target.result;
             
-            if (!dateFrom || !dateTo) {
-                alert("⚠️ Por favor seleccione el rango de fechas (Desde / Hasta) antes de calcular.");
+            // 📡 PARALLEL ENGINE QUERY POOL: Fetches structural mappings and snapshots in one network loop
+            var results = await Promise.all([
+                fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                // Fetch the exact opening inventory balances recorded at 23:30 on the starting date checkpoint
+                fetch(API_URL + `daily_stock_snapshots?snapshot_date=eq.${dateFrom}&select=ingredient_id,recorded_qty`, { headers: { "apikey": API_KEY } }).then(r => r.json()),
+                // Fetch the exact closing inventory balances recorded at 23:30 on the ending date checkpoint
+                fetch(API_URL + `daily_stock_snapshots?snapshot_date=eq.${dateTo}&select=ingredient_id,recorded_qty`, { headers: { "apikey": API_KEY } }).then(r => r.json())
+            ]);
+            
+            var mappings = results[0];
+            var recipes = results[1];
+            var ingredients = results[2];
+            var openingSnapshots = results[3];
+            var closingSnapshots = results[4];
+            
+            if (!mappings || !recipes || !ingredients) {
+                resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con los servidores de base de datos.</div>";
                 return;
             }
-            if (!fileInput || fileInput.files.length === 0) {
-                alert("⚠️ Por favor seleccione su archivo CSV de ventas Revo para continuar.");
+            
+            // Map opening snapshots into a high-speed O(1) RAM lookup dictionary table
+            var openingStockMap = {};
+            if (Array.isArray(openingSnapshots)) {
+                openingSnapshots.forEach(s => { openingStockMap[String(s.ingredient_id).toLowerCase().trim()] = parseFloat(s.recorded_qty || 0); });
+            }
+
+            // Map closing snapshots into a high-speed O(1) RAM lookup dictionary table
+            var closingStockMap = {};
+            if (Array.isArray(closingSnapshots)) {
+                closingSnapshots.forEach(s => { closingStockMap[String(s.ingredient_id).toLowerCase().trim()] = parseFloat(s.recorded_qty || 0); });
+            }
+
+            // Build lookup dictionaries for lightning-fast indexing loops
+            var recMapById = {};
+            var recMapByRevo = {};
+            var recMapByName = {};
+            recipes.forEach(r => {
+                var multiplier = r.locked_multiplier !== null && r.locked_multiplier !== undefined ? parseFloat(r.locked_multiplier) : 1.0;
+                if (multiplier === 0.0 || multiplier === -9.0) return; 
+                
+                var cleanId = String(r.id).toLowerCase().trim();
+                recMapById[cleanId] = r;
+                if (r.revo_id) recMapByRevo[String(r.revo_id).toLowerCase().trim()] = r;
+                if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
+            });
+            
+            var ingMap = {};
+            ingredients.forEach(i => { ingMap[String(i.id).toLowerCase().trim()] = i; });
+            
+            var lines = text.split(/\r?\n/);
+            if (lines.length <= 1) {
+                resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ El archivo seleccionado está vacío o corrupto.</div>";
                 return;
             }
             
-            // 🌟 CRITICAL ACTIVE BLANK WIPE: Forces old ghost data off your monitor screen instantly before processing
-            resultsContainer.innerHTML = ""; 
-            resultsContainer.innerHTML = "<div style='color:var(--text-main); font-style:italic;'>⏳ Extrayendo datos de Supabase y procesando matriz de ventas...</div>";
+            var headers = lines[0].split(",");
+            var idxQty = -1, idxProd = -1, idxId = -1;
             
-            // 🛡️ RE-ALIGNED FILE POINTER SELECTION: Index zero bracket added to prevent FileReader crashes!
-            var file = fileInput.files[0];
-            var reader = new FileReader();
+            for (var h = 0; h < headers.length; h++) {
+                var headTxt = headers[h].replace(/["']/g, "").trim().toLowerCase();
+                if (headTxt === "cantidad") idxQty = h;
+                if (headTxt === "producto") idxProd = h;
+                if (headTxt === "id") idxId = h;
+            }
             
-            reader.onload = async function(e) {
-                try {
-                    var text = e.target.result;
-                    
-                    // Fetch full data parameters from Supabase in parallel
-                    var results = await Promise.all([
-                        fetch(API_URL + "recipe_ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                        fetch(API_URL + "recipes", { headers: { "apikey": API_KEY } }).then(r => r.json()),
-                        fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json())
-                    ]);
-                    
-                    var mappings = results[0];
-                    var recipes = results[1];
-                    var ingredients = results[2];
-                    
-                    if (!mappings || !recipes || !ingredients) {
-                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error al conectar con los servidores de base de datos.</div>";
-                        return;
-                    }
-                    
-                    // Build lookup dictionaries for lightning-fast indexing loops
-                    var recMapById = {};
-                    var recMapByRevo = {};
-                    var recMapByName = {};
-                     recipes.forEach(r => {
-                        // 🌟 IRONCLAD FILTER BLOCK: Skip any recipe soft-deleted or deactivated by management
-                        var multiplier = r.locked_multiplier !== null && r.locked_multiplier !== undefined ? parseFloat(r.locked_multiplier) : 1.0;
-                        if (multiplier === 0.0 || multiplier === -9.0) {
-                            return; // Skip this row completely so the calculation engine cannot read it!
-                        }
-                        
-                        var cleanId = String(r.id).toLowerCase().trim();
-                        recMapById[cleanId] = r;
-                        if (r.revo_id) recMapByRevo[String(r.revo_id).toLowerCase().trim()] = r;
-                        if (r.name) recMapByName[String(r.name).toLowerCase().trim()] = r;
-                    });
-                    
-                    var ingMap = {};
-                    ingredients.forEach(i => { ingMap[String(i.id).toLowerCase().trim()] = i; });
-                    
-                    // Parse text lines from Revo file
-                    var lines = text.split(/\r?\n/);
-                    if (lines.length <= 1) {
-                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ El archivo seleccionado está vacío o corrupto.</div>";
-                        return;
-                    }
-                    
-                    // Header detection map loop
-                    var headers = lines[0].split(",");
-                    var idxQty = -1, idxProd = -1, idxId = -1;
-                    
-                    for (var h = 0; h < headers.length; h++) {
-                        var headTxt = headers[h].replace(/["']/g, "").trim().toLowerCase();
-                        if (headTxt === "cantidad") idxQty = h;
-                        if (headTxt === "producto") idxProd = h;
-                        if (headTxt === "id") idxId = h;
-                    }
-                    
-                    if (idxQty === -1 || idxProd === -1 || idxId === -1) {
-                        resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Asegúrese de que contenga las columnas: Cantidad, Producto, Id.</div>";
-                        return;
-                    }
-                    
-                    // Fire Part 2 logic directly to execute tree explosion and render HTML grid layout
-                    executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo);
-                    
-                } catch (err) {
-                    console.error("Sales variance breakdown initialization crash:", err);
-                    resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al procesar el cálculo de desvíos.</div>";
-                }
-            };
+            if (idxQty === -1 || idxProd === -1 || idxId === -1) {
+                resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Estructura CSV inválida. Requeridos: Cantidad, Producto, Id.</div>";
+                return;
+            }
             
-            reader.readAsText(file);
+            // 🚀 PASS DATASTREAM DOWNSTREAM TO THE MODIFIED MULTI-TIER EXPLOATION CORE:
+            // We pass the compiled opening and closing inventory maps safely into our processing grid
+            executeDecompositionAndRender(
+                lines, headers, idxQty, idxProd, idxId, 
+                recMapById, recMapByRevo, recMapByName, ingMap, 
+                mappings, resultsContainer, dateFrom, dateTo,
+                openingStockMap, closingStockMap
+            );
+            
+        } catch (err) {
+            console.error("Sales variance breakdown initialization crash:", err);
+            resultsContainer.innerHTML = "<div style='color:#ef4444;'>❌ Error fatal al procesar el cálculo de desvíos.</div>";
         }
+    };
+    
+    reader.readAsText(file);
+}
 
 // 📊 INTEGRATED VARIANCE ENGINE (LIVE RECEIVING APP INTEGRATION - PART 1 OF 3)
 async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, idxId, recMapById, recMapByRevo, recMapByName, ingMap, mappings, resultsContainer, dateFrom, dateTo) {
