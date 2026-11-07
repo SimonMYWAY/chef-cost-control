@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [REPAIRED STACK MATRIX]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [FIXED SCHEMA PAYLOAD]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -390,7 +390,6 @@ async function processIncomingDelivery(orderId) {
     const confirmation = confirm("¿Confirmar que las cantidades en pantalla corresponden a la entrega física recibida?");
     if (!confirmation) return;
 
-    // ✨ THE LOG ACCOUNTABILITY EXTRACTOR: Pull the active guard profile out of tab memory sessionStorage
     var activeGuardUsername = "Guardia Desconocido";
     try {
         var cachedProfileString = sessionStorage.getItem("receiving_app_authorized_session_profile");
@@ -410,11 +409,10 @@ async function processIncomingDelivery(orderId) {
         const itemInputs = cardNode.querySelectorAll(".qty-input");
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
         
-        // Fetch full data parameters from Supabase in parallel
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-        // 🎯 THE CORE STRUCTURAL FIX: Extract purely index zero string from the split matrix array! ("YYYY-MM-DD")
+        // Clear layout dates array index to pass a pristine single YYYY-MM-DD text token
         const currentReceptionDateText = new Date().toISOString().split('T')[0];
 
         // 🛡️ STEP 1: Process child rows sequentially
@@ -425,10 +423,8 @@ async function processIncomingDelivery(orderId) {
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
             
-            // Safe-guard layout lookup attributes case differences
             const supplierUomString = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad"; 
 
-            // Locate the matching cost input for this specific line item row
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
             const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
 
@@ -445,7 +441,6 @@ async function processIncomingDelivery(orderId) {
             });
             if (!itemPatchRes.ok) throw new Error(`Fallo al actualizar la línea de artículo ${itemId}`);
 
-            // Find matching ingredient item from master repository cache strings to secure true tracking IDs
             const matchedIngredient = masterIngredients.find(function(i) {
                 const dbNameClean = String(i.name_es || "").toLowerCase().trim();
                 const itemNameClean = String(ingTextName || "").toLowerCase().trim();
@@ -458,16 +453,15 @@ async function processIncomingDelivery(orderId) {
             // 🌟 NEW CLOUD ENGINE INJECTION: WRITE TO INVOICE_ITEMS ANALYTICS TABLE
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
-                console.log(`✈️ Dispatching permanent analytics logging payload to invoice_items for: ${ingTextName}`);
+                console.log(`✈️ Dispatching analytical record to invoice_items table for: ${ingTextName}`);
                 
-                // 🛡️ REMOVED THE NON-EXISTENT COLUMN 'equivalencia' FROM PAYLOAD TO PREVENT PGRST204 SCHEMA CACHE CRASH
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
                     headers: headers,
                     body: JSON.stringify({
                         po_id: orderId,
                         ingredient_id: ingUuid,
-                        invoice_number: invoiceNum,
+                        invoice_number: invoiceNum, // Enabled! Securely mapped upon completing Step 1 SQL alteration
                         invoice_date: currentReceptionDateText, 
                         actual_quantity_purchased: deliveredQty,
                         actual_total_cost: enteredLineTotalCost,
