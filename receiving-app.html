@@ -460,6 +460,7 @@ async function processIncomingDelivery(orderId) {
             if (ingUuid && deliveredQty > 0) {
                 console.log(`✈️ Dispatching permanent analytics logging payload to invoice_items for: ${ingTextName}`);
                 
+                // 🛡️ REMOVED THE NON-EXISTENT COLUMN 'equivalencia' FROM PAYLOAD TO PREVENT PGRST204 SCHEMA CACHE CRASH
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
                     headers: headers,
@@ -467,10 +468,9 @@ async function processIncomingDelivery(orderId) {
                         po_id: orderId,
                         ingredient_id: ingUuid,
                         invoice_number: invoiceNum,
-                        invoice_date: currentReceptionDateText, // Safe type-safe pure string passed here
+                        invoice_date: currentReceptionDateText, 
                         actual_quantity_purchased: deliveredQty,
                         actual_total_cost: enteredLineTotalCost,
-                        equivalencia: equivalenceMultiplier,
                         supplier_uom: supplierUomString
                     })
                 });
