@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [CORRELATED EDITION]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [REPAIRED PAYLOAD]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -390,7 +390,7 @@ async function processIncomingDelivery(orderId) {
     const confirmation = confirm("¿Confirmar que las cantidades en pantalla corresponden a la entrega física recibida?");
     if (!confirmation) return;
 
-    // 🏷️ PO CORELATION STRAP: Scrape the human-readable PO text string directly from the card header!
+    // 🏷️ PO CORELATION STRAP: Scrape the human-readable PO text string directly from the card header
     let extractedPoNumberText = "Desconocido";
     if (cardNode) {
         const poBadgeNode = cardNode.querySelector(".po-badge") || cardNode.querySelector(".po-number") || cardNode.querySelector(".supplier-title-bar div:last-child");
@@ -421,7 +421,7 @@ async function processIncomingDelivery(orderId) {
         const masterIngredients = await fetch(API_URL + "ingredients", { headers: { "apikey": API_KEY } }).then(r => r.json());
         if (!Array.isArray(masterIngredients)) throw new Error("No se pudo cargar el catálogo maestro de insumos.");
 
-        // Extract native string token ("YYYY-MM-DD")
+        // Extract native string token ("YYYY-MM-DD") cleanly from ISO matrix dates
         const currentReceptionDateText = new Date().toISOString().split('T')[0];
 
         // 🛡️ STEP 1: Process child rows sequentially
@@ -431,8 +431,6 @@ async function processIncomingDelivery(orderId) {
             const orderedQty = parseFloat(input.getAttribute("data-ordered-qty") || 0);
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
-            
-            const supplierUomString = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad"; 
 
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
             const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
@@ -459,29 +457,35 @@ async function processIncomingDelivery(orderId) {
             const ingUuid = matchedIngredient ? matchedIngredient.id : null;
 
             // =======================================================================
-            // 🌟 NEW CLOUD ENGINE INJECTION: WRITE CORRELEATED INVOICE_ITEMS
+            // 🌟 NEW CLOUD ENGINE INJECTION: WRITE CORRELATED INVOICE_ITEMS
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
-                console.log(`✈️ Dispatching correlated record to invoice_items: ${ingTextName} -> ${extractedPoNumberText}`);
+                console.log(`✈️ Dispatching correlated record to invoice_items: ${ingTextName}`);
                 
+                // 🛡️ OMITTED 'supplier_uom' TO SAFELY PREVENT API SCHEMA REJECTION CRASHES UNTIL SQL MIGRATION IS APPLIED
+                const invoicePayload = {
+                    po_id: orderId,                     
+                    po_number: extractedPoNumberText,   
+                    ingredient_id: ingUuid,
+                    invoice_number: invoiceNum, 
+                    invoice_date: currentReceptionDateText, 
+                    actual_quantity_purchased: deliveredQty,
+                    actual_total_cost: enteredLineTotalCost
+                };
+
+                // Un-comment this specific line down below once you have run the Step 1 SQL alteration script:
+                // invoicePayload.supplier_uom = input.getAttribute("data-uom") || "Unidad";
+
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
                     headers: headers,
-                    body: JSON.stringify({
-                        po_id: orderId,                     // Links order UUID key
-                        po_number: extractedPoNumberText,   // Links human-readable PO string text
-                        ingredient_id: ingUuid,
-                        invoice_number: invoiceNum, 
-                        invoice_date: currentReceptionDateText, 
-                        actual_quantity_purchased: deliveredQty,
-                        actual_total_cost: enteredLineTotalCost,
-                        supplier_uom: supplierUomString
-                    })
+                    body: JSON.stringify(invoicePayload)
                 });
                 
                 if (!invoiceItemPostRes.ok) {
                     const postErrText = await invoiceItemPostRes.text();
                     console.error(`⚠️ Database Write Error inside invoice_items: ${postErrText}`);
+                    // Fail-silent catch allows the main workflow execution loops to advance cleanly even if a log drops
                 }
             }
 
