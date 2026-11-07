@@ -1531,11 +1531,11 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
     }
 }
 
-// 🚀 GATEWAY CHECKPOINT: Increments stock counts ONLY when checked sent verification runs [SECURE TRANSITION MATRIX]
+// 🚀 GATEWAY CHECKPOINT: Processes dispatch status matrix locks without altering physical stock volumes (DOUBLE-INCREMENT FIX)
 async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     var supplierCard = document.getElementById(cardElementId);
 
-    // Filter lines belonging to this supplier to run inventory operations
+    // Filter lines belonging to this supplier to run operations
     var filteredLines = LOCAL_STAGED_ROWS.filter(r => r.supplier_name === supplierName && r.is_approved && r.approved_formats_quantity > 0);
 
     if (filteredLines.length === 0) {
@@ -1543,7 +1543,6 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
         return;
     }
 
-    // ✨ THE ACCURATE METADATA IDENTIFIER LOOKUP:
     // Extract the explicit parent text string PO tracking parameter from your local staging rows array cache
     var targetPoNumberToken = filteredLines[0].poNumber || filteredLines[0].forced_po_number;
 
@@ -1554,8 +1553,8 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
     }
 
     try {
-        // 1️⃣ RELATIONAL TRANSITION: Update parent document header status string in Supabase using the exact text key matching rule!
-        console.log(`📝 Dispatch transaction firing securely for Cloud PO: ${targetPoNumberToken}`);
+        // 1️⃣ RELATIONAL TRANSITION: Update parent document header status string in Supabase to 'dispatched'
+        console.log(`📝 Dispatch status lockout firing securely for Cloud PO: ${targetPoNumberToken}`);
         const patchRes = await fetch(API_URL + "purchase_orders?po_number=eq." + targetPoNumberToken, {
             method: "PATCH",
             headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
@@ -1563,61 +1562,9 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
         });
 
         if (!patchRes.ok) throw new Error("Supabase rechazó la actualización de despacho por número de orden.");
+        console.log(`✅ Cloud document status successfully changed to 'dispatched' for PO: ${targetPoNumberToken}`);
 
-        // 2️⃣ 📊 INVENTORY MATH TRANSFORMATION LAYER
-        for (var i = 0; i < filteredLines.length; i++) {
-            var item = filteredLines[i];
-            
-            // Extract the isolated ingredients dictionary UUID hash token natively saved inside your array objects
-            var finalIngredientUuid = item.ingredient_id;
-            
-            // If the saved key falls back to a string name description text, resolve it from your master dictionary map layout
-            var cleanNameLower = String(item.ingredient_name || "").toLowerCase().trim();
-            if (typeof masterNameToUuidMap !== "undefined" && masterNameToUuidMap[cleanNameLower]) {
-                finalIngredientUuid = masterNameToUuidMap[cleanNameLower];
-            }
-
-            console.log(`📊 Processing stock change for: ${item.ingredient_name} using UUID: ${finalIngredientUuid}`);
-
-            // Fetch running catalog stock balance targeting strictly by the true database UUID primary key
-            const ingFetchRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
-                method: "GET", headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY }
-            });
-            
-            if (ingFetchRes.ok) {
-                const ingDataArray = await ingFetchRes.json();
-                var dbIngredient = (ingDataArray && ingDataArray.length > 0) ? ingDataArray[0] : ingDataArray;
-                
-                if (dbIngredient) {
-                    var currentLiveDbStock = parseFloat(dbIngredient.std_inventory || 0);
-                    var approvedFormatsCount = parseFloat(item.approved_formats_quantity || 0);
-                    var conversionFactor = parseFloat(item.conversion_factor || item.equivalencia || 1);
-                    
-                    var addedPurchaseWeight = approvedFormatsCount * conversionFactor;
-                    var definitiveNewInventoryLevel = currentLiveDbStock + addedPurchaseWeight;
-                    if (definitiveNewInventoryLevel < 0) definitiveNewInventoryLevel = 0.00;
-
-                    // Patch increased stock level back onto master catalog row targeting the true UUID key
-                    const patchStockRes = await fetch(API_URL + "ingredients?id=eq." + finalIngredientUuid, {
-                        method: "PATCH",
-                        headers: { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            std_inventory: parseFloat(definitiveNewInventoryLevel.toFixed(2))
-                        })
-                    });
-                    
-                    if (patchStockRes.ok) {
-                        console.log(`✅ Stock updated successfully for ${item.ingredient_name}: ${currentLiveDbStock} -> ${definitiveNewInventoryLevel.toFixed(2)}`);
-                    } else {
-                        console.error(`❌ Failed to patch stock level for item: ${item.ingredient_name}`);
-                    }
-                }
-            } else {
-                console.error(`❌ Failed to fetch ingredient row for matching database key: ${finalIngredientUuid}`);
-            }
-        }
-
-        // 3️⃣ Apply visual updates locally to sink the card container row elements on your monitor screen
+        // 2️⃣ Apply visual updates locally to sink the card container row elements on your monitor screen
         if (supplierCard) {
             supplierCard.style.opacity = "0.35";
             supplierCard.style.filter = "blur(0.2px)";
@@ -1636,6 +1583,7 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
             }
         }
 
+        // Synchronize local browser runtime memory parameters with the newly logged status
         LOCAL_STAGED_ROWS.forEach(function(r) {
             if (r.supplier_name === supplierName) {
                 r.db_saved_status = 'dispatched';
@@ -1644,13 +1592,14 @@ async function markSupplierOrderAsDispatched(supplierName, cardElementId) {
             }
         });
         
-        alert("✅ ¡Orden finalizada! El documento se ha cerrado y el stock de inventario se ha incrementado correctamente.");
+        alert("✅ ¡Orden finalizada! El documento se ha cerrado como 'Despachado' y está listo para control físico en la App de Recepción.");
 
     } catch (err) {
         console.error("Dispatch Error:", err);
         alert("❌ Error al registrar despacho en la nube: " + err.message);
     }
 }
+
 
 // ⚡ LIFE-CYCLE RECOVERY HELPER: Checks if terminal queue is empty and releases button states cleanly
 function verifyAndReleaseShipmentLock() {
