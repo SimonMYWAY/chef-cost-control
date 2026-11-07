@@ -376,7 +376,7 @@ function renderDashboardGrids() {
     if (historyCount === 0) historyGrid.innerHTML = "<div class='no-data' style='grid-column: span 3; text-align:center; padding:20px; color:var(--text-muted); font-style:italic;'>No se registran entregas completadas hoy.</div>";
 }
 
-// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [REPAIRED PAYLOAD]
+// 🚀 MUTATION PIPELINE ROADMAP: Processes confirmation clicks, saves line items logs, and alters standard inventory levels [COMPLETE REPAIR - PART 1]
 async function processIncomingDelivery(orderId) {
     const cardNode = document.getElementById(`po-card-${orderId}`);
     const invoiceInput = document.getElementById(`invoice-${orderId}`);
@@ -432,6 +432,9 @@ async function processIncomingDelivery(orderId) {
             const deliveredQty = parseFloat(input.value || 0);
             const equivalenceMultiplier = parseFloat(input.getAttribute("data-factor") || 1);
 
+            // Isolate the true wholesale packaging format string label (e.g. Caja, Bolsa, Kg)
+            const supplierUomString = input.getAttribute("data-uom") || input.getAttribute("data-supplier-uom") || "Unidad";
+
             const costInputNode = cardNode.querySelector(`.cost-input[data-item-id="${itemId}"]`);
             const enteredLineTotalCost = costInputNode ? parseFloat(costInputNode.value || 0) : 0;
 
@@ -460,9 +463,8 @@ async function processIncomingDelivery(orderId) {
             // 🌟 NEW CLOUD ENGINE INJECTION: WRITE CORRELATED INVOICE_ITEMS
             // =======================================================================
             if (ingUuid && deliveredQty > 0) {
-                console.log(`✈️ Dispatching correlated record to invoice_items: ${ingTextName}`);
+                console.log(`✈️ Dispatching analytical record to invoice_items table for: ${ingTextName}`);
                 
-                // 🛡️ OMITTED 'supplier_uom' TO SAFELY PREVENT API SCHEMA REJECTION CRASHES UNTIL SQL MIGRATION IS APPLIED
                 const invoicePayload = {
                     po_id: orderId,                     
                     po_number: extractedPoNumberText,   
@@ -470,11 +472,9 @@ async function processIncomingDelivery(orderId) {
                     invoice_number: invoiceNum, 
                     invoice_date: currentReceptionDateText, 
                     actual_quantity_purchased: deliveredQty,
-                    actual_total_cost: enteredLineTotalCost
+                    actual_total_cost: enteredLineTotalCost,
+                    supplier_uom: supplierUomString // 🔓 FULLY ACTIVATED SATELLITE FIELD WRITE
                 };
-
-                // Un-comment this specific line down below once you have run the Step 1 SQL alteration script:
-                // invoicePayload.supplier_uom = input.getAttribute("data-uom") || "Unidad";
 
                 const invoiceItemPostRes = await fetch(API_URL + "invoice_items", {
                     method: "POST",
@@ -485,7 +485,6 @@ async function processIncomingDelivery(orderId) {
                 if (!invoiceItemPostRes.ok) {
                     const postErrText = await invoiceItemPostRes.text();
                     console.error(`⚠️ Database Write Error inside invoice_items: ${postErrText}`);
-                    // Fail-silent catch allows the main workflow execution loops to advance cleanly even if a log drops
                 }
             }
 
@@ -510,15 +509,49 @@ async function processIncomingDelivery(orderId) {
                 if (!inventoryPatchRes.ok) throw new Error(`Fallo al calibrar el inventario del insumo ${ingTextName}`);
             }
         }
+        // =======================================================================
+        // 🛡️ STEP 2: Overwrite the Master Parent Purchase Order Document Header
+        // =======================================================================
+        console.log(`📝 Finalizing order state transformation to received for ID: ${orderId}...`);
+        const orderPatchResponse = await fetch(API_URL + "purchase_orders?id=eq." + orderId, {
+            method: "PATCH",
+            headers: headers, 
+            body: JSON.stringify({
+                status: "received", // 🔐 LOCKOUT GATEWAY: Changes state status so card is permanently locked!
+                invoice_number: invoiceNum,
+                received_at: new Date().toISOString(),
+                received_by_user: activeGuardUsername
+            })
+        });
 
-        alert("✅ ¡Recepción procesada exitosamente! Bitácoras e inventarios teóricos calibrados con precisión en Supabase.");
-        await loadReceivingDashboard(); // Repaints screen grids
+        if (!orderPatchResponse.ok) throw new Error("Error al modificar el estado general de la Orden de Compra.");
+        console.log("🔒 Cloud header status successfully locked to 'received' inside database disk fields.");
+
+        // 🌟 STEP 3: SMOOTH EXIT INTERFACE TRANSITION ANIMATION & LOCAL CARD ACCORDION POINTER FREEZE
+        if (cardNode) {
+            console.log("🎬 Triggering card element blur look updates...");
+            cardNode.style.opacity = "0.3";
+            cardNode.style.filter = "blur(1.5px) grayscale(100%)";
+            cardNode.style.pointerEvents = "none";
+            cardNode.style.transform = "scale(0.98)";
+            cardNode.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+        }
+
+        alert("🔒 ¡Cargamento consolidado con éxito! Registros analíticos guardados, inventarios maestros incrementados y orden de compra archivada.");
+        
+        // Repaint workspace grid to cleanly drop the frozen invoice card out of view registers
+        if (typeof loadReceivingDashboard === "function") {
+            await loadReceivingDashboard();
+        } else if (typeof checkLiveInventorySessionStatusFromServer === "function") {
+            await checkLiveInventorySessionStatusFromServer();
+        }
 
     } catch (err) {
         console.error("Critical receiving pipeline collapse:", err);
         alert(`❌ Error crítico al procesar la entrega: ${err.message}`);
     }
 }
+
 // =======================================================================
 // 💓 AUTOMATED SECURITY HEARTBEAT DAEMON [RECEIVING APP - PLUGGED]
 // =======================================================================
