@@ -1864,7 +1864,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
     }
 
     try {
-        // 2. 🌐 LIVE CONNECTIVITY MATRIX: Fetch real data strings logged by the Receiving App
+                // 2. 🌐 LIVE CONNECTIVITY MATRIX: Fetch real data strings logged by the Receiving App
         var invoiceUrl = API_URL + "invoice_items?invoice_date=gte." + dateFrom + "&invoice_date=lte." + dateTo;
         var invoiceRes = await fetch(invoiceUrl, { headers: { "apikey": API_KEY } });
         var realPurchasedLines = await invoiceRes.json();
@@ -1877,16 +1877,22 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
                 var cleanIngId = String(line.ingredient_id).toLowerCase().trim();
                 
                 var rawPurchasedQty = parseFloat(line.actual_quantity_purchased || 0);
-                var lineMultiplierFactor = parseFloat(line.equivalencia || 1.0);
                 var purchasedCost = parseFloat(line.actual_total_cost || 0);
                 
-                // ⚡ DYNAMIC ALIGNMENT ENGINE: Convert to Standard UOM line-by-line using individual receipt multipliers
+                // ⚡ CORE FIX: Pull the type-safe multiplier rule directly from your master ingredient map registers!
+                var masterIngredientAssetRow = ingMap[cleanIngId];
+                var lineMultiplierFactor = 1.0;
+                if (masterIngredientAssetRow) {
+                    lineMultiplierFactor = parseFloat(masterIngredientAssetRow.inventory_conversion_factor) || 1.0;
+                }
+                
+                // ⚡ DYNAMIC ALIGNMENT ENGINE: Convert to Standard UOM using the true master asset multiplier
                 var standardQtyConvertedValue = rawPurchasedQty * lineMultiplierFactor;
                 
                 totalRealInvoiceSpending += purchasedCost;
                 
                 if (!theoreticalUsage[cleanIngId]) {
-                    var dbIng = ingMap[cleanIngId];
+                    var dbIng = masterIngredientAssetRow; // Re-uses our local lookup variable cleanly!
                     theoreticalUsage[cleanIngId] = {
                         id: cleanIngId,
                         name: dbIng ? (dbIng.name_es || "Ingrediente Extra") : "Compra Fuera de Catálogo",
@@ -1906,7 +1912,7 @@ async function executeDecompositionAndRender(lines, headers, idxQty, idxProd, id
         itemsArray = [];
         for (var k in theoreticalUsage) { itemsArray.push(theoreticalUsage[k]); }
         itemsArray.sort((a,b) => b.theoreticalCost - a.theoreticalCost); // Order by top expenditures
-        
+
         // 3. Output Matrix Dashboard Builder: Compiles financial cost variance cards
         var financialVarianceTotal = totalRealInvoiceSpending - totalTheoreticalSalesCost;
         var varianceColor = financialVarianceTotal <= 0 ? "#22c55e" : "#ef4444";
