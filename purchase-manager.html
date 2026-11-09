@@ -2220,24 +2220,26 @@ async function executeEmergencyOrderAttachmentPipeline() {
             targetPoId = matchedOrder.id;
             activeOrderStatus = matchedOrder.status; // Inherits whether it is Pending, draft, or dispatched!
             console.log(`🎯 Active order found (${activeOrderStatus})! Merging item inside PO Header ID: ${targetPoId}`);
-        } else {
-            // SCENARIO B: No active order exists at all. Instantiate a brand new PO header log tracking record.
-            console.log(`✨ No active orders found for ${providerName}. Generating fresh PO log header...`);
-            const newPoRes = await fetch(`${API_URL}purchase_orders`, {
+          } else {
+            // SCENARIO B: No mutable or inflight order exists (or the previous one was already 'received').
+            // 🌟 THE AUTO-ROUTE FIX: Initialize status directly as 'dispatched' so it appears on the guard's screen instantly!
+            console.log(`✨ No active open orders found for ${providerName}. Generating fresh emergency dispatch header...`);
+            const newPoRes = await fetch(API_URL + "purchase_orders", {
                 method: "POST",
                 headers: headers,
                 body: JSON.stringify({
                     provider_name: providerName,
-                    status: "Pending", 
+                    status: "dispatched", // 🔓 Fast-tracks it past the manager straight to the guard!
                     created_at: new Date().toISOString()
                 })
             });
             
-            const lookupNewPo = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=eq.Pending&order=created_at.desc&limit=1`, {
+            const lookupNewPo = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=eq.dispatched&order=created_at.desc&limit=1`, {
                 headers: { "apikey": API_KEY }
             });
             const newPoData = await lookupNewPo.json();
             targetPoId = newPoData[0].id;
+            activeOrderStatus = "dispatched"; 
         }
 
         // 2️⃣ CONVERSION CALCULATIONS & CEILING GUARDS
