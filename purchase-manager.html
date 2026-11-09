@@ -2184,7 +2184,7 @@ function renderAvailableSupplierFormatsForIngredient() {
     const initialChecked = radioList.querySelector("input[type='radio']:checked");
     if (initialChecked) document.getElementById("em-active-format-uom-label").innerText = initialChecked.dataset.uom;
 }
-// ⚡ RE-ENGINEERED PIPELINE ENGINE (PART 2 OF 2 - CONVERSION BALANCED)
+// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (FIXED: LAST-MINUTE DISPATCHED MERGING)
 async function executeEmergencyOrderAttachmentPipeline() {
     const ingredientId = document.getElementById("em-select-ingredient").value;
     const selectedRadio = document.querySelector("input[name='em_active_format_selection']:checked");
@@ -2203,9 +2203,46 @@ async function executeEmergencyOrderAttachmentPipeline() {
     try {
         const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
 
-        // Convert the entered pack count to standard recipe weight units
+        // 1️⃣ LOOKUP OPEN OR IN-FLIGHT DISPATCHED ORDERS FOR THIS PROVIDER
+        // 🌟 THE UNIFICATION FIX: Added 'dispatched' to the status filter so last-minute items attach to active deliveries!
+        console.log(`📡 Searching for mutable or inflight orders for: ${providerName}`);
+        const checkPoRes = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=in.(draft,Pending,dispatched)&order=created_at.desc`, {
+            headers: { "apikey": API_KEY }
+        });
+        const openOrders = await checkPoRes.json();
+        
+        let targetPoId = null;
+        let activeOrderStatus = "Pending"; // Fallback default state
+
+        if (Array.isArray(openOrders) && openOrders.length > 0) {
+            // SCENARIO A: An open or active inflight delivery order exists! Merge directly into its ID.
+            const matchedOrder = openOrders[0];
+            targetPoId = matchedOrder.id;
+            activeOrderStatus = matchedOrder.status; // Inherits whether it is Pending, draft, or dispatched!
+            console.log(`🎯 Active order found (${activeOrderStatus})! Merging item inside PO Header ID: ${targetPoId}`);
+        } else {
+            // SCENARIO B: No active order exists at all. Instantiate a brand new PO header log tracking record.
+            console.log(`✨ No active orders found for ${providerName}. Generating fresh PO log header...`);
+            const newPoRes = await fetch(`${API_URL}purchase_orders`, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    provider_name: providerName,
+                    status: "Pending", 
+                    created_at: new Date().toISOString()
+                })
+            });
+            
+            const lookupNewPo = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=eq.Pending&order=created_at.desc&limit=1`, {
+                headers: { "apikey": API_KEY }
+            });
+            const newPoData = await lookupNewPo.json();
+            targetPoId = newPoData[0].id;
+        }
+
+        // 2️⃣ CONVERSION CALCULATIONS & CEILING GUARDS
         let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
-        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guardrail
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guard
 
         let targetIngName = "Insumo de Emergencia";
         if (typeof masterNameToUuidMap !== "undefined") {
@@ -2213,11 +2250,13 @@ async function executeEmergencyOrderAttachmentPipeline() {
             if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
         }
 
+        // 3️⃣ POST THE TRANSACTION RECORD DIRECTLY TO THE CHILD PURCHASE ITEMS TABLE IN SUPABASE
         console.log("✈️ Transmitting item record straight to Supabase database registers...");
         await fetch(`${API_URL}purchase_order_items`, {
             method: "POST",
             headers: headers,
             body: JSON.stringify({
+                po_id: targetPoId, // 🔒 Dynamic Binding Lock: Securely attaches to the dispatched or pending parent ID!
                 ingredient_id: ingredientId,
                 pedido_sugerido: purchaseQty,
                 approved_formats_quantity: purchaseQty,
@@ -2229,7 +2268,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
             })
         });
 
-        // Inject row directly into frontend state to execute instant card refresh
+        // 4️⃣ LIVE FRONTEND STATE INTERPOLATION FOR RE-RENDERING
         if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
             LOCAL_STAGED_ROWS.push({
                 ingredient_id: ingredientId,
@@ -2242,13 +2281,13 @@ async function executeEmergencyOrderAttachmentPipeline() {
                 supplier_uom: purchaseUom,
                 recipe_uom: targetRecipeUom,
                 is_approved: true,
-                db_saved_status: "Pending"
+                db_saved_status: activeOrderStatus // Automatically updates UI context to display matching frosted card styles!
             });
         }
 
         alert(`🎯 ¡Registrado con éxito! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel de ${providerName}.`);
         
-        // Redraw interactive manager spreadsheet grid
+        // Redraw core view dashboard instantly
         renderInteractiveManagerSpreadsheetGrid();
 
     } catch (err) {
@@ -2256,7 +2295,6 @@ async function executeEmergencyOrderAttachmentPipeline() {
         alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
 }
-
 
     </script>
 </body>
