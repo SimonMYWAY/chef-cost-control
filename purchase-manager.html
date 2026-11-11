@@ -2227,7 +2227,7 @@ function renderAvailableSupplierFormatsForIngredient() {
     const initialChecked = radioList.querySelector("input[type='radio']:checked");
     if (initialChecked) document.getElementById("em-active-format-uom-label").innerText = initialChecked.dataset.uom;
 }
-// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (FIXED: LAST-MINUTE DISPATCHED MERGING)
+// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (FIXED: SUPPLIER_NAME & ARRAY INDEXES)
 async function executeEmergencyOrderAttachmentPipeline() {
     const ingredientId = document.getElementById("em-select-ingredient").value;
     const selectedRadio = document.querySelector("input[name='em_active_format_selection']:checked");
@@ -2244,50 +2244,67 @@ async function executeEmergencyOrderAttachmentPipeline() {
     const targetRecipeUom = selectedRadio.dataset.recipeuom || "unidad";
 
     try {
-        const headers = { "apikey": API_KEY, "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
+        const headers = { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json",
+            "Prefer": "return=representation" // Returns the created row immediately without needing a second GET!
+        };
 
-        // 1️⃣ LOOKUP OPEN OR IN-FLIGHT DISPATCHED ORDERS FOR THIS PROVIDER
-        // 🌟 THE UNIFICATION FIX: Added 'dispatched' to the status filter so last-minute items attach to active deliveries!
-        console.log(`📡 Searching for mutable or inflight orders for: ${providerName}`);
-        const checkPoRes = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=in.(draft,Pending,dispatched)&order=created_at.desc`, {
+        // 1️⃣ LOOKUP OPEN OR IN-FLIGHT DISPATCHED ORDERS FOR THIS SUPPLIER (Using 'supplier_name')
+        console.log(`📡 Searching for active orders for supplier: ${providerName}`);
+        const checkPoRes = await fetch(`${API_URL}purchase_orders?supplier_name=eq.${encodeURIComponent(providerName)}&status=in.(draft,Pending,dispatched)&order=created_at.desc`, {
             headers: { "apikey": API_KEY }
         });
+        
+        if (!checkPoRes.ok) {
+            const errTxt = await checkPoRes.text();
+            throw new Error("Error buscando órdenes abiertas: " + errTxt);
+        }
+
         const openOrders = await checkPoRes.json();
         
         let targetPoId = null;
-        let activeOrderStatus = "Pending"; // Fallback default state
+        let activeOrderStatus = "Pending";
+        let activePoNumber = "PO-EMERG-" + Math.floor(1000 + Math.random() * 9000);
 
         if (Array.isArray(openOrders) && openOrders.length > 0) {
-            // SCENARIO A: An open or active inflight delivery order exists! Merge directly into its ID.
+            // SCENARIO A: Active order found! Read index [0]
             const matchedOrder = openOrders[0];
             targetPoId = matchedOrder.id;
-            activeOrderStatus = matchedOrder.status; // Inherits whether it is Pending, draft, or dispatched!
-            console.log(`🎯 Active order found (${activeOrderStatus})! Merging item inside PO Header ID: ${targetPoId}`);
-          } else {
-            // SCENARIO B: No mutable or inflight order exists (or the previous one was already 'received').
-            // 🌟 THE AUTO-ROUTE FIX: Initialize status directly as 'dispatched' so it appears on the guard's screen instantly!
-            console.log(`✨ No active open orders found for ${providerName}. Generating fresh emergency dispatch header...`);
-            const newPoRes = await fetch(API_URL + "purchase_orders", {
+            activeOrderStatus = matchedOrder.status;
+            activePoNumber = matchedOrder.po_number || activePoNumber;
+            console.log(`🎯 Active order found (${activeOrderStatus})! Merging into PO ID: ${targetPoId}`);
+        } else {
+            // SCENARIO B: No active order found. Create a new 'dispatched' header using 'supplier_name'
+            console.log(`✨ Creating fresh emergency dispatch header for ${providerName}...`);
+            const newPoRes = await fetch(`${API_URL}purchase_orders`, {
                 method: "POST",
                 headers: headers,
                 body: JSON.stringify({
-                    provider_name: providerName,
-                    status: "dispatched", // 🔓 Fast-tracks it past the manager straight to the guard!
+                    supplier_name: providerName,
+                    po_number: activePoNumber,
+                    status: "dispatched",
                     created_at: new Date().toISOString()
                 })
             });
+
+            if (!newPoRes.ok) {
+                const postErr = await newPoRes.text();
+                throw new Error("Supabase rechazó la creación de cabecera PO: " + postErr);
+            }
             
-            const lookupNewPo = await fetch(`${API_URL}purchase_orders?provider_name=eq.${encodeURIComponent(providerName)}&status=eq.dispatched&order=created_at.desc&limit=1`, {
-                headers: { "apikey": API_KEY }
-            });
-            const newPoData = await lookupNewPo.json();
+            const newPoData = await newPoRes.json();
+            if (!Array.isArray(newPoData) || newPoData.length === 0) {
+                throw new Error("No se recibió el ID de la nueva orden creada.");
+            }
             targetPoId = newPoData[0].id;
             activeOrderStatus = "dispatched"; 
         }
 
         // 2️⃣ CONVERSION CALCULATIONS & CEILING GUARDS
         let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
-        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999; // NUMERIC(10,4) safety guard
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999;
 
         let targetIngName = "Insumo de Emergencia";
         if (typeof masterNameToUuidMap !== "undefined") {
@@ -2295,30 +2312,15 @@ async function executeEmergencyOrderAttachmentPipeline() {
             if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
         }
 
-        // 3️⃣ POST THE TRANSACTION RECORD DIRECTLY TO THE CHILD PURCHASE ITEMS TABLE IN SUPABASE
-        console.log("✈️ Transmitting item record straight to Supabase database registers...");
-        await fetch(`${API_URL}purchase_order_items`, {
+        // 3️⃣ POST THE CHILD ITEM TO PURCHASE_ORDER_ITEMS
+        console.log("✈️ Transmitting item record straight to Supabase...");
+        const itemRes = await fetch(`${API_URL}purchase_order_items`, {
             method: "POST",
             headers: headers,
             body: JSON.stringify({
-                po_id: targetPoId, // 🔒 Dynamic Binding Lock: Securely attaches to the dispatched or pending parent ID!
-                ingredient_id: ingredientId,
-                pedido_sugerido: purchaseQty,
-                approved_formats_quantity: purchaseQty,
-                faltante_base: safetyFaltanteBase,
-                equivalencia: equivalenceMultiplier,
-                supplier_uom: purchaseUom,
-                is_approved: true,
-                created_at: new Date().toISOString()
-            })
-        });
-
-        // 4️⃣ LIVE FRONTEND STATE INTERPOLATION FOR RE-RENDERING
-        if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
-            LOCAL_STAGED_ROWS.push({
+                po_id: targetPoId,
                 ingredient_id: ingredientId,
                 ingredient_name: targetIngName,
-                supplier_name: providerName,
                 pedido_sugerido: purchaseQty,
                 approved_formats_quantity: purchaseQty,
                 faltante_base: safetyFaltanteBase,
@@ -2326,13 +2328,34 @@ async function executeEmergencyOrderAttachmentPipeline() {
                 supplier_uom: purchaseUom,
                 recipe_uom: targetRecipeUom,
                 is_approved: true,
-                db_saved_status: activeOrderStatus // Automatically updates UI context to display matching frosted card styles!
+                created_at: new Date().toISOString()
+            })
+        });
+
+        if (!itemRes.ok) {
+            const itemErr = await itemRes.text();
+            throw new Error("Error guardando la línea del insumo: " + itemErr);
+        }
+
+        // 4️⃣ LIVE FRONTEND STATE INTERPOLATION FOR RE-RENDERING
+        if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
+            LOCAL_STAGED_ROWS.push({
+                ingredient_id: ingredientId,
+                ingredient_name: targetIngName,
+                supplier_name: providerName,
+                forced_po_number: activePoNumber,
+                pedido_sugerido: purchaseQty,
+                approved_formats_quantity: purchaseQty,
+                faltante_base: safetyFaltanteBase,
+                equivalencia: equivalenceMultiplier,
+                supplier_uom: purchaseUom,
+                recipe_uom: targetRecipeUom,
+                is_approved: true,
+                db_saved_status: activeOrderStatus
             });
         }
 
         alert(`🎯 ¡Registrado con éxito! Agregadas ${purchaseQty} ${purchaseUom} (${safetyFaltanteBase.toFixed(2)} ${targetRecipeUom} netas) al panel de ${providerName}.`);
-        
-        // Redraw core view dashboard instantly
         renderInteractiveManagerSpreadsheetGrid();
 
     } catch (err) {
@@ -2340,6 +2363,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
         alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
 }
+
 
     </script>
 </body>
