@@ -1315,6 +1315,46 @@ async function saveSupplierOrderAsDraft(supplierName, cardElementId) {
     }
 }
 
+// 📋 MOBILE-SAFE CLIPBOARD HELPER: Bypasses iOS/Android async fetch clipboard blocks
+async function copyTextToClipboardMobileSafe(textToCopy) {
+    try {
+        // 1. Try modern Clipboard API first (Works on PC and fast connections)
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(textToCopy);
+            return true;
+        }
+    } catch (err) {
+        console.warn("Modern Clipboard API blocked by mobile browser context. Switching to fallback...", err);
+    }
+
+    // 2. Fallback Method: Hidden textarea selection (Works reliably on iOS Safari & Android Chrome after async calls)
+    try {
+        const textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+        
+        // Keep it off-screen and prevent mobile keyboard from popping up
+        textArea.style.position = "fixed";
+        textArea.style.top = "-9999px";
+        textArea.style.left = "-9999px";
+        textArea.setAttribute("readonly", "");
+        
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // Required specifically for iOS mobile devices
+
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        
+        if (!successful) throw new Error("Fallback copy command failed.");
+        return true;
+    } catch (fallbackErr) {
+        console.error("All clipboard copy methods failed:", fallbackErr);
+        return false;
+    }
+}
+
+
 // 🟢 HIGH-SPEED ATOMIC BATCH ENGINE: Processes stock calculations, bulk commits to Supabase via RPC, copies text
 async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
 
@@ -1413,7 +1453,10 @@ async function executeUnifiedSupplierProcess(supplierName, cardElementId) {
                "=======================\n" +
                "```"; 
 
-        await navigator.clipboard.writeText(msg);
+        const copiedSuccessfully = await copyTextToClipboardMobileSafe(msg);
+if (!copiedSuccessfully) {
+    alert("⚠️ La orden se procesará en la nube, pero tu teléfono bloqueó el copiado automático al portapapeles. Puedes copiar el mensaje manualmente desde el recuadro gris abajo.");
+}
         console.timeEnd("⏱️ STEP_1_CLIPBOARD_AND_TEXT_FORMATTING");
 
         // =======================================================================
