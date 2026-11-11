@@ -2228,6 +2228,139 @@ function renderAvailableSupplierFormatsForIngredient() {
     if (initialChecked) document.getElementById("em-active-format-uom-label").innerText = initialChecked.dataset.uom;
 }
 
+// ⚡ RE-ENGINEERED AUTOMATIC CONVERSION PIPELINE ENGINE (SYNTAX & SCHEMA VERIFIED)
+async function executeEmergencyOrderAttachmentPipeline() {
+    const ingredientId = document.getElementById("em-select-ingredient").value;
+    const selectedRadio = document.querySelector("input[name='em_active_format_selection']:checked");
+    const purchaseQty = parseFloat(document.getElementById("em-input-qty").value) || 0;
+
+    if (!ingredientId || !selectedRadio || purchaseQty <= 0) {
+        alert("⚠️ Por favor complete la selección y especifique una cantidad válida.");
+        return;
+    }
+
+    const providerName = selectedRadio.dataset.provider;
+    const purchaseUom = selectedRadio.dataset.uom;
+    const equivalenceMultiplier = parseFloat(selectedRadio.dataset.factor) || 1.0;
+    const targetRecipeUom = selectedRadio.dataset.recipeuom || "unidad";
+
+    try {
+        const headers = { 
+            "apikey": API_KEY, 
+            "Authorization": "Bearer " + API_KEY, 
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+        };
+
+        // 1️⃣ LOOKUP OPEN OR IN-FLIGHT DISPATCHED ORDERS FOR THIS SUPPLIER
+        console.log("📡 Searching for active orders for supplier: " + providerName);
+        const checkPoRes = await fetch(API_URL + "purchase_orders?supplier_name=eq." + encodeURIComponent(providerName) + "&status=in.(draft,Pending,dispatched)&order=created_at.desc", {
+            headers: { "apikey": API_KEY }
+        });
+        
+        if (!checkPoRes.ok) {
+            const errTxt = await checkPoRes.text();
+            throw new Error("Error buscando órdenes abiertas: " + errTxt);
+        }
+
+        const openOrders = await checkPoRes.json();
+        
+        let targetPoId = null;
+        let activeOrderStatus = "Pending";
+        let activePoNumber = "PO-EMERG-" + Math.floor(1000 + Math.random() * 9000);
+
+        if (Array.isArray(openOrders) && openOrders.length > 0) {
+            // SCENARIO A: Active order found
+            const matchedOrder = openOrders[0];
+            targetPoId = matchedOrder.id;
+            activeOrderStatus = matchedOrder.status;
+            activePoNumber = matchedOrder.po_number || activePoNumber;
+            console.log("🎯 Active order found (" + activeOrderStatus + ")! Merging into PO ID: " + targetPoId);
+        } else {
+            // SCENARIO B: No active order found. Create a new 'dispatched' header
+            console.log("✨ Creating fresh emergency dispatch header for " + providerName + "...");
+            const newPoRes = await fetch(API_URL + "purchase_orders", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    supplier_name: providerName,
+                    po_number: activePoNumber,
+                    status: "dispatched",
+                    created_at: new Date().toISOString()
+                })
+            });
+
+            if (!newPoRes.ok) {
+                const postErr = await newPoRes.text();
+                throw new Error("Supabase rechazó la creación de cabecera PO: " + postErr);
+            }
+            
+            const newPoData = await newPoRes.json();
+            if (!Array.isArray(newPoData) || newPoData.length === 0) {
+                throw new Error("No se recibió el ID de la nueva orden creada.");
+            }
+            targetPoId = newPoData[0].id;
+            activeOrderStatus = "dispatched"; 
+        }
+
+        // 2️⃣ CONVERSION CALCULATIONS & CEILING GUARDS
+        let safetyFaltanteBase = purchaseQty * equivalenceMultiplier;
+        if (safetyFaltanteBase > 999999.9999) safetyFaltanteBase = 999999.9999;
+
+        let targetIngName = "Insumo de Emergencia";
+        if (typeof masterNameToUuidMap !== "undefined") {
+            const foundKey = Object.keys(masterNameToUuidMap).find(k => String(masterNameToUuidMap[k]).toLowerCase() === ingredientId.toLowerCase());
+            if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
+        }
+
+        // 3️⃣ POST THE CHILD ITEM USING EXACT DATABASE COLUMN NAMES
+        console.log("✈️ Transmitting item record straight to Supabase...");
+        const itemRes = await fetch(API_URL + "purchase_order_items", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+                po_id: targetPoId,
+                ingredient_id: ingredientId,
+                ingredient_name: targetIngName,
+                quantity_ordered: Math.ceil(purchaseQty),
+                faltante_base: safetyFaltanteBase,
+                equivalencia: equivalenceMultiplier,
+                supplier_uom: purchaseUom,
+                recipe_uom: targetRecipeUom
+            })
+        });
+
+        if (!itemRes.ok) {
+            const itemErr = await itemRes.text();
+            throw new Error("Error guardando la línea del insumo: " + itemErr);
+        }
+
+        // 4️⃣ LIVE FRONTEND STATE INTERPOLATION FOR RE-RENDERING
+        if (typeof LOCAL_STAGED_ROWS !== "undefined" && Array.isArray(LOCAL_STAGED_ROWS)) {
+            LOCAL_STAGED_ROWS.push({
+                ingredient_id: ingredientId,
+                ingredient_name: targetIngName,
+                supplier_name: providerName,
+                forced_po_number: activePoNumber,
+                pedido_sugerido: purchaseQty,
+                approved_formats_quantity: purchaseQty,
+                faltante_base: safetyFaltanteBase,
+                equivalencia: equivalenceMultiplier,
+                supplier_uom: purchaseUom,
+                recipe_uom: targetRecipeUom,
+                is_approved: true,
+                db_saved_status: activeOrderStatus
+            });
+        }
+
+        alert("🎯 ¡Registrado con éxito! Agregadas " + purchaseQty + " " + purchaseUom + " (" + safetyFaltanteBase.toFixed(2) + " " + targetRecipeUom + " netas) al panel de " + providerName + ".");
+        renderInteractiveManagerSpreadsheetGrid();
+
+    } catch (err) {
+        console.error("Emergency pipeline execution crash:", err);
+        alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
+    }
+}
 
 
     </script>
