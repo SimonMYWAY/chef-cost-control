@@ -2313,14 +2313,13 @@ async function executeEmergencyOrderAttachmentPipeline() {
             if (foundKey) targetIngName = foundKey.charAt(0).toUpperCase() + foundKey.slice(1);
         }
 
-        // 3️⃣ POST THE CHILD ITEM USING EXACT DATABASE COLUMN NAMES
+                // 3️⃣ POST THE CHILD ITEM USING EXACT DATABASE COLUMN NAMES (NO ingredient_id)
         console.log("✈️ Transmitting item record straight to Supabase...");
         const itemRes = await fetch(API_URL + "purchase_order_items", {
             method: "POST",
             headers: headers,
             body: JSON.stringify({
                 po_id: targetPoId,
-                ingredient_id: ingredientId,
                 ingredient_name: targetIngName,
                 quantity_ordered: Math.ceil(purchaseQty),
                 faltante_base: safetyFaltanteBase,
@@ -2329,6 +2328,7 @@ async function executeEmergencyOrderAttachmentPipeline() {
                 recipe_uom: targetRecipeUom
             })
         });
+
 
         if (!itemRes.ok) {
             const itemErr = await itemRes.text();
@@ -2361,7 +2361,6 @@ async function executeEmergencyOrderAttachmentPipeline() {
         alert("❌ Error crítico al procesar la inserción de la orden manual: " + err.message);
     }
 }
-
 
     </script>
 </body>
